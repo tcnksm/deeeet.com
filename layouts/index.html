@@ -1,0 +1,10 @@
+{{ partial "header.html" . }}
+
+
+<div class="blog-cover" style="background-image:url(/images/{{ .Site.Params.cover_image }});"></div>
+
+<article class="container">
+  {{ range .Data.Pages }}
+  {{ .Render "summary"}}
+  {{ end }}
+</article>

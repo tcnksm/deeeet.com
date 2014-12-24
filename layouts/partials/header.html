@@ -1,0 +1,34 @@
+<!doctype html>
+<html>
+  <head>
+    <meta http-equiv="content-type" content="text/html; charset=utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    
+    <title>{{ .Title }} | {{.Site.Title}}</title>
+    
+    {{ with .Site.Params.google_font }}<link href="https://fonts.googleapis.com/css?family={{ . }}" rel="stylesheet" type="text/css">{{ end }}
+    <link rel="stylesheet" href="/css/main.css">
+    <link rel="shortcut icon" href="/favicon.png" type="image/x-icon" />
+    <link href="{{ .Site.BaseUrl }}/index.xml" rel="alternate" type="application/rss+xml" title="{{ .Site.Params.inc.title }}" />
+    <meta name="title" content="{{ .Site.BaseUrl }}">
+    <link rel="canonical" href="{{ .Site.BaseUrl }}">
+    
+    <meta property="og:title" content="{{ .Title }}"/>
+    <meta property="og:url" content="{{ .Site.BaseUrl }}"/>
+    <meta property="og:image" content="{{ .Site.BaseUrl }}/images/{{ .Site.Params.inc.logo }}"/>   
+  </head>
+  
+  <body>
+    <section class="site-nav">
+      <header>
+        <nav id="navigation">
+          <ul class="menu">
+            <li><a href="/talking">Talks</a></li>
+            <li><a href="https://tcnksm.exposure.co/">Photos</a></li>
+          </ul>
+
+          <a class="name" href="/">SOTA</a>
+        </nav>        
+      </header>
+    </section>
+    

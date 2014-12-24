@@ -1,0 +1,47 @@
+.site-nav {
+    background:#fff;
+    max-width: 900px;
+    margin: 0 auto;
+    margin-top: 75px;
+    margin-bottom: 30px;
+        
+    #navigation {
+        
+        margin: 0 6em;
+
+        a {            
+            border:0;
+            &:hover {
+                color:$accent;
+            }
+        }
+
+        .name {
+            color:#444;
+            border:0;
+            font-family: $font-title;
+            font-weight:900;
+            font-size:30px;
+        }
+                
+        .menu {
+            padding: 0;
+            margin: 12px 0;
+            font-family: $font-title;
+            font-weight:900;
+            font-size:15px;
+            text-transform: uppercase;
+            float: right;
+        }
+
+        .menu li {
+            display: inline-block;
+            padding-left: 15px;
+            > a {
+                color:#444;
+            }
+        }
+    }
+}
+
+

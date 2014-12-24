@@ -1,0 +1,30 @@
+baseurl = "http://deeeet.com"
+title = "SOTA"
+languageCode = "ja-jp"
+copyright = "Copyright (C) 2013-2015 Taichi Nakashima All Right Reserved."
+
+contentdir = "content"
+layoutdir = "layouts"
+publishdir = "public"
+pygmentsuseclasses = true
+
+[permalinks]
+    writing = "/writing/:year/:month/:day/:filename/"
+    talking = "/talking/:year/:month/:day/:filename/"
+    
+[indexes]
+    category = "categories"
+
+[author]
+    name = "Taichi Nakashima"
+    image = "bio.jpeg"
+    bio = "A Tokyo based PaaS engineer. Please contact me via twitter."
+    
+[params]
+    cover_image = "cover-201412.jpg"
+    talking_cover_image = "talk.jpg"
+    twitter = "deeeet"
+    github = "tcnksm"
+    google_font = "Lato:900"
+
+

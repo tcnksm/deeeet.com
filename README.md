@@ -25,12 +25,6 @@ $ gem install sass
 $ sass scss/main.scss static/css/main.css
 ```
 
-## Temporal Operation
-
-```bash
-$ cp public/index.xml public/writing/atom.xml
-```
-
 ## Author
 
 [tcnksm](https://github.com/tcnksm)

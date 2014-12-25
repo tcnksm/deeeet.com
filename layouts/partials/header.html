@@ -10,12 +10,11 @@
     <link rel="stylesheet" href="/css/main.css">
     <link rel="shortcut icon" href="/favicon.png" type="image/x-icon" />
     <link href="{{ .Site.BaseUrl }}/index.xml" rel="alternate" type="application/rss+xml" title="{{ .Site.Params.inc.title }}" />
-    <meta name="title" content="{{ .Site.BaseUrl }}">
-    <link rel="canonical" href="{{ .Site.BaseUrl }}">
+    <meta name="title" content="{{ .Permalink }}">
+    <link rel="canonical" href="{{ .Permalink }}">
     
     <meta property="og:title" content="{{ .Title }}"/>
-    <meta property="og:url" content="{{ .Site.BaseUrl }}"/>
-    <meta property="og:image" content="{{ .Site.BaseUrl }}/images/{{ .Site.Params.inc.logo }}"/>   
+    <meta property="og:url" content="{{ .Permalink }}"/>
   </head>
   
   <body>

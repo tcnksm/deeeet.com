@@ -2734,6 +2734,8 @@ article {
     article .container > header, article .container > section, article .container > footer {
       margin: 0 10%;
       padding: 0; }
+    article .title {
+      margin-bottom: 1em; }
     article .container > footer {
       margin-top: 5em;
       padding: 3em 0;

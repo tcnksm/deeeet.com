@@ -6,7 +6,7 @@ comments: true
 categories: Live
 ---
 
-{% img /images/post/electraglide.jpg %}
+<img src="/images/electraglide.jpg" class="image">
 
 I wached belows,
 

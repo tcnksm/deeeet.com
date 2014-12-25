@@ -6,7 +6,7 @@ comments: true
 categories: Listening
 ---
 
-{%img /images/post/surround-new-age.jpg %}
+<img src="/images/surround-new-age.jpg" class="image">
 
 From [カクバリズム](http://www.kakubarhythm.com/), 2013 July.
 

@@ -6,7 +6,7 @@ comments: true
 categories: Listening 
 ---
 
-{% img /images/post/thriller.jpg %}
+<img src="/images/thriller.jpg" class="image">
 
 From [Warp Records](http://warp.net/), 2013 April.
 

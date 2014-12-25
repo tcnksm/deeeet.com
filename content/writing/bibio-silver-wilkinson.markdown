@@ -6,7 +6,7 @@ comments: true
 categories: Listening 
 ---
 
-{% img /images/post/SilverWilkinson.png %}
+<img src="/images/SilverWilkinson.png" class="image">
 
 イングランド，ウェストミッドランド在住のBibioこと，Stephan Wilkionによるの通算7作目となるアルバム．
 Bibioの音楽はフォーキーで牧歌的．初夏の夕暮れ時に草原で，ビールを飲みながらゆっくりと聴きたくなる．

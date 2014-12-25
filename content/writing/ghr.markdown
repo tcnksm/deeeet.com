@@ -14,7 +14,7 @@ categories: golang
 
 以下は簡単な動作例．
 
-{%img /images/post/ghr.gif %}
+<img src="/images/ghr.gif" class="image">
 
 上のデモでは，`v0.1.0`タグでリリースを作成し，`pkg/dist/v0.1.0`以下の6つのファイルを並列でアップロードしている（`ghr`を`ghr`でリリースしている）．1ファイルあたり，2.0M程度なのでまあま速いかと．アップロード結果は，[ここ](https://github.com/tcnksm/ghr/releases/tag/v0.1.0)で見られる．
 

@@ -29,7 +29,7 @@ Go言語を使うようになるとそのシンプルなディレクトリ構成
 
 さらに進めて`docc`というコマンドを作った．
 
-{%img /images/post/docc.gif %}
+<img src="/images/docc.gif" class="image">
 
 [tcnkms/docc · GitHub](https://github.com/tcnksm/docc)
 

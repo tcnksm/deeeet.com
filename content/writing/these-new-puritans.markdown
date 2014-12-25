@@ -6,7 +6,7 @@ comments: true
 categories: Listening
 ---
 
-{%img /images/post/These-New-Puritans-Field-of-Reeds.jpg %}
+<img src="/images/These-New-Puritans-Field-of-Reeds.jpg" class="image">
 
 From [AIS records](http://aisrecords.blogspot.jp/), 2013 June.
 

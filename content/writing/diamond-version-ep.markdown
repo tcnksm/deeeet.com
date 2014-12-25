@@ -6,7 +6,7 @@ comments: true
 categories: Listening
 ---
 
-{%img /images/post/diamond-version-ep.jpg %}
+<img src="/images/diamond-version-ep.jpg" class="image">
 
 From [Mute](http://mute.com/), 2013 October.
 

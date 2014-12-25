@@ -58,7 +58,7 @@ Dockerを使うことで上図のようにコンテナによるプロセスの�
 
 CoreOSは複数のマシンからクラスタを形成する．クラスタを形成するために，CoreOSは`etcd`という分散Key-Valuesストアを使い，各種設定をノード間で共有する（`etcd`ってのは"`/etc` distributed"という意味）．
 
-{% img /images/post/etcd.png %}
+<img src="/images/etcd.png" class="image">
 
 [https://coreos.com/assets/images/media/Three-Tier-Webapp.png](https://coreos.com/assets/images/media/Three-Tier-Webapp.png)
 

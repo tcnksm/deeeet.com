@@ -6,6 +6,6 @@ comments: true
 categories: 
 ---
 
-{% img /images/post/kamakura2.jpg %}
+<img src="/images/kamakura2.jpg" class="image">
 
 住みたい．通勤時間をとるか，生活をとるか．

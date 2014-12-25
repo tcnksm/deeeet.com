@@ -6,7 +6,7 @@ comments: true
 categories: Watching
 ---
 
-{%img /images/post/kyouaku.jpg %}
+<img src="/images/kyouaku.jpg" class="image">
 
 映画でのすげー悪役はたくさん描かれてきた．
 例えば，"ダークナイト"のジョーカーや，"ノーカントリー" のシガー，"セブン"のジョン・ドゥ，"羊たちの沈黙"のレクターなどなど．こいつらは，知的で，思想的で，あまりに人間離れしてた純粋な悪であるため，ファンタジー感は抜けない．

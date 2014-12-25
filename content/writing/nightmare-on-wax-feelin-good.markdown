@@ -6,7 +6,7 @@ comments: true
 categories: Listening
 ---
 
-{%img /images/post/night-mare-feelin-good.jpg %}
+<img src="/images/night-mare-feelin-good.jpg" class="image">
 
 From [Warp](http://warp.net/), 2013 September.
 

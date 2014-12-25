@@ -6,4 +6,4 @@ comments: true
 categories: Listening
 ---
 
-{%img /images/post/bleep-guide-to-independent.jpg %}
+<img src="/images/bleep-guide-to-independent.jpg" class="image">

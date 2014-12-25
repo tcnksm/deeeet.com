@@ -6,7 +6,7 @@ comments: true
 categories: Listening
 ---
 
-{%img /images/post/jon-hopkins-immunity.jpg %}
+<img src="/images/jon-hopkins-immunity.jpg" class="image">
 
 From [Domino Records](http://www.dominorecordco.com/), 2013 June.
 

@@ -6,7 +6,7 @@ comments: true
 categories: golang
 ---
 
-{%img /images/post/spiral.png %}
+<img src="/images/spiral.png" class="image">
 
 Goを始めた．今は[Tour of go](http://go-tour-jp.appspot.com)を黙々と写生している．
 

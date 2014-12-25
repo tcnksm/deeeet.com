@@ -1,6 +1,5 @@
 +++
 date = "2014-10-23T22:37:06+09:00"
-draft = true
 title = "Move Fast, Don't Break Your Infra Config"
 +++
 

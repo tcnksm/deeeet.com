@@ -14,7 +14,7 @@ dmuxを使うと現在起動中のtmuxのwindowにおいて，新しくpaneを�
 
 以下は簡単な動作例．
 
-{%img /images/post/dmux.gif %}
+<img src="/images/dmux.gif" class="image">
 
 上のデモでは，以下のことが可能であることを示している．
 

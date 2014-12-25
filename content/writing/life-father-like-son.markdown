@@ -6,7 +6,7 @@ comments: true
 categories: Watching
 ---
 
-{%img /images/post/soshite.jpg %}
+<img src="/images/soshite.jpg" class="image">
 
 丸の内ピカデリーにて．
 

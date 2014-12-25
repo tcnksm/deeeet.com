@@ -41,11 +41,11 @@ res.start {|http| http.request(req)}
 
 通知は以下のような感じ．
 
-{%img /images/post/push_normal.PNG %}
+<img src="/images/push_normal.PNG" class="image">
 
 通知をタップすると，詳細が表示される．
 
-{%img /images/post/push_normal2.PNG %}
+<img src="/images/push_normal2.PNG" class="image">
 
 通知本文内のURLは自動で判別されるため，ブラウザで開くことができる．`url`と`url_title`パラメータを与えれば，追加でURLを送ることもできる．これで長いURLも送ることができるし，アプリのURLスキームも使えるので，例えば上のように`tel:117`とすれば，タップでそのまま電話アプリを開いて117に電話するなんてこともできる（117はありえんが）．また`sound`パラメータで通知音を変更することもできる．使える音は[ここ](https://pushover.net/api#sounds)にある．
 
@@ -58,7 +58,7 @@ res.start {|http| http.request(req)}
 
 例えば通知のレベルをHighにすると，通知は以下のように赤色になる．
 
-{%img /images/post/push_hp.PNG %}
+<img src="/images/push_hp.PNG" class="image">
 
 通知のレベルをEmergencyにする場合は，以下のように`retry`で通知の間隔，`expire`で通知の持続時間を指定する必要がある．
 
@@ -76,11 +76,11 @@ req.set_form_data({
 
 通知は以下のように，Highより赤く表示される．
 
-{%img /images/post/push_em.PNG %}
+<img src="/images/push_em.PNG" class="image">
 
 通知を止めるには，メッセージを開いて"Acknowledge Notification"をタップする必要がある．
 
-{%img /images/post/push_em2.PNG %}
+<img src="/images/push_em2.PNG" class="image">
 
 ざっと触ってみたけど簡単だった．基本，障害通知を意識して作られてる印象あるけど，もっといろいろ面白い使い道がありそう．[IFTTTのRecipe](https://ifttt.com/pushover)も作れるようになってる．IFTTTでは物足りないときに簡単にスクリプト組めそうでよい．
 

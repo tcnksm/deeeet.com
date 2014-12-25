@@ -6,7 +6,7 @@ comments: true
 categories: Listening
 ---
 
-{% img /images/post/inheritors.jpg %}
+<img src="/images/inheritors.jpg" class="image">
 {% snd https://soundcloud.com/experimedia/holden-the-inheritors %}
 
 

@@ -6,4 +6,4 @@ comments: true
 categories: Watching
 ---
 
-{%img /images/post/sonohinomaeni.jpg %}
+<img src="/images/sonohinomaeni.jpg" class="image">

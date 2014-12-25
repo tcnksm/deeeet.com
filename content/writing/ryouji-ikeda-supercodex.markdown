@@ -6,7 +6,7 @@ comments: true
 categories: Listening
 ---
 
-{%img /images/post/supercodex.jpg %}
+<img src="/images/supercodex.jpg" class="image">
 
 From [Raster-noton](http://www.raster-noton.net/), 2013 November.
 

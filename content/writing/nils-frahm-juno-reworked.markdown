@@ -6,7 +6,7 @@ comments: true
 categories: Listening
 ---
 
-{%img /images/post/nils-fram-juno-reworked.jpg %}
+<img src="/images/nils-fram-juno-reworked.jpg" class="image">
 
 From [Erased Tapes](http://www.erasedtapes.com/), 2013 July.
 

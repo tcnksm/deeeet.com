@@ -6,7 +6,7 @@ comments: true
 categories: Listening
 ---
 
-{%img /images/post/Konstellaatio.jpg %}
+<img src="/images/Konstellaatio.jpg" class="image">
 
 From [Sähkö Recordings](http://www.sahkorecordings.com/), 2014 January.
 

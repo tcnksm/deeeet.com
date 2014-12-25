@@ -6,5 +6,5 @@ comments: true
 categories: Listening
 ---
 
-{%img /images/post/paracosm.jpg %}
+<img src="/images/paracosm.jpg" class="image">
 

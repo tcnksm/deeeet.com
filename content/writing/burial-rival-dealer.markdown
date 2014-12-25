@@ -6,7 +6,7 @@ comments: true
 categories: Listening
 ---
 
-{%img /images/post/Burial-Rival-Dealer.png %}
+<img src="/images/Burial-Rival-Dealer.png" class="image">
 
 From [Hyperdub](http://www.hyperdub.net/), 2013 December.
 

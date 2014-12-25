@@ -6,7 +6,7 @@ comments: true
 categories: Art
 ---
 
-{% img /images/post/gursky.jpg %}
+<img src="/images/gursky.jpg" class="image">
 
 Andreas Gurskyはドイツの現代写真家．その日本初の個展．
 

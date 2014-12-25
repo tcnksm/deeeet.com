@@ -6,7 +6,7 @@ comments: true
 categories: Watching
 ---
 
-{%img /images/post/jigokude.jpg %}
+<img src="/images/jigokude.jpg" class="image">
 
 
 笑った．

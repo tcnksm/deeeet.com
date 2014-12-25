@@ -18,7 +18,7 @@ categories: docker
 
 以下は，簡単なデモ．
 
-{%img /images/post/flynn.gif %}
+<img src="/images/flynn.gif" class="image">
 
 やっていることは以下．
 

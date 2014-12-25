@@ -14,7 +14,7 @@ categories: golang
 
 以下は簡単な動作例．
 
-{%img /images/post/cli-init.gif %}
+<img src="/images/cli-init.gif" class="image">
 
 上のデモでは，`add`と`list`，`delete`というサブコマンドをもつ`todo`アプリケーションを生成している．生成結果は，[tcnksm/sample-cli-init](https://github.com/tcnksm/sample-cli-init)にある．
 

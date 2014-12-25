@@ -6,7 +6,7 @@ comments: true
 categories: Listening
 ---
 
-{%img /images/post/Majical-Cloudz-Impersonator2.jpg %}
+<img src="/images/Majical-Cloudz-Impersonator2.jpg" class="image">
 
 From [Matador Records](http://www.matadorrecords.com/), 2013 March. 
 

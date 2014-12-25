@@ -6,6 +6,6 @@ comments: true
 categories: Listening
 ---
 
-{%img /images/post//newsfromnowhere.jpg %}
+<img src="/images//newsfromnowhere.jpg" class="image">
 
 

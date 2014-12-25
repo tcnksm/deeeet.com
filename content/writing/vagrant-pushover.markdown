@@ -14,7 +14,7 @@ Vagrantのプロビジョニングはものすごく時間がかかる．その�
 
 以下のような通知を受け取ることができる．
 
-{%img /images/post/vagrant-pushover.png %}
+<img src="/images/vagrant-pushover.png" class="image">
 
 ## インストール
 

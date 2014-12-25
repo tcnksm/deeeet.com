@@ -6,7 +6,7 @@ comments: true
 categories: Listening
 ---
 
-{%img /images/post/shigeto-no-better-time-than-now.jpg %}
+<img src="/images/shigeto-no-better-time-than-now.jpg" class="image">
 
 From [Ghostly International](http://ghostly.com/), 2013 August.
 

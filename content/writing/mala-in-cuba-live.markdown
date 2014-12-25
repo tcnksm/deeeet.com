@@ -6,7 +6,7 @@ comments: true
 categories: Live
 ---
 
-{% img /images/post/mala-in-cuba.jpg %}
+<img src="/images/mala-in-cuba.jpg" class="image">
 
 Evening Sessionに行ってきた．気持ちよかった．
 ['Cuba Electronic'](http://www.youtube.com/watch?v=-vDiPQtkVI8)が流れたときの高揚感が最高だった．

@@ -6,7 +6,7 @@ comments: true
 categories: Listening
 ---
 
-{% img /images/post/atom-tm-hd.jpg %}
+<img src="/images/atom-tm-hd.jpg" class="image">
 
 From [Raster-noton](http://www.raster-noton.net/), 2013 March.
 

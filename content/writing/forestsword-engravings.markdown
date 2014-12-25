@@ -6,7 +6,7 @@ comments: true
 categories: Listening
 ---
 
-{%img /images/post/forestsword-engravings.jpg %}
+<img src="/images/forestsword-engravings.jpg" class="image">
 
 From [Tri Angle records](http://tri-anglerecords.com/), 2013 August.
 

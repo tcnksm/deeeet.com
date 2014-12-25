@@ -6,4 +6,4 @@ comments: true
 categories: Listening
 ---
 
-{%img /images/post/r-plus-seven.jpg %}
+<img src="/images/r-plus-seven.jpg" class="image">

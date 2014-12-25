@@ -6,7 +6,7 @@ comments: true
 categories: Listening
 ---
 
-{% img /images/post/atak019.jpeg %}
+<img src="/images/atak019.jpeg" class="image">
 
 "Soundtrack for Children who wont die, Shusaku Arakawa"は，「養老天命反転地」で有名な荒川修作氏のドキュメンタリー映画 "死なない子供、荒川修作" のサウンドトラックを2年間かけて再構築したアルバム．ピアノソロだけではなく，電子音響も取り入れた作品．
 

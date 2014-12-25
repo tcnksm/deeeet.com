@@ -23,5 +23,8 @@ curl  -H "X-DNSimple-Token: ${DNSIMPLE_EMAIL}:${DNSIMPLE_TOKEN}" \
       https://api.dnsimple.com/v1/domains/deeeet.com/records
 
 
-# Check the DNS record configuration
+echo "Check the DNS record configuration"
 dig @ns1.dnsimple.com deeeet.com A
+
+echo "Check the domain is using the DNSimple name server"
+dig NS deeeet.com +short

@@ -16,6 +16,13 @@ $ go get -v github.com/spf13/hugo
 $ hugo server --buildDrafts --watch
 ```
 
+Or run with docker.
+
+```bash
+$ docker build -t tcnksm/deeeet-com .
+$ docker run -p 80:80 tcnksm/deeeet
+```
+
 ## Design
 
 Design is written by [sass](http://sass-lang.com/). After editting it, run the following commands,

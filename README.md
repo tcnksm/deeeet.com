@@ -19,9 +19,10 @@ $ hugo server --buildDrafts --watch
 Or run with docker.
 
 ```bash
-$ docker build -t tcnksm/deeeet-com .
-$ docker run -p 80:80 tcnksm/deeeet
+$ docker run -p 80:80 tcnksm/deeeet-com
 ```
+
+See DockerHub automated build status [here](https://registry.hub.docker.com/u/tcnksm/deeeet-com/).
 
 ## Design
 

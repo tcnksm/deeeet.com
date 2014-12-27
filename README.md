@@ -24,6 +24,13 @@ $ docker run -p 80:80 tcnksm/deeeet-com
 
 See DockerHub automated build status [here](https://registry.hub.docker.com/u/tcnksm/deeeet-com/).
 
+Or run it on CoreOS.
+
+```bash
+$ vagrant up
+$ export FLEETCTL_ENDPOINT=http://172.20.20.101:4001
+```
+
 ## Design
 
 Design is written by [sass](http://sass-lang.com/). After editting it, run the following commands,

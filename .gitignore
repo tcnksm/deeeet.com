@@ -1,3 +1,9 @@
 public/
 .sass-cache/
 .envrc
+
+*.backup
+*.tfvars
+*.tfstate
+terraform.tfplan
+terraform.tfstate

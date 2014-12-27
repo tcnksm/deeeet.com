@@ -8,13 +8,13 @@ Setup [CoreOS](https://coreos.com/) cluster and connect them with [DNSimple](htt
 First, run `plan` to check what happens.
 
 ```bash
-$ terraform plan -var digitalocean_token=${DIGITALOCEAN_KEY} -var keys=${SSH_KEYS}
+$ terraform plan -var-file terraform.tfvars
 ```
 
 Then, run `apply` to execute.
 
 ```bash
-$ terraform apply -var digitalocean_token=${DIGITALOCEAN_KEY} -var keys=${SSH_KEYS}
+$ terraform apply -var-file terraform.tfvars
 ```
 
 ## Setup

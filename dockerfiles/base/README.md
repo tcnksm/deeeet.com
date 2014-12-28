@@ -9,7 +9,7 @@ Base Dockerfile for [deeeet.com](http://deeeet.com/). The site is built by [Hugo
 
 `tcnksm/deeeet-com-base` image supports below tags. Link is its `Dockerfile`. 
 
-- [`latest`,`1.0` (1.0/Dockerfile)](https://github.com/tcnksm/deeeet.com/blob/master/dockerfile-base/1.0/Dockerfile)
+- [`latest`,`1.0` (1.0/Dockerfile)](https://github.com/tcnksm/deeeet.com/blob/master/dockerfiles/base/1.0/Dockerfile)
 
 ## Author
 

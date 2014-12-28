@@ -1,7 +1,7 @@
 upstream apache_pool {
-{{ range $server := .services_apache }}
-    server {{ $server.Value }};
-{{ end }}
+{{range getvs "/services/deeeet-com/*"}}
+    server {{.}};
+{{end}}
 }
 
 server {

@@ -1,6 +1,7 @@
 # Use same cloud-config.yml which terraform
 # uses for creating droplet on DigitalOcean. 
-CLOUD_CONFIG_PATH = File.join(File.dirname(__FILE__), "terraform/cloud-config.yml")
+CLOUD_CONFIG_WEB_PATH = File.join(File.dirname(__FILE__), "terraform/cloud-config-web.yml")
+CLOUD_CONFIG_LB_PATH = File.join(File.dirname(__FILE__), "terraform/cloud-config-lb.yml")
 
 # Vagrant settings
 Vagrant.configure("2") do |config|
@@ -34,7 +35,7 @@ Vagrant.configure("2") do |config|
     config.vm.network :private_network, ip: "172.20.20.101"
 
     # Place cloud-config on CoreOS
-    config.vm.provision :file, :source => "#{CLOUD_CONFIG_PATH}", :destination => "/tmp/vagrantfile-user-data"
+    config.vm.provision :file, :source => "#{CLOUD_CONFIG_LB_PATH}", :destination => "/tmp/vagrantfile-user-data"
     config.vm.provision :shell, :inline => "mv /tmp/vagrantfile-user-data /var/lib/coreos-vagrant/", :privileged => true
   end
 
@@ -52,7 +53,7 @@ Vagrant.configure("2") do |config|
     config.vm.network :private_network, ip: "172.20.20.102"
 
     # Place cloud-config on CoreOS
-    config.vm.provision :file, :source => "#{CLOUD_CONFIG_PATH}", :destination => "/tmp/vagrantfile-user-data"
+    config.vm.provision :file, :source => "#{CLOUD_CONFIG_WEB_PATH}", :destination => "/tmp/vagrantfile-user-data"
     config.vm.provision :shell, :inline => "mv /tmp/vagrantfile-user-data /var/lib/coreos-vagrant/", :privileged => true
   end
 

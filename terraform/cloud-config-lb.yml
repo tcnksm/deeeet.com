@@ -3,13 +3,14 @@
 coreos:
   etcd:
     # curl -w "\n" https://discovery.etcd.io/new
-    discovery: <DISCOVERY_IP>
+    discovery: https://discovery.etcd.io/b2f4664ea4a971c3bd267db642d9b0c7
     addr: $private_ipv4:4001
     peer-addr: $private_ipv4:7001
       
   fleet:
     # used for fleetctl ssh command
     public-ip: $private_ipv4
+    metadata: role=lb
   
   units:
     - name: etcd.service

@@ -5,6 +5,7 @@ CLOUD_CONFIG_PATH = File.join(File.dirname(__FILE__), "terraform/cloud-config.ym
 # Vagrant settings
 Vagrant.configure("2") do |config|
   # always use Vagrants insecure key
+  # To use fleet from local environment, exec ssh-add ~/.vagrant.d/insecure_private_key
   config.ssh.insert_key = false
 
   # Setup box URL to use

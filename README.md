@@ -29,6 +29,7 @@ Or run it on CoreOS.
 ```bash
 $ vagrant up
 $ export FLEETCTL_ENDPOINT=http://172.20.20.101:4001
+$ export ETCDCTL_PEERS=http://172.20.20.101:4001
 ```
 
 ## Design

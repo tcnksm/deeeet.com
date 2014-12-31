@@ -1,0 +1,29 @@
+[Unit]
+Description=deeeet.com on port %i
+
+# Requirements
+Requires=etcd.service
+Requires=docker.service
+Requires=deeeet-com-discovery@%i.service
+
+[Service]
+# Let processes take awhile to start up (for first run Docker containers)
+TimeoutStartSec=0
+
+# Change killmode from "control-group" to "none" to let Docker remove
+# work correctly.
+KillMode=none
+
+# Get CoreOS environmental variables
+EnvironmentFile=/etc/environment
+
+# Pre-start and Start
+ExecStartPre=-/usr/bin/docker kill deeeet-com.%i
+ExecStartPre=-/usr/bin/docker rm deeeet-com.%i
+ExecStartPre=/usr/bin/docker pull tcnksm/deeeet-com
+ExecStart=/usr/bin/docker run --name deeeet-com.%i -p ${COREOS_PRIVATE_IPV4}:%i:80 tcnksm/deeeet-com
+ExecStop=/usr/bin/docker stop deeeet-com.%i
+
+[X-Fleet]
+# Don't schedule on the same machine as other Apache instances
+X-Conflicts=deeeet-com@*.service

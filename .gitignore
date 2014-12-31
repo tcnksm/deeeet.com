@@ -2,6 +2,7 @@ public/
 .sass-cache/
 .vagrant/
 .envrc
+.DS_Store
 
 *.backup
 *.tfvars

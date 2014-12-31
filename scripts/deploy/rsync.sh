@@ -8,6 +8,6 @@ cd ${DIR}
 cp public/index.xml public/writing/atom.xml
 
 # Send all files 
-echo rsync -avze "'ssh -p ${BLOG_PORT}'" --delete \
+rsync -avze "ssh -p ${BLOG_PORT}" --delete \
       --chmod=Du=rwx,Dg=rx,Do=rx,Fu=rw,Fg=r,Fo=r \
       public/ taichi@${BLOG_IP}:~/www/public

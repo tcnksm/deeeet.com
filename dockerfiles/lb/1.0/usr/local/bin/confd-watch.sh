@@ -16,8 +16,8 @@ until confd -onetime -node $ETCD -config-file /etc/confd/conf.d/nginx.toml; do
 done
 
 # Put a continual polling `confd` process into the background to watch
-# for changes every 10 seconds
-confd -interval 10 -node $ETCD -config-file /etc/confd/conf.d/nginx.toml &
+# for changes every 5 seconds
+confd -interval 5 -node $ETCD -config-file /etc/confd/conf.d/nginx.toml &
 echo "[nginx] confd is now monitoring etcd for changes..."
 
 # Start the Nginx service using the generated config

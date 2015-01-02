@@ -1,7 +1,27 @@
-# Use same cloud-config.yml which terraform
-# uses for creating droplet on DigitalOcean. 
-CLOUD_CONFIG_WEB_PATH = File.join(File.dirname(__FILE__), "terraform/cloud-config-web.yml")
-CLOUD_CONFIG_LB_PATH = File.join(File.dirname(__FILE__), "terraform/cloud-config-lb.yml")
+require "yaml"
+
+# Replace discovery url with new one
+def set_new_discovery(path, discovery)
+  cloud_config = YAML.load_file(path)
+  cloud_config["coreos"]["etcd"]["discovery"] = discovery
+  
+  # Write to temp file
+  tmp_path = File.join("/tmp",File.basename(path)) 
+  File.open(tmp_path,"w") do |f|
+    f.puts "#cloud-config"
+    f.puts cloud_config.to_yaml.gsub(/^---\n/,"")
+  end
+  return tmp_path
+end
+
+# Use same cloud-config.yml which terraform uses for creating droplet on DigitalOcean.
+cloud_config_lb_path = File.join(File.dirname(__FILE__), "terraform/cloud-config-lb.yml")
+cloud_config_web_path = File.join(File.dirname(__FILE__), "terraform/cloud-config-web.yml")
+
+# Generate new discovery url
+discovery=`curl -w "\n" https://discovery.etcd.io/new 2>/dev/null`.strip()
+cloud_config_lb_path= set_new_discovery(cloud_config_lb_path,discovery)
+cloud_config_web_path= set_new_discovery(cloud_config_web_path,discovery)
 
 # Vagrant settings
 Vagrant.configure("2") do |config|
@@ -35,7 +55,7 @@ Vagrant.configure("2") do |config|
     config.vm.network :private_network, ip: "172.20.20.101"
 
     # Place cloud-config on CoreOS
-    config.vm.provision :file, :source => "#{CLOUD_CONFIG_LB_PATH}", :destination => "/tmp/vagrantfile-user-data"
+    config.vm.provision :file, :source => "#{cloud_config_lb_path}", :destination => "/tmp/vagrantfile-user-data"
     config.vm.provision :shell, :inline => "mv /tmp/vagrantfile-user-data /var/lib/coreos-vagrant/", :privileged => true
   end
 
@@ -53,7 +73,7 @@ Vagrant.configure("2") do |config|
     config.vm.network :private_network, ip: "172.20.20.102"
 
     # Place cloud-config on CoreOS
-    config.vm.provision :file, :source => "#{CLOUD_CONFIG_WEB_PATH}", :destination => "/tmp/vagrantfile-user-data"
+    config.vm.provision :file, :source => "#{cloud_config_web_path}", :destination => "/tmp/vagrantfile-user-data"
     config.vm.provision :shell, :inline => "mv /tmp/vagrantfile-user-data /var/lib/coreos-vagrant/", :privileged => true
   end
 

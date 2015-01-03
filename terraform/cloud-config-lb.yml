@@ -3,7 +3,7 @@
 coreos:
   etcd:
     # curl -w "\n" https://discovery.etcd.io/new
-    discovery: DISCOVERY_URL
+    discovery: *****
     addr: $private_ipv4:4001
     peer-addr: $private_ipv4:7001
       
@@ -17,3 +17,7 @@ coreos:
       command: start
     - name: fleet.service
       command: start
+
+users:
+  - name: core
+    coreos-ssh-import-github: tcnksm

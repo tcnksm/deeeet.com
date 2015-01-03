@@ -10,9 +10,9 @@ resource "digitalocean_droplet" "deeeet-com-lb1" {
   image = "coreos-stable"
   private_networking = true
   region = "sgp1"
-  size = "${var.size}"
-  ssh_keys = ["${var.ssh_key_imac}","${var.ssh_key_mba}"]
-  user_data = "${file("cloud-config.yml")}"
+  size = "512mb"
+  ssh_keys = ["${var.ssh_key}"]
+  user_data = "${file("cloud-config-lb.yml")}"
 }
 
 resource "digitalocean_droplet" "deeeet-com-web1" {
@@ -20,9 +20,9 @@ resource "digitalocean_droplet" "deeeet-com-web1" {
   image = "coreos-stable"
   private_networking = true
   region = "sgp1"
-  size = "${var.size}"
-  ssh_keys = ["${var.ssh_key_imac}","${var.ssh_key_mba}"]
-  user_data = "${file("cloud-config.yml")}"
+  size = "512mb"
+  ssh_keys = ["${var.ssh_key}"]
+  user_data = "${file("cloud-config-web.yml")}"
 }
 
 

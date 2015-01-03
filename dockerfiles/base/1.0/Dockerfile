@@ -37,4 +37,10 @@ RUN echo "daemon off;" >> /etc/nginx/nginx.conf
 ADD etc/nginx/sites-enabled/ /etc/nginx/sites-enabled/
 EXPOSE 80
 
+# Add ONBUILD setting so that site source is added
+# and the site is built by hugo. And place where nginx can serve it
+ONBUILD ADD . /site-source
+ONBUILD RUN cd /site-source && hugo
+ONBUILD RUN cp -r /site-source/public /app/
+
 CMD ["/usr/sbin/nginx"]

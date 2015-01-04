@@ -11,7 +11,11 @@ coreos:
     # used for fleetctl ssh command
     public-ip: $private_ipv4
     metadata: role=lb,provider=digitalocean
-  
+
+  update:
+    group: alpha
+    reboot-strategy: best-effort    
+    
   units:
     - name: etcd.service
       command: start

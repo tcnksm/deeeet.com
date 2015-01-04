@@ -12,6 +12,10 @@ coreos:
     public-ip: $private_ipv4
     metadata: role=web,provider=digitalocean
   
+  update:
+    group: alpha
+    reboot-strategy: best-effort    
+      
   units:
     - name: etcd.service
       command: start

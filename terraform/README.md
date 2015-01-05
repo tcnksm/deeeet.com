@@ -8,19 +8,25 @@ Setup [CoreOS](https://coreos.com/) cluster and connect them with [DNSimple](htt
 First, run `plan` to check what happens.
 
 ```bash
-$ terraform plan -var-file terraform.tfvars
+$ terraform plan
 ```
 
 Then, run `apply` to execute.
 
 ```bash
-$ terraform apply -var-file terraform.tfvars
+$ terraform apply
 ```
 
 ## Setup
 
-You need `discovery` url for etcd get below command and edit `cloud-config.yml`. 
+First you need to create ssh-key and register it on [https://cloud.digitalocean.com/ssh_keys](https://cloud.digitalocean.com/ssh_keys). And when terraforming, set above key id as `var.ssh_key_id`. 
 
 ```bash
-$ curl -w "\n" https://discovery.etcd.io/new
+$ ssh-keygen -q -t rsa -f ~/.ssh/deeeet-com -N '' -C deeeet-com
+```
+
+To operate on CoreOS, you also need to register key to your ssh-agent.
+
+```bash
+$ ssh-add ~/.ssh/deeeet-com
 ```

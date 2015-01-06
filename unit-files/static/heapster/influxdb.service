@@ -1,0 +1,27 @@
+[Unit]
+Description=InfluxDB Service
+
+# Requirements
+After=docker.service
+
+# Dependency ordering
+Requires=docker.service
+
+[Service]
+# Let the process take awhile to start up (for first run Docker containers)
+TimeoutStartSec=0
+
+# Change killmode from "control-group" to "none" to let Docker remove work correctly.
+KillMode=none
+
+# Restart policy
+Restart=always
+
+ExecStartPre=-/usr/bin/docker kill influxdb
+ExecStartPre=-/usr/bin/docker rm -f influxdb
+ExecStartPre=/usr/bin/docker pull kubernetes/heapster_influxdb
+ExecStart=/usr/bin/docker run --name influxdb -p 8083:8083 -p 8086:8086 -p 8090:8090 -p 8099:8099 kubernetes/heapster_influxdb
+ExecStop=/usr/bin/docker stop -t 2 influxdb
+
+[X-Fleet]
+MachineMetadata=role=db

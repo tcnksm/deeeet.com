@@ -1,0 +1,30 @@
+[Unit]
+Description=Heapster Agent Service (Buddy)
+
+# Requirements
+After=docker.service
+After=influxdb.service
+
+# Dependency ordering
+Requires=docker.service
+Requires=influxdb.service
+
+[Service]
+# Let the process take awhile to start up (for first run Docker containers)
+TimeoutStartSec=0
+
+# Change killmode from "control-group" to "none" to let Docker remove work correctly.
+KillMode=none
+
+# Restart policy
+Restart=always
+
+ExecStartPre=-/usr/bin/mkdir -p /home/core/heapster
+ExecStartPre=-/usr/bin/docker kill heapster-buddy
+ExecStartPre=-/usr/bin/docker rm -f heapster-buddy
+ExecStartPre=/usr/bin/docker pull vish/heapster-buddy-coreos
+ExecStart=/usr/bin/docker run --name heapster-buddy --net host -v /home/core/heapster:/var/run/heapster vish/heapster-buddy-coreos
+ExecStop=/usr/bin/docker stop -t 2 heapster-buddy
+
+[X-Fleet]
+MachineOf=influxdb.service

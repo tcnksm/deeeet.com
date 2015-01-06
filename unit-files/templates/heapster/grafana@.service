@@ -1,0 +1,34 @@
+[Unit]
+Description=Grafana Service on port %i
+
+# Requirements
+After=docker.service
+After=influxdb.service
+
+# Dependency ordering
+Requires=docker.service
+Requires=influxdb.service
+BindsTo=influxdb.service
+
+[Service]
+# Let the process take awhile to start up (for first run Docker containers)
+TimeoutStartSec=0
+
+# Change killmode from "control-group" to "none" to let Docker remove work correctly.
+KillMode=none
+
+# Restart policy
+Restart=always
+
+# Get CoreOS environmental variables
+EnvironmentFile=/etc/environment
+
+# Start Container
+ExecStartPre=-/usr/bin/docker kill grafana.%i
+ExecStartPre=-/usr/bin/docker rm grafana.%i
+ExecStartPre=/usr/bin/docker pull tutum/grafana
+ExecStart=/usr/bin/docker run --name grafana.%i -p ${COREOS_PRIVATE_IPV4}:%i:80 -e HTTP_USER=admin -e HTTP_PASS=admin -e INFLUXDB_HOST=${COREOS_PUBLIC_IPV4} -e INFLUXDB_NAME=k8s tutum/grafana
+ExecStop=/usr/bin/docker stop grafana.%i
+
+[X-Fleet]
+MachineOf=influxdb.service

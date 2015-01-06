@@ -25,5 +25,9 @@ ExecStart=/usr/bin/docker run --name deeeet-com.%i -p ${COREOS_PRIVATE_IPV4}:%i:
 ExecStop=/usr/bin/docker stop deeeet-com.%i
 
 [X-Fleet]
+# Don't shecule on the host its role is db
+MachineMetadata=role=lb
+MachineMetadata=role=web
+
 # Don't schedule on the same machine as other Apache instances
-X-Conflicts=deeeet-com@*.service
+Conflicts=deeeet-com@*.service

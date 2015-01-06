@@ -29,4 +29,4 @@ ExecStop=/usr/bin/etcdctl rm /services/deeeet-com/${COREOS_PRIVATE_IPV4}
 
 [X-Fleet]
 # Schedule on the same machine as the associated Apache service
-X-ConditionMachineOf=deeeet-com@%i.service
+MachineOf=deeeet-com@%i.service

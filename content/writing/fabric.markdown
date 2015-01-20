@@ -100,7 +100,7 @@ $ fab stg release:feature/ABC
 - [今日からすぐに使えるデプロイ・システム管理ツール Fabric 入門 - 科学と非科学の迷宮](http://shiumachi.hatenablog.com/entry/20130414/1365920515)
 - [俺達のFabric 〜余計な仕事はFabricに任せよう〜｜サイバーエージェント 公式エンジニアブログ](http://ameblo.jp/principia-ca/entry-11925739692.html)
 - [Python製デプロイツール Fabricを初めて使う際に役立つTips](http://dekokun.github.io/posts/2013-04-07.html)
-- [Chefに挫折したあなたへ。Fabricのすすめ](http://hozumi.github.io/2013/03/chef-fabric-ja.html)
+- [Chefに挫折したあなたへ．Fabricのすすめ](http://hozumi.github.io/2013/03/chef-fabric-ja.html)
 - [Fabric デプロイツールのPythonicな書き方 - Ian Lewis](http://www.ianlewis.org/jp/fabric-pythonic)
 
 ### 自動化や開発フローについて

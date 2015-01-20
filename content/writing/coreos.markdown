@@ -22,7 +22,7 @@ cover_image: coreos.png
 - Dockerコンテナによるアプリケーションの起動
 - クラスタリング
 
-CoreOSはとてもミニマルである．従来のLinuxディストリビューションが機能を追加することでその価値を高めていったのに対して，CoreOSは必要最低限まで機能を削ぎ落としていることに価値がある（["CoreOS の調査：足し算から引き算へと、Linux ディストリビューションを再編する"](http://agilecatcloud.com/2014/11/17/coreos-%E3%81%AE%E8%AA%BF%E6%9F%BB%EF%BC%9A%E8%B6%B3%E3%81%97%E7%AE%97%E3%81%8B%E3%82%89%E5%BC%95%E3%81%8D%E7%AE%97%E3%81%B8%E3%81%A8%E3%80%81linux-%E3%83%87%E3%82%A3%E3%82%B9%E3%83%88%E3%83%AA/)）．
+CoreOSはとてもミニマルである．従来のLinuxディストリビューションが機能を追加することでその価値を高めていったのに対して，CoreOSは必要最低限まで機能を削ぎ落としていることに価値がある（["CoreOS の調査：足し算から引き算へと，Linux ディストリビューションを再編する"](http://agilecatcloud.com/2014/11/17/coreos-%E3%81%AE%E8%AA%BF%E6%9F%BB%EF%BC%9A%E8%B6%B3%E3%81%97%E7%AE%97%E3%81%8B%E3%82%89%E5%BC%95%E3%81%8D%E7%AE%97%E3%81%B8%E3%81%A8%E3%80%81linux-%E3%83%87%E3%82%A3%E3%82%B9%E3%83%88%E3%83%AA/)）．
 
 CoreOSは安全かつ容易なOSアップデート機構を持っている．これには[Omaha](https://code.google.com/p/omaha/)というChromeOSやChromeの更新に利用されているUpdate Engineを使っており，RootFSを丸ごと入れ替えることでアップデートを行う．これによりShellShockのような脆弱性が発見されても，いちいちパッチを当てるといったことやらずに済む．
 

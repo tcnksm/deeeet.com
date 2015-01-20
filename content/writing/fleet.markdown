@@ -279,7 +279,7 @@ service_specific_directive_3
 fleet_specific_directive
 ```
 
-`[Unit]`セクションには，Unitの依存関係/順序関係など、Unitのタイプに依存しない設定を既述する（systemdと同様）．
+`[Unit]`セクションには，Unitの依存関係/順序関係など，Unitのタイプに依存しない設定を既述する（systemdと同様）．
 
 `[Service]`セクションには，service固有の設定を書く．例えば，起動・停止コマンドや，サービス起動前に実行するべきコマンド，環境変数ファイルの場所などを既述する（systemdと同様）．
 

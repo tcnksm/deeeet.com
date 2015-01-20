@@ -6,7 +6,7 @@ comments: true
 categories: golang
 ---
 
-[@motemen]()さんの["Wercker で Go のプロジェクトをクロスコンパイルし、GitHub にリリースする - 詩と創作・思索のひろば (Poetry, Writing and Contemplation)"](http://motemen.hatenablog.com/entry/2014/06/27/xcompile-go-and-release-to-github-with-wercker)を手元からやる．
+[@motemen]()さんの["Wercker で Go のプロジェクトをクロスコンパイルし，GitHub にリリースする - 詩と創作・思索のひろば (Poetry, Writing and Contemplation)"](http://motemen.hatenablog.com/entry/2014/06/27/xcompile-go-and-release-to-github-with-wercker)を手元からやる．
 
 [Wercker](http://wercker.com/)からリリース良いと思うけど，自分はリリースは手元で管理したい．その辺は毎回同じスクリプトでやってるのでまとめておく．なお，コードは全て[tcnksm/go-distribution-scripts](https://github.com/tcnksm/go-distribution-scripts)にある．
 

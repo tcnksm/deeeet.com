@@ -156,7 +156,7 @@ MartiniとGinkgoとの連携は["Getting started with RethinkDB, Ginkgo and Mart
 
 ## Wercker
 
-Werckerの使い方は，["Githubのプライベートリポジトリでも無料で使えるCI、Werckerを使ってrails newからHerokuのデプロイまでやってみる"](http://blog.mah-lab.com/2014/01/08/rails-wercker-heroku-deploy/)が詳しい．基本はこの通りにやれば連携可能．
+Werckerの使い方は，["Githubのプライベートリポジトリでも無料で使えるCI，Werckerを使ってrails newからHerokuのデプロイまでやってみる"](http://blog.mah-lab.com/2014/01/08/rails-wercker-heroku-deploy/)が詳しい．基本はこの通りにやれば連携可能．
 
 `wercker.yml`はレポジトリを登録すると，自動でGo専用のものが生成され，そのまま使える．
 
@@ -185,7 +185,7 @@ DockerやSerfとかを触っていると，やっぱコードレベルで中身�
 - [#117: Go, Martini and Gophercasts with Jeremy Saenz - The Changelog](http://thechangelog.com/117/)
 - [Announcing Ginkgo and Gomega: BDD-Style Testing for Golang - Pivotal Labs](http://pivotallabs.com/announcing-ginkgo-and-gomega-bdd-style-testing-for-golang/)
 - [Getting started with RethinkDB, Ginkgo and Martini on wercker](http://blog.wercker.com/2014/02/06/RethinkDB-Gingko-Martini-Golang.html)
-- [Githubのプライベートリポジトリでも無料で使えるCI、Werckerを使ってrails newからHerokuのデプロイまでやってみる | mah365](http://blog.mah-lab.com/2014/01/08/rails-wercker-heroku-deploy/)
+- [Githubのプライベートリポジトリでも無料で使えるCI，Werckerを使ってrails newからHerokuのデプロイまでやってみる | mah365](http://blog.mah-lab.com/2014/01/08/rails-wercker-heroku-deploy/)
 
 
 

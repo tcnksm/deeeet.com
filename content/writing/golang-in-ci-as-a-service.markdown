@@ -124,6 +124,6 @@ CI-as-a-Serviceの比較にもなった．結論から言うと自由度の高�
 
 ### 参考
 
-- [Wercker で Go のプロジェクトをクロスコンパイルし、GitHub にリリースする - 詩と創作・思索のひろば (Poetry, Writing and Contemplation)](http://motemen.hatenablog.com/entry/2014/06/27/xcompile-go-and-release-to-github-with-wercker)
+- [Wercker で Go のプロジェクトをクロスコンパイルし，GitHub にリリースする - 詩と創作・思索のひろば (Poetry, Writing and Contemplation)](http://motemen.hatenablog.com/entry/2014/06/27/xcompile-go-and-release-to-github-with-wercker)
 - [Integrate ghr with CI as a Service · tcnksm/ghr Wiki · GitHub](https://github.com/tcnksm/ghr/wiki/Integrate-ghr-with-CI-as-a-Service)
 

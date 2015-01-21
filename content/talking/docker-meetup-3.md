@@ -1,6 +1,5 @@
 ---
-
-title: 'The Age of flynn'
+title: 'flynnの時代'
 date: 2014-07-07
 comments: true
 categories: docker
@@ -8,10 +7,9 @@ categories: docker
 
 <script async class="speakerdeck-embed" data-id="3e5fba00e59601314f771288f3080752" data-ratio="1.77777777777778" src="http://speakerdeck.com/assets/embed.js"></script>
 
-["flynnの時代"](https://speakerdeck.com/tcnksm/flynnfalseshi-dai-number-dockerjp)
+[Docker meetup tokyo #3](http://connpass.com/event/6998/)
 
-["Docker meetup tokyo #3"](http://connpass.com/event/6998/)で発表してきた．内容は，Dockerの応用の１つであるOSSでPaaSをつくる[flynn](https://flynn.io)というプロジェクトの概要とそのアーキテクチャーの紹介．
-
+内容は，Dockerの応用の１つであるOSSでPaaSをつくる[flynn](https://flynn.io)というプロジェクトの概要とそのアーキテクチャーの紹介．FlynnのアーキテクチャやDockerの使いかたは非常に面白く，これからDockerを使うときに参考になると思い発表した．
 
 ### 参考
 

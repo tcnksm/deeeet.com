@@ -21,7 +21,7 @@ categories: golang
 gox \
     -os="darwin linux windows" \
     -arch="386 amd64" \
-    -output "{%raw%} pkg/{{.OS}}_{{.Arch}}/{{.Dir}} {%endraw%}"
+    -output "pkg/{{.OS}}_{{.Arch}}/{{.Dir}}"
 ```
 
 あとは，これらをzipでアーカイブする（[package.sh](https://github.com/tcnksm/go-compile-scripts/blob/master/package.sh)）．

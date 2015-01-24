@@ -30,7 +30,7 @@ index.haml
 
   %body
     %input{type: "text", "ng-model" => "name"}
-    %p Hello, {% raw %} {{ name }} {% endraw %}
+    %p Hello, {{ name }}
 ```
 
 htmlに整形
@@ -51,7 +51,7 @@ index.html
   </head>
   <body>
     <input ng-model='name' type='text'>
-    <p>Hello, {% raw %} {{ name }} {% endraw %}</p>
+    <p>Hello, {{ name }}</p>
   </body>
 </html>
 ```

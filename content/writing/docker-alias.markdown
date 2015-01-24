@@ -53,7 +53,7 @@ $ dl
 コンテナのIPを取得する．
 
 ```bash
-alias dip="docker inspect --format {% raw %} '{{ .NetworkSettings.IPAddress }}' {% endraw %}"
+alias dip="docker inspect --format '{{ .NetworkSettings.IPAddress }}'"
 ```
 
 ```bash

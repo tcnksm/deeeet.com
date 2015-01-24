@@ -104,7 +104,7 @@ rm -rf pkg/
 gox \
     -os="${XC_OS}" \
     -arch="${XC_ARCH}" \
-    -output "{%raw%} pkg/{{.OS}}_{{.Arch}}/{{.Dir}} {%endraw%}"
+    -output "pkg/{{.OS}}_{{.Arch}}/{{.Dir}}"
 ```
 
 出力先は，`-output`で指定できる．フォーマットは，go templateに従う．

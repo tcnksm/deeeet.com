@@ -65,12 +65,12 @@ docker0   Link encap:Ethernet  HWaddr 7a:b1:e2:00:15:66
 ```
 
 ```bash
-$ docker inspect --format '{% raw %} {{ .NetworkSettings.IPAddress }} {% endraw %}' b9ffb0800ca5
+$ docker inspect --format '{{ .NetworkSettings.IPAddress }}' b9ffb0800ca5
 172.17.0.2
 ```
 
 ```bash
-$ docker inspect --format '{% raw %} {{ .NetworkSettings.IPAddress }} {% endraw %}' 4c0d9b786e8f
+$ docker inspect --format '{{ .NetworkSettings.IPAddress }}' 4c0d9b786e8f
 172.17.0.3
 ```
 

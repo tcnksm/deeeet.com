@@ -95,7 +95,7 @@ $ docker run -d -t \
 $ docker run -d -t \
     --name serf2 \
     tcnksm/serf \
-    serf agent -join $(docker inspect --format '{% raw %} {{ .NetworkSettings.IPAddress }} {% endraw %}' 06b0325f6373):7979
+    serf agent -join $(docker inspect --format '{{ .NetworkSettings.IPAddress }}' 06b0325f6373):7979
 ```
 
 `--format`指定するとIPだけを抜き出せる．

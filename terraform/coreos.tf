@@ -7,7 +7,7 @@ resource "digitalocean_droplet" "deeeet-com-lb1" {
   region = "sgp1"
   size = "512mb"
   ssh_keys = ["${var.ssh_key_id}"]
-  user_data = "${file("cloud-config-lb.yml")}"
+  user_data = "${file("../cloud-configs/lb.yml")}"
 }
 
 resource "digitalocean_droplet" "deeeet-com-web1" {
@@ -17,7 +17,7 @@ resource "digitalocean_droplet" "deeeet-com-web1" {
   region = "sgp1"
   size = "512mb"
   ssh_keys = ["${var.ssh_key_id}"]
-  user_data = "${file("cloud-config-web.yml")}"
+  user_data = "${file("../cloud-configs/web.yml")}"
 }
 
 

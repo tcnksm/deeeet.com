@@ -5,7 +5,7 @@ Name-Real: deeeet-com
 Name-Comment: deeeet-com configuration key
 Name-Email: nsd22843@gmail.com
 Expire-Date: 0
-%pubring .pubring.gpg
-%secring .secring.gpg
+%pubring deeeet-com-pubring.gpg
+%secring deeeet-com-secring.gpg
 %commit
 %echo done

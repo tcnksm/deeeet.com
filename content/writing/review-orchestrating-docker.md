@@ -59,3 +59,6 @@ comments: true
 - [Docker Cookbook](http://www.amazon.com/gp/product/149191971X/ref=pd_lpo_sbs_dp_ss_3?pf_rd_p=1944687742&pf_rd_s=lpo-top-stripe-1&pf_rd_t=201&pf_rd_i=1783984783&pf_rd_m=ATVPDKIKX0DER&pf_rd_r=0TN7FPBYNDKAYFTF99FB)
 - [Using Docker](http://www.amazon.com/gp/product/1491915765/ref=pd_lpo_sbs_dp_ss_2?pf_rd_p=1944687742&pf_rd_s=lpo-top-stripe-1&pf_rd_t=201&pf_rd_i=1783984783&pf_rd_m=ATVPDKIKX0DER&pf_rd_r=0TN7FPBYNDKAYFTF99FB)
 
+## 参考
+
+- [Show HN: My first book: Orchestrating Docker](https://news.ycombinator.com/item?id=8947858)

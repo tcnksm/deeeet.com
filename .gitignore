@@ -2,6 +2,7 @@ public/
 .sass-cache/
 .vagrant/
 .envrc
+.ddapikey
 .DS_Store
 
 *.backup

@@ -15,7 +15,7 @@ coreos:
   etcd:
     discovery: %s
     addr: %s:4001
-    peer-addr: $private_ipv4:7001      
+    peer-addr: $public_ipv4:7001      
   fleet:
     # used for fleetctl ssh command
     public-ip: $private_ipv4
@@ -99,13 +99,13 @@ func _main() int {
 	}
 
 	var etcd_addr string
-	etcd_addr = "$public_ipv4"
+	etcd_addr = "$private_ipv4"
 	err = genConfig("lb", discovery, etcd_addr, key)
 	if err != nil {
 		return 1
 	}
 
-	etcd_addr = "$private_ipv4"
+	etcd_addr = "$public_ipv4"
 	err = genConfig("web", discovery, etcd_addr, key)
 	if err != nil {
 		return 1

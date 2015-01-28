@@ -29,6 +29,15 @@ To release hook service (which is hooked dockerhub work and re-release base serv
 $ fleetctl start unit-files/static/basic/deeeet-com-hook.service
 ```
 
+### Monitoring
+
+To monitor metrics of Container, use [DATADOG]().
+
+```bash
+$ crypt set -keyring deeeet-com-pubring.gpg /ddapikey .ddapikey
+$ fleetctl start unit-files/static/datadog/dd-agent.service
+```
+
 ## Local development
 
 If you want to run the site at local environment, run the following commands.

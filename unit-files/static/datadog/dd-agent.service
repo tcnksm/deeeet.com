@@ -1,0 +1,26 @@
+[Unit]
+Description=Datadog agent service
+Documentation=https://www.datadoghq.com/2014/08/monitor-coreos-scale-datadog/
+
+# Requirements
+After=docker.service
+
+# Dependency ordering
+Requires=docker.service
+
+
+[Service]
+TimeoutStartSec=0
+ExecStartPre=-/usr/bin/docker kill dd-agent
+ExecStartPre=-/usr/bin/docker rm dd-agent
+ExecStartPre=/usr/bin/docker pull datadog/docker-dd-agent
+ExecStart=/usr/bin/bash -c \
+"/usr/bin/docker run --privileged --name dd-agent -h `hostname` \
+-v /var/run/docker.sock:/var/run/docker.sock \
+-v /proc/mounts:/host/proc/mounts:ro \
+-v /sys/fs/cgroup/:/host/sys/fs/cgroup:ro \
+-e API_KEY=`/opt/bin/crypt get -secret-keyring /etc/deeeet-com-secring.gpg /ddapikey` \
+datadog/docker-dd-agent"
+
+[X-Fleet]
+Global=true

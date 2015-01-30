@@ -26,7 +26,7 @@ twitterでちょっとつぶやいてたけど，最近自分がよく聴いて�
 - [Giant Robots Smashing into other Giant Robots Podcast](http://podcasts.thoughtbot.com/giantrobots) - Railsで有名なthoughtbotのPodcast．Rubyを書いてるときはよく聴いていた．["gitsh"](http://robots.thoughtbot.com/announcing-gitsh)の回（["Do One Thing Well (George Brocklehurst, Mike Burns)"](http://podcasts.thoughtbot.com/giantrobots/90)）は面白かったなー．
 - [Food Fight](http://foodfightshow.org/) - DevOps系のPodcast．Chef主催．タイトルを見て気に入った回を拾い聴きしてる．例えば，["Immutable Infrastructure"](http://foodfightshow.org/2013/07/immutable-infrastructure.html)とか，["Docker in Practice"](http://foodfightshow.org/2013/11/docker-in-practice.html)とか．参加者が多すぎてしんどいときある．
 
-あと，最近はPodcastアプリとして[Overcast](https://overcast.fm/)を使っているのだが，そのオススメ機能が良い．Rebuildで[@naan]()さんが言っていたが，それこそ海外系のPodcastって山のようになるので，うまく探せない，かつ試すコストも高いので，オススメ機能はすごい助かる．今は，まだユーザが少ないのか，自分のフォロアーだとMarco Armentのオススメがよく出てくるが，それを上から聴いてる．面白いの多い．気に入ったのがあれば購読を始めてる．
+あと，最近はPodcastアプリとして[Overcast](https://overcast.fm/)を使っているのだが，そのオススメ機能が良い．Rebuildで[@naan](https://twitter.com/naan)さんが言っていたが，それこそ海外系のPodcastって山のようになるので，うまく探せない，かつ試すコストも高いので，オススメ機能はすごい助かる．今は，まだユーザが少ないのか，自分のフォロアーだとMarco Armentのオススメがよく出てくるが，それを上から聴いてる．面白いの多い．気に入ったのがあれば購読を始めてる．
 
 ただ，海外のPodcastはまだまだ英語力が弱くてがっつり聴けている訳ではない．もっと鍛えて，たくさん聴けるようになりたい．普通にこれが今の英語のモチベーションになってる．
 

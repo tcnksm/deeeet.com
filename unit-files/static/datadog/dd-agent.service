@@ -11,6 +11,8 @@ Requires=docker.service
 
 [Service]
 TimeoutStartSec=0
+KillMode=none
+Restart=always
 ExecStartPre=-/usr/bin/docker kill dd-agent
 ExecStartPre=-/usr/bin/docker rm dd-agent
 ExecStartPre=/usr/bin/docker pull datadog/docker-dd-agent

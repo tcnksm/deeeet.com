@@ -1,7 +1,7 @@
 #!/bin/bash
 # This script is used for rolling update docker container.
 # Just run fleet stop & start one by one.
-PORTS=( "9999" "8888" )
+PORTS=( "8901" "8902" )
 for p in "${PORTS[@]}"; do
     SERVICE="deeeet-com@${p}.service"
     echo "Restart ${SERVICE}"

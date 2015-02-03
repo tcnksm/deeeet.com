@@ -27,4 +27,11 @@ pygmentsuseclasses = true
     github = "tcnksm"
     google_font = "Lato:900"
 
+    [params.sharing]
+        twitter =true
+        hn = true
+        
+    [params.analytics]
+        googleid = "UA-45390253-1"
+
 

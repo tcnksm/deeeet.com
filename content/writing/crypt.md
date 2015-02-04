@@ -1,6 +1,5 @@
 +++
 date = "2015-02-03T23:09:51+09:00"
-draft = true
 title = "etcd/consulに認証情報を安全に保存する"
 +++
 

@@ -5,11 +5,11 @@ title = "etcd/consulに認証情報を安全に保存する"
 
 分散Key-Valueストアとして[etcd](https://github.com/coreos/etcd)や[consul](https://hashicorp.com/blog/consul.html)の利用が増えている．ここにアプリケーションの設定値などを保存し，各ホストからそれらを購読して利用する．
 
-また，X-as-a-Serviceといった外部サービスの利用も多くなってきた．その場合API Tokenやパスワードといった認証情報が必要になる．PaaSや[Twelve-factor](http://12factor.net/)的なアーキテクチャを採用する場合は，それらの値を環境変数に保存して利用することが多い（危険であるという意見はある．cf. [http://techlife.cookpad.com/entry/envchain](http://techlife.cookpad.com/entry/envchain)）．etcdやconsulの分散Key-Valueストアの利用を前提としたアーキテクチャでは，そこに外部に漏らしたくない設定値も一緒に保存してしまうのがシンプルになる．
+また，X-as-a-Serviceといった外部サービスの利用も多くなってきた．その場合API Tokenやパスワードといった認証情報が必要になる．PaaSや[Twelve-factor](http://12factor.net/)的なアーキテクチャを採用する場合は，それらの値を環境変数に保存して利用することが多い（危険であるという意見はある．cf. [http://techlife.cookpad.com/entry/envchain](http://techlife.cookpad.com/entry/envchain)）．etcdやconsulといった分散Key-Valueストアの利用を前提としたアーキテクチャでは，そこに外部に漏らしたくない設定値も一緒に保存してしまうのがシンプルになる．
 
-しかし，そういった設定値をプレインテキストのまま保存するのは望ましい状態ではない．ChefのDataBagのように，それらを暗号化して保存できるとよい．
+しかし，そういった設定値をプレインテキストのまま保存するのは望ましい状態ではない．暗号化して保存できるとよい．
 
-[xordataexchange/crypt](https://github.com/xordataexchange/crypt)を使うとetcdやconsulのような分散Key-Valueストアに暗号化して値を保存できるようになる．具体的にはGNU Privacy Guard（GnuPG）で秘密鍵と公開鍵をつくり，それらを使った値の暗号化/値の取り出しを行う．本記事ではその使い方とCoreOSでの実例を簡単に紹介する．
+[xordataexchange/crypt](https://github.com/xordataexchange/crypt)を使うとetcdやconsulに暗号化して値を保存できるようになる．具体的にはGNU Privacy Guard（GnuPG）で秘密鍵と公開鍵をつくり，それらを使った値のやりとりを行う．本記事ではその使い方とCoreOSでの実例を簡単に紹介する．
 
 ## インストール
 
@@ -70,6 +70,8 @@ $ crypt get -secret-keyring deeeet-com-secring.gpg /app/config
 {"password":"passw0rd"}
 ```
 
+`-backend`を変えればconsulでも利用できる．
+
 ## CoreOSの場合
 
 CoreOSにおいても認証情報をetcdに保存し，Dockerコンテナのアプリケーションからその値を利用したいことはある．例えば，Dockerイメージに認証情報を保存してビルドするのではなく，コンテナを起動する際に`-e`オプションなどで動的に値を取得/設定したい場合など（以下は，模索してやっていることなので，もしより良い方法があれば教えて欲しいです）．
@@ -115,7 +117,7 @@ write_files:
 
 新しく`units.download-crypt.service`を定義して，cryptをインストールし，`write-files`で秘密鍵を書き出す．これで，あらかじめ認証情報をcryptを使ってectdに保存しておけば，Unitファイルからcryptでそれを取り出すことができる．
 
-例えば，[DataDog](https://www.datadoghq.com/)でCoreOS内のDockerコンテナのメトリクスを収集したい場合，Agentの利用にはAPI Keyが必要である．これを実現するには，以下のようにあらかじめcryptでKeyを保存しておき，Unitファイルにその値を購読するように既述すればよい．
+例えば，[DataDog](https://www.datadoghq.com/)でCoreOS内のDockerコンテナのメトリクスを収集したい場合，Agentの利用にはAPI Keyが必要である．これを実現するには，以下のようにあらかじめcryptでetcdにKeyを保存しておき，Unitファイルにその値を購読するように既述すればよい．
 
 ```bash
 $ crypt set -endpoint=$ETCDCTL_PEERS -keyring .pubring.gpg /ddapikey .ddapikey

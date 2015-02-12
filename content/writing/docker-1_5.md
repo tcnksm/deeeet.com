@@ -70,7 +70,7 @@ $ docker stats redis
 # redis               0.46%               10.23 MiB/1.961 GiB   0.51%               1.266 KiB/648 B
 ```
 
-ただ，メトリクス収集をまともにやるなら[google/cadvisor](https://github.com/google/cadvisor)の方が筋が良いのでこっち使うと思う．
+ざっと確認するには使える．ただ，メトリクス収集をまともにやるなら[google/cadvisor](https://github.com/google/cadvisor)の方が筋が良いのでこっち使うと思う．
 
 ### ホストのPID
 

@@ -6,7 +6,7 @@ title = "Docker 1.5の変更点"
 - [Docker 1.5.0-rc1](https://groups.google.com/forum/#!topic/docker-dev/nzKREJKqxe4)
 - [Docker 1.5: IPv6 support, read-only containers, stats, “named Dockerfiles” and more | Docker Blog](http://blog.docker.com/2015/02/docker-1-5-ipv6-support-read-only-containers-stats-named-dockerfiles-and-more/)
 
-Docker 1.5が出た．IPv6のサポートや`stats`コマンドによるコンテナのメトリクス表示などが追加された．エンドユーザ的に一番嬉しいのはDockerfileの名前を自由に決められるようになったことだろうと思う．
+Docker 1.5が出た．IPv6のサポートや`stats`コマンドによるコンテナのメトリクス表示などが追加された．ユーザ的に一番嬉しいのはDockerfileの名前を自由に決められるようになったことだろうと思う．
 
 今までDockerfileは`Dockefile`という名前しか受け付けなかった，というかまともに動かなかった．やりようはあって，標準入力からぶっ込むことはできた．例えば`base`とう名前のDockerfileを作って以下のように`build`を実行することができた．
 

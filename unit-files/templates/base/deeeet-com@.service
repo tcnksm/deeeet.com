@@ -17,6 +17,10 @@ KillMode=none
 # Get CoreOS environmental variables
 EnvironmentFile=/etc/environment
 
+# Restart policy
+Restart=always
+RestartSec=5
+
 # Pre-start and Start
 ExecStartPre=-/usr/bin/docker kill deeeet-com.%i
 ExecStartPre=-/usr/bin/docker rm deeeet-com.%i

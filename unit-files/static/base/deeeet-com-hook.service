@@ -19,6 +19,10 @@ KillMode=none
 # Get CoreOS environmental variables
 EnvironmentFile=/etc/environment
 
+# Restart policy
+Restart=always
+RestartSec=5
+
 # Start
 ExecStartPre=-/usr/bin/docker kill deeeet-com-hook
 ExecStartPre=-/usr/bin/docker rm deeeet-com-hook

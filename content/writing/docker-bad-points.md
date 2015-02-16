@@ -7,15 +7,15 @@ title = "Dockerの諸問題とRocket登場の経緯"
 
 - [CoreOS is building a container runtime, Rocket](https://coreos.com/blog/rocket/)
 
-批判は，セキュリティであったり，ドキュメントされていない謎の仕様やバグだったり，コミュニティの運営だったり，と多方面にわたる．これらは具体的にどういうことなのか？なぜRocketが必要なのか？は具体的に整理されていないと思う．これらは，今後コンテナ技術を使っていく上で，ある意味[オーケストレーション](http://deeeet.com/writing/2014/12/01/docker-link-pattern/)とかと同じくらい重要な部分であると思うので，ここで一度まとめておきたい．
+批判は，セキュリティであったり，ドキュメントされていない謎の仕様やバグだったり，コミュニティの運営だったり，と多方面にわたる．これらは具体的にどういうことなのか？なぜRocketが必要なのか？は具体的に整理されていないと思う．これらは，今後コンテナ技術を使っていく上で，[オーケストレーション](http://deeeet.com/writing/2014/12/01/docker-link-pattern/)とかと同じくらい重要な部分だと思うので，ここで一度まとめておきたい．
 
-なお僕自身は，コンテナ技術に初めて触れたのがDockerであり，かつ長い間Dockerに触れているので，Docker派的な思考が強いと思う．またセキュリティに関しても専門ではない．なので，以下の記事はなるべく引用を多くすることを意識した．また，あくまで僕の観測範囲であり，深追いしていないところも多い，気になるひとは自分で掘ってみて欲しい．
+なお僕自身は，コンテナ技術に初めて触れたのがDockerであり，かつ長い間Dockerに触れているので，Docker派的な思考が強いと思う．またセキュリティに関しても専門ではない．なので，以下の記事はなるべく引用を多くすることを意識した．また，あくまで僕の観測範囲であり，深追いしていないところもある，気になるひとは自分で掘ってみて欲しい．
 
 ## セキュリティ問題
 
 Dockerを使ったことがあるひとならわかると思うがDockerを使うにはルート権限が必須である．デーモンが常に動いており，それにクライアントがコマンドを発行するアーキテクチャになっているので，Dockerコンテナが動いているホストでは常にルートのプロセスが動き続けることになる．クライアントとデーモンはHTTPでやりとりするため，外部ホストからコマンドを叩くこともできてしまう．
 
-これは怖くて，コンテナはカーネルを共有しているので，もし特権昇格の脆弱性であるコンテナがハイジャックされたら，他の全てのコンテナと**ホストも**攻撃されることになる（[Container Security: Isolation Heaven or Dependency Hell | Red Hat Security](https://securityblog.redhat.com/2014/12/17/container-security-isolation-heaven-or-dependency-hell/)）．
+これは怖い．コンテナはカーネルを共有しているので，もし特権昇格の脆弱性であるコンテナがハイジャックされたら，他の全てのコンテナと**ホストも**攻撃されることになる（[Container Security: Isolation Heaven or Dependency Hell | Red Hat Security](https://securityblog.redhat.com/2014/12/17/container-security-isolation-heaven-or-dependency-hell/)）．
 
 実際Docker 1.3.1以前のバージョンでは脆弱生も見つかっている．
 
@@ -45,15 +45,13 @@ Dockerを使ったことがあるひとならわかると思うがDockerを使�
 127.0.0.1 index.docker.io
 ```
 
-（この問題に関しては，yumとかaptがやってきた署名による配布モデルが実装されれば良いのではないかと思っている．）　
-
 ## Dockerfile問題
 
-Dockerfileには，なんでこれができないの？ということやハマりどころが多い．
+Dockerfileには，なんでこれができないの？やハマりどころが多い．
 
-なんでこれができないの？で一番有名だったのが，Dockerfileが`Docekerfile`という名前しかちゃんと使えなかった問題がある．これは現時点で最新の1.5で解決された（[Docker 1.5の変更点](http://deeeet.com/writing/2015/02/11/docker-1_5/)）．それ以外にも，`INCLUDE`によるDockerfileの分割（[#735](https://github.com/docker/docker/issues/735)）や，`FROM`の複数指定（[#5726](https://github.com/docker/docker/issues/5726)）など，なんでこれできないのだろうということが多々ある．
+なんでこれができないの？で一番有名だったのが，Dockerfileが`Docekerfile`という名前しかちゃんと使えなかった問題がある．これは現時点で最新のバージョン1.5で解決された（[Docker 1.5の変更点](http://deeeet.com/writing/2015/02/11/docker-1_5/)）．それ以外にも，`INCLUDE`によるDockerfileの分割（[#735](https://github.com/docker/docker/issues/735)）や，`FROM`の複数指定（[#5726](https://github.com/docker/docker/issues/5726)）など，なんでこれできないのだろうということが多々ある．
 
-またDockerfileはハマりどころも多い．一番ハマるのがCacheで，どういうときにCacheされるのか全く分からない．いつCacheが無効になるか分からずにもう一度ビルドし直しでうおーとなったひとは多いと思う（[Gotchas in Writing Dockerfile](http://kimh.github.io/blog/en/docker/gotchas-in-writing-dockerfile-en/)）．他にも環境変数の挙動がおかしなときもある．
+またDockerfileはハマりどころも多い．一番ハマるのがCacheで，どういうときにCacheされるのか全く分からない．いつCacheが無効になるか分からずにビルドし直しでうおー！となったひとは多いと思う（[Gotchas in Writing Dockerfile](http://kimh.github.io/blog/en/docker/gotchas-in-writing-dockerfile-en/)）．他にも環境変数の挙動がおかしなときもある．
 
 これらはバージョンが上がるに連れて解決されていくであろう問題だとは思う．が以下に関しては慎重にならないといけない．
 
@@ -63,9 +61,9 @@ Dockerfileには，なんでこれができないの？ということやハマ�
 
 よく言われているように答えは「No」．Dockerはコンテナ内部で起動するデーモン（e.g., PostgresSQLやRedis）は特定のバージョンを使うかを固定できるが，それが依存するライブラリやパッケージに関しては何もできない．Dockerfileを書いたことがある人ならわかると思うが，必ず`apt-get update`を書くので．
 
-これに関しては，`go get`と同じ批判かなと思う．セキュリティ的にも最新のライブラリやパッケージが使われるにこしたことはないと思うし，またどれだけちゃんとテストするか，にもつながると思う．もちろん皆が皆それができる環境ではないからこそこういう批判が登場するのだが．
+これに関しては，`go get`と同じ批判かなと思う．セキュリティ的にも最新のライブラリやパッケージが使われるにこしたことはないと思うし，またどれだけちゃんとテストするか，にもつながると思う（もちろん皆が皆それができる環境ではないからこそこういう批判が登場するのだが）
 
-その一方でソフトウェアのインストールや設定の知識というのは，ChefやPuppet，Ansibleのようなツールに依然として存在しているし，今後もしばらくは必須になる．DockerfileのようなDockerのみでしか使えないものに依存するのは危ない．Packerは当初からその問題を解決しようとしている．詳しくはHashicorpのMitchell氏がHNの議論で詳しく語っており，軽く翻訳したので，そちらを参考にしてほしい．
+その一方でソフトウェアのインストールや設定の知識というのは，ChefやPuppet，Ansibleのようなツールに依然として存在しているし，今後もしばらくは必須になる．DockerfileのようなDockerのみでしか使えないものに依存するのは危ない．[Packer](https://www.packer.io/)は当初からその問題を解決しようとしている．詳しくは[@mitchellh](https://github.com/mitchellh)氏がHNの議論で詳しく語っており，軽く翻訳したので，そちらを参考にしてほしい．
 
 - [DockerイメージのビルドにPackerを使うべき理由](http://deeeet.com/writing/2014/03/03/why-building-docker-by-packer/)
 
@@ -75,9 +73,9 @@ Dockerfileには，なんでこれができないの？ということやハマ�
 
 Docker Registryもなかなかの嫌われものである．自分としては便利に使わせてもらっているが，不満はいくつかある．
 
-まず，DockerHub．上述した`docker pull`の問題のように，セキュリティ等に関しては完全にDockerHubという中央集権システムを信用しつづけないといけない．Automated buildは便利だけど，時にPending地獄に陥りビルドが始まらず何もできなくなるときがある．リリースがDockerHubの安定性に左右されるのはあまり良い状態ではない．Post/Preフックで簡単なスクリプトを動かすこともできない．
+まず，DockerHub．上述した`docker pull`の問題のように，セキュリティ等に関しては完全にDockerHubを信用しないといけない．Automated buildは便利だけど，時にPending地獄に陥りビルドが始まらず何もできなくなるときがある．リリースがDockerHubの安定性に左右されるのはあまり良い状態ではない．Post/Preフックで簡単なスクリプトを動かすこともできない．
 
-では，[docker/docker-registry](https://github.com/docker/docker-registry)を使って自分で運用するのか．これも実際に試した人の運用の辛い話しか聞かない（でかいイメージpushしたら死ぬとか）．立ち上げるのは簡単だが，一番大切な認証機構を準備するのに一苦労必要だったりする．
+では，[docker/docker-registry](https://github.com/docker/docker-registry)を使って自分で運用するのか．これも実際に運用したひとの辛い話しか聞かない（でかいイメージpushしたら死ぬとか）．立ち上げるのは簡単だが，一番大切な認証機構を準備するのに一苦労必要だったりする．
 
 絶対自分で運用したくないから外部のプライベートレジストリサービス，例えば[Quay.io](https://quay.io/)など，を見ているが，ちゃんと使おうと思うと有料の壁にぶつかる（ただQuay.ioは機能的にも面白いし，CoreOSに買収されてるので期待感はあり，現時点では良い選択かなと思っている）．
 
@@ -92,7 +90,7 @@ Docker Registryもなかなかの嫌われものである．自分としては�
 
 - [Why Docker and CoreOS split was predictable – Daniel With Music](http://danielcompton.net/2014/12/02/modular-integrated-docker-coreos)
 
-僕はこの問題を追っていて，OSSだけど企業は企業なんだなあということを実感した．Dockerはもはや単にコンテナのRumtimeというコンポーネントでない．Dockerはプラットフォームを目指している．それは[DockerCon EU 2014](http://europe.dockercon.com/)で発表された各ツール群を見れば明らかである（[Announcing Docker Machine, Swarm, and Compose for Orchestrating Distributed Apps | Hacker News](https://news.ycombinator.com/item?id=8699957)）．これは企業としては当たり前の考え方だし，間違っているとも思わない．コミュニティの意向は間違いなくある．
+僕はこの問題を追っていて，OSSだけど企業は企業なんだなあということを実感した．Dockerはもはや単にコンテナのRumtimeというコンポーネントでない．Dockerはプラットフォームを目指している．それは[DockerCon EU 2014](http://europe.dockercon.com/)で発表された各ツール群を見れば明らかである（[Announcing Docker Machine, Swarm, and Compose for Orchestrating Distributed Apps | Hacker News](https://news.ycombinator.com/item?id=8699957)）．これは企業としては当たり前の考え方だし，間違っているとも思わない．コミュニティの意向も間違いなくある．
 
 が，Dockerをコンポーネントとして見ていたCoreOSのようなチームは，何でやねんとはなる．上で紹介したようなセキュリティなど今すぐにでも解決するべき問題がたくさんあるのにも関わらず，またDockerが進もうとしている領域は既に他のツールが解決しているのにも関わらず... これがRocketという新しいRumtimeの登場につながる．
 

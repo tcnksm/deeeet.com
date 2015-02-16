@@ -1,7 +1,6 @@
 +++
-date = "2015-02-14T23:32:16+09:00"
-draft = true
-title = "ここがヘンだよDocker"
+date = "2015-02-17T23:32:16+09:00"
+title = "Dockerの諸問題とRocket登場の経緯"
 +++
 
 2014年の後半あたりからDocker，Docker Inc.への批判を多く見かけるようになった（もちろんもともと懸念や嫌悪を表明するひとはいた）．それを象徴する出来事としてCoreOSチームによる新しいコンテナのRuntimeである[Rocket](https://github.com/coreos/rocket)のリリースと，オープンなアプリケーションコンテナの仕様の策定を目指した[App Containerプロジェクト](https://github.com/appc/spec)の開始があった．
@@ -12,73 +11,9 @@ title = "ここがヘンだよDocker"
 
 なお僕自身は，コンテナ技術に初めて触れたのがDockerであり，かつ長い間Dockerに触れているので，Docker派的な思考が強いと思う．またセキュリティに関しても専門ではない．なので，以下の記事はなるべく引用を多くすることを意識した．また，あくまで僕の観測範囲であり，深追いしていないところも多い，気になるひとは自分で掘ってみて欲しい．
 
-## 批判まとめ
-
-「Dockerがホストを抽象化し，Dockerさえあればどこでもイメージを起動できる」というのはDockerを使うことの利点として語られることだけど，別の見方をすればDockerがないと動かせないということになる．
-
-- [boycott docker](http://www.boycottdocker.org/)
-    - Docker is vendor lock-in technology convenient for, and spreaded by cloud computing corporations.
-    - Better than VMs?
-        - どこでも動くの？
-        - At least KVM, qemu, VMware and VirtualBox are not required to be executed under GNU/Linux
-        - Docker images can be run only under dockerized GNU/Linux. Let's call it DockerOS. Moreover, as a rule, you will require specific Linux-kernel version compatible with provided images.
-    - VMはVMのこと知ってるひとのものでは？
-        - In the case of KVM, software developer hardly knows if his program is running under either real hardware, or virtual one.
-        - Software developers forced to vendor lock-in their software, forced to make it workable under strict restrictions like single process per container.
-    - Plays well with others?
-    - 特定の言語やフレームワーク，パッケージシステムなどが必要ない？
-        - Your application has to be Docker locked-in. FreeBSD Jails, VServer, OpenVZ containers are just an isolated chrootwith possible network stack separation: they does not impose any specific conditions for your software.
-    - No way to escape dependency hell
-        - PostgresSQLやRedisのどのバージョンを使うかは考慮しているが，library or packageの依存については何も考えてない
-    - Deployment hell
-        - 今までオペレーターがやってきたデバッグ術が使えない（Everything must be de using completely different approaches and vendor (Docker) specific tools.）
-
-- [Lets review.. Docker (again) | Cal Leeming Blog](http://iops.io/blog/docker-hype/)
-    - performance was so bad, that disabling caching features actually resulted in faster build times.
-    - Dockerfile
-        - Dockerfileという名前，https://github.com/docker/docker/issues/9198 (https://github.com/docker/docker/issues/9198)
-        - Includeしたい, https://github.com/docker/docker/issues/735 (https://github.com/docker/docker/issues/735)
-        - ENVとWORKDIR, https://github.com/docker/docker/issues/2637 (https://github.com/docker/docker/issues/2637) (Need to check)
-        - $HOME環境変数問題, https://gist.github.com/foxx/0c4f02de6e3906fa1c98 (https://gist.github.com/foxx/0c4f02de6e3906fa1c98)
-        - Cache問題
-    - COW FSを選択できるようになったのはよい
-    - 一部だけCache無効にとかできない
-    - enforcing linear instruction execution even in situations where it is entirely inappropriate
-    - DockerHub
-        - 複数のFROMを指定できない
-        - https://github.com/docker/docker/issues/3378 (https://github.com/docker/docker/issues/3378)
-        - https://github.com/docker/docker/issues/5714 (https://github.com/docker/docker/issues/5714)
-        - https://github.com/docker/docker/issues/5726 (https://github.com/docker/docker/issues/5726)
-    - Cache問題
-    - http://kimh.github.io/blog/en/docker/gotchas-in-writing-dockerfile-en/ (http://kimh.github.io/blog/en/docker/gotchas-in-writing-dockerfile-en/)
-    - It also has no version enforcement, for example the author of dockerfile/ubuntu:14.04 could replace the contents of that tag, which is the equivalent of using a package manager without enforcing versions
-    - パッケージマネージをバージョン指定なしでつかってるのと同じ
-    - pre/post script hooksさえ指定できない
-    - プロジェクトのストラクチャーを限定してくる
-    - 一つのディレクトリに一つのDockerfile
-    - Security
-        - ホストでRoot権限のデーモンを動かし続けるのはめちゃ危険
-        - puts ultimate trust in namespace capabilities which expose a much larger attack surface than a typical hypervisor
-            -  NameSpaceの能力に頼りまくってるけど，ハイパーバイザー以上に攻撃可能な部分を晒している…
-    - Containers are not VMs
-        - Hypervisorのほうが安定しているから本当に理由がない限りDockerを使うべきではない
-    - Docker is unnessary
-        -  if you're not using snapshots then your production environment scaling is dependant on the stability of Docker Hub.
-- [The case against Docker - Andreas Jung](https://www.andreas-jung.com/contents/the-case-against-docker)
-    - A typical build under Docker was  5-10 times slower than executing the same scripts and code on the same machine directly under the shell.
-    - Pushing the three images - each about 1.3 GB in size - took more than two hours.
-    - Starting exist-db, executing a small Plone script for site setup and finally starting the Plone instance takes about ten minutes (under one minute without Docker)
-    - Nobody could told me where and why this happened.
-    - But restarting Docker also means that your containers go away and need to get restart - major pain in the ass factor...why is Docker so stupid and monolithic that containers can not continue to run? This is bad application design.
-    - The slowness of Docker is a big pain.
-    - There is not even a producedure for cleaning up the mess on the system
-    - The theory and ideas behind Docker are great, its architecture and implementation is a mess.
-    - It is unreliable, it is unpredictable, it is flaky.
-
-
 ## セキュリティ問題
 
-Dockerを使ったことがあるひとならわかると思うがDockerを使うにはルート権限が必須である．デーモンが常に動いており，それにクライアントがコマンドを発行するアーキテクチャになっているので，Dockerコンテナが動いているホストでは常にルートのプロセスが動き続けることになる．
+Dockerを使ったことがあるひとならわかると思うがDockerを使うにはルート権限が必須である．デーモンが常に動いており，それにクライアントがコマンドを発行するアーキテクチャになっているので，Dockerコンテナが動いているホストでは常にルートのプロセスが動き続けることになる．クライアントとデーモンはHTTPでやりとりするため，外部ホストからコマンドを叩くこともできてしまう．
 
 これは怖くて，コンテナはカーネルを共有しているので，もし特権昇格の脆弱性であるコンテナがハイジャックされたら，他の全てのコンテナと**ホストも**攻撃されることになる（[Container Security: Isolation Heaven or Dependency Hell | Red Hat Security](https://securityblog.redhat.com/2014/12/17/container-security-isolation-heaven-or-dependency-hell/)）．
 
@@ -116,6 +51,12 @@ Dockerを使ったことがあるひとならわかると思うがDockerを使�
 
 Dockerfileには，なんでこれができないの？ということやハマりどころが多い．
 
+なんでこれができないの？で一番有名だったのが，Dockerfileが`Docekerfile`という名前しかちゃんと使えなかった問題がある．これは現時点で最新の1.5で解決された（[Docker 1.5の変更点](http://deeeet.com/writing/2015/02/11/docker-1_5/)）．それ以外にも，`INCLUDE`によるDockerfileの分割（[#735](https://github.com/docker/docker/issues/735)）や，`FROM`の複数指定（[#5726](https://github.com/docker/docker/issues/5726)）など，なんでこれできないのだろうということが多々ある．
+
+またDockerfileはハマりどころも多い．一番ハマるのがCacheで，どういうときにCacheされるのか全く分からない．いつCacheが無効になるか分からずにもう一度ビルドし直しでうおーとなったひとは多いと思う（[Gotchas in Writing Dockerfile](http://kimh.github.io/blog/en/docker/gotchas-in-writing-dockerfile-en/)）．他にも環境変数の挙動がおかしなときもある．
+
+これらはバージョンが上がるに連れて解決されていくであろう問題だとは思う．が以下に関しては慎重にならないといけない．
+
 ### このDockerfileから10年後も同じDockerイメージができるの？
 
 - [Gregory Szorc's Digital Home | Deterministic and Minimal Docker Images](http://gregoryszorc.com/blog/2014/10/13/deterministic-and-minimal-docker-images/)
@@ -124,25 +65,59 @@ Dockerfileには，なんでこれができないの？ということやハマ�
 
 これに関しては，`go get`と同じ批判かなと思う．セキュリティ的にも最新のライブラリやパッケージが使われるにこしたことはないと思うし，またどれだけちゃんとテストするか，にもつながると思う．もちろん皆が皆それができる環境ではないからこそこういう批判が登場するのだが．
 
+その一方でソフトウェアのインストールや設定の知識というのは，ChefやPuppet，Ansibleのようなツールに依然として存在しているし，今後もしばらくは必須になる．DockerfileのようなDockerのみでしか使えないものに依存するのは危ない．Packerは当初からその問題を解決しようとしている．詳しくはHashicorpのMitchell氏がHNの議論で詳しく語っており，軽く翻訳したので，そちらを参考にしてほしい．
+
+- [DockerイメージのビルドにPackerを使うべき理由](http://deeeet.com/writing/2014/03/03/why-building-docker-by-packer/)
 
 ## Registry問題
 
-- [Allow images to be pulled by ID #4106](https://github.com/docker/docker/issues/4106)
+- [Rebuild: 79: Deep Learning Anime (Naoya Ito)](http://rebuild.fm/79/)
 
-## コンテナ仕様問題
+Docker Registryもなかなかの嫌われものである．自分としては便利に使わせてもらっているが，不満はいくつかある．
+
+まず，DockerHub．上述した`docker pull`の問題のように，セキュリティ等に関しては完全にDockerHubという中央集権システムを信用しつづけないといけない．Automated buildは便利だけど，時にPending地獄に陥りビルドが始まらず何もできなくなるときがある．リリースがDockerHubの安定性に左右されるのはあまり良い状態ではない．Post/Preフックで簡単なスクリプトを動かすこともできない．
+
+では，[docker/docker-registry](https://github.com/docker/docker-registry)を使って自分で運用するのか．これも実際に試した人の運用の辛い話しか聞かない（でかいイメージpushしたら死ぬとか）．立ち上げるのは簡単だが，一番大切な認証機構を準備するのに一苦労必要だったりする．
+
+絶対自分で運用したくないから外部のプライベートレジストリサービス，例えば[Quay.io](https://quay.io/)など，を見ているが，ちゃんと使おうと思うと有料の壁にぶつかる（ただQuay.ioは機能的にも面白いし，CoreOSに買収されてるので期待感はあり，現時点では良い選択かなと思っている）．
+
+
+## コンテナイメージの仕様問題
+
+「Dockerがホストを抽象化しDockerさえあればどこでもイメージを起動できる」というのはDockerを使うことの利点として語られることだけど，別の見方をすればDockerがないと何もできないうことになる．["boycott docker"](http://www.boycottdocker.org/)はDockerのことをまるでDockerOSだと批判し，ベンダーロックインに陥る危険性を仮想化技術との比較で語っている．
+
+そういうこともあり，統一的なコンテナイメージの仕様を作ろうという流れは以前からあった（つまり，誰でもコンテナのRumtimeを作れるようにしようと）．が，それに対して最近になるまでちゃんとした仕様を作るということをしていなかった．
 
 ## Docker Inc.の方向性問題
 
-僕はこの問題を追っていてOSSだけど，企業なんだなということを実感した．
-
 - [Why Docker and CoreOS split was predictable – Daniel With Music](http://danielcompton.net/2014/12/02/modular-integrated-docker-coreos)
-- [Announcing Docker Machine, Swarm, and Compose for Orchestrating Distributed Apps | Hacker News](https://news.ycombinator.com/item?id=8699957)
+
+僕はこの問題を追っていて，OSSだけど企業は企業なんだなあということを実感した．Dockerはもはや単にコンテナのRumtimeというコンポーネントでない．Dockerはプラットフォームを目指している．それは[DockerCon EU 2014](http://europe.dockercon.com/)で発表された各ツール群を見れば明らかである（[Announcing Docker Machine, Swarm, and Compose for Orchestrating Distributed Apps | Hacker News](https://news.ycombinator.com/item?id=8699957)）．これは企業としては当たり前の考え方だし，間違っているとも思わない．コミュニティの意向は間違いなくある．
+
+が，Dockerをコンポーネントとして見ていたCoreOSのようなチームは，何でやねんとはなる．上で紹介したようなセキュリティなど今すぐにでも解決するべき問題がたくさんあるのにも関わらず，またDockerが進もうとしている領域は既に他のツールが解決しているのにも関わらず... これがRocketという新しいRumtimeの登場につながる．
 
 ## Rocketとは何か
 
 - [CoreOS 共同創設者 Alex Polvi が語る: コンテナ、Rocket と Docker の比較ほか](https://jp.linux.com/news/linuxcom-exclusive/426261-lco2015021001)
 - [What is Rocket and How It’s Different Than Docker | Century Link Labs](http://www.centurylinklabs.com/interviews/what-is-rocket-and-how-its-different-than-docker/)
-- [Docker向けOSとか](http://www.slideshare.net/Yuryu/dockeros-tech-girl)
+- [#138: Rocket, App Container Spec, and CoreOS with Alex Polvi - The Changelog](http://thechangelog.com/138/)
+
+まず，[App Container](https://github.com/appc/spec)という標準的なコンテナの仕様が作られ始めた．これにより，コンテナイメージの仕様問題（Dockerによるベンダーロックイン問題）を解決しようとしている．DockerイメージからACIを作る，ACIからDockerイメージを作れるようなツールも作成している．
+
+次に[CoreOS/Rocket](https://github.com/coreos/rocket)は，その標準的なコンテナを動かすためのRuntimeである．App ContainerとRocketのレポジトリが分かれているのは，あくまでRocketは実装の1つであることを意図していると思う．DockerとRocketの違いは，ブラウザで言うところのChromeとFirefoxの違いだと思えばよい．
+
+直近のRocketはDockerでも得にヤバいと言われている部分を解決した．
+
+- ルート権限のデーモンとクライアントのアーキテクチャの廃止
+- 安全なイメージの配布モデルの作成
+
+内部を詳しくは見れていないが，他のCoreOSツールと同様に既にあるテクノロジーをなるべく使うように作られている（例えば内部では，[systemd-nspawn](http://www.freedesktop.org/software/systemd/man/systemd-nspawn.html)を使っている）．少し触ってみたが，まだまだ使いやすさとは決して言えないレベル．
+
+## まとめ
+
+Dockerの何がすごかったか，コンテナという技術を一般の人にも使いやすくしたところだと思う．現時点でRocketにはDockerほどの使いやすさはない．が，かといってDockerのセキュリティ問題などを無視するわけにもいかない．
+
+今年はKubernetesやMesosといった周辺ツールにひと盛り上がりがありそうだが，ここで書いた諸問題に関してもちゃんと注視しておきたい．
 
 ## 参考
 
@@ -163,22 +138,4 @@ Dockerfileには，なんでこれができないの？ということやハマ�
 - [CoreOS 共同創設者 Alex Polvi が語る: コンテナ、Rocket と Docker の比較ほか](https://jp.linux.com/news/linuxcom-exclusive/426261-lco2015021001)
 - [What is Rocket and How It’s Different Than Docker | Century Link Labs](http://www.centurylinklabs.com/interviews/what-is-rocket-and-how-its-different-than-docker/)
 - [Docker向けOSとか](http://www.slideshare.net/Yuryu/dockeros-tech-girl)
-
-
-## LXC containers are awesome, but Docker.io sucks
-
-- for example an apt dependency on a package which then breaks libc6 for ssh
-- Bad point (1 year ago)
-- AuFS is not a good choice of FS. It requires kernel patches
-- CLI/API abstraction is non intuitive.
-- Private image storage is unnecessarily complex
-- For some of you, Docker might be the best step forward especially if you do not have the in-house skills to create your own application container stack. But for those who have the time/skill set, I would highly recommend rolling your own instead.
-- コンテナ技術初心者にとっては良い選択．
-
-## Container
-
-仮想化はプログラムを完全に隔離する（例えばLinuxを動かしつつBSDを動かすことができる），がコンテナ化はそこまで隔離されない，
-
-- また，2つのコンテナが異なるバージョンのカーネルモジュールを使うことはできない．
-- コンテナは，デフォルトで多くのケーパビリティ（System-level kernel capabilities）を継承している．Dockerではオプションでそれらを管理できるが，VMでアプリケーションを動かす以上にアプリケーションが何を必要とするかに対する深い理解が必要になる．コンテナとその中のアプリケーションはホストのカーネルのケーパビリティに依存することになる．
-- コンテナは"Write once, run anywhere"ではない．ホストのカーネルを使うので，アプリケーションはホストのカーネルと互換性が必要である．単に多くのアプリケーションが特定のカーネルの特徴に依存していないだけであって，**全て**のアプリケーションがそうであるわけではない．
+- [CoreOS - はじめてのRocket - Qiita](http://qiita.com/mopemope/items/9f163e4715a8bb5846e9)

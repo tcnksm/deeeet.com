@@ -17,7 +17,7 @@ Dockerを使ったことがあるひとならわかると思うがDockerを使�
 
 これは怖い．コンテナはカーネルを共有しているので，もし特権昇格の脆弱性であるコンテナがハイジャックされたら，他の全てのコンテナと**ホストも**攻撃されることになる（[Container Security: Isolation Heaven or Dependency Hell | Red Hat Security](https://securityblog.redhat.com/2014/12/17/container-security-isolation-heaven-or-dependency-hell/)）．
 
-実際Docker 1.3.1以前のバージョンでは脆弱生も見つかっている．
+実際Docker 1.3.1以前のバージョンでは脆弱性も見つかっている．
 
 - [CVE-2014-6407](http://web.nvd.nist.gov/view/vuln/detail?vulnId=CVE-2014-6407)
 - [CVE-2014-6408](http://web.nvd.nist.gov/view/vuln/detail?vulnId=CVE-2014-6408)

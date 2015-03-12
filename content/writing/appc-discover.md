@@ -1,12 +1,14 @@
 +++
 date = "2015-03-12T23:20:39+09:00"
 draft = true
-title = "appc discover"
+title = "Appcイメージのディスカバリーの仕様"
 +++
 
-イメージの署名について
+## TODO
 
-appcの名前はURLのような生`example.com/reduce-worker`が，明確なスキーマがないのでイメージのURLを解決することができない．さらに，名前以上にバージョンやOSといった情報が必要になる．appc specはアプリ?イメージの名前からインターネット上のイメージを見つける方法も定義している．
+- イメージの署名について
+
+appcの名前はURLのような`example.com/reduce-worker`が，明確なスキーマがないのでイメージのURLを解決することができない．さらに，名前以上にバージョンやOSといった情報が必要になる．appc specはアプリ?イメージの名前からインターネット上のイメージを見つける方法も定義している．
 
 Image Discovery is inspired by Go's remote import paths
 

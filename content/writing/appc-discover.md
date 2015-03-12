@@ -6,7 +6,9 @@ title = "Appcイメージのディスカバリーの仕様"
 
 ## TODO
 
-- イメージの署名について
+- イメージの署名について, [Signing and Verification Guide](https://github.com/coreos/rocket/blob/master/Documentation/signing-and-verification-guide.md)
+
+[https://github.com/appc/spec/blob/master/SPEC.md](https://github.com/appc/spec/blob/master/SPEC.md)
 
 appcの名前はURLのような`example.com/reduce-worker`が，明確なスキーマがないのでイメージのURLを解決することができない．さらに，名前以上にバージョンやOSといった情報が必要になる．appc specはアプリ?イメージの名前からインターネット上のイメージを見つける方法も定義している．
 

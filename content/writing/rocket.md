@@ -213,6 +213,12 @@ Added key for prefix "coreos.com/etcd" at "/etc/rkt/trustedkeys/prefix.d/coreos.
 $ sudo rkt fetch coreos.com/etcd:v2.0.0
 ```
 
+もちろんイメージのURLを知っていればそれをそれを直接指定することもできる．
+
+```bash
+$ sudo rkt fetch https://github.com/coreos/etcd/releases/download/v2.0.0/etcd-v2.0.0-linux-amd64.aci
+```
+
 ### run
 
 `rkt run`でコンテナを起動する．上で`actool`を使って作成した`hello.aci`を動かすには以下のようにする．

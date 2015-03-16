@@ -3,6 +3,7 @@
 title: 'PaaSエンジニアになった'
 date: 2014-11-14
 comments: true
+draft: true
 categories: 
 ---
 

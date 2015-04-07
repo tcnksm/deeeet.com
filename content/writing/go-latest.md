@@ -1,14 +1,13 @@
 +++
 date = "2015-04-07T00:02:56+09:00"
-draft = true
-title = "Go言語のツールが最新バージョンであるかをチェックするgo-latestというパッケージをつくった"
+title = "Go言語のツールが最新バージョンであるかをユーザに伝えるためのgo-latestというパッケージをつくった"
 +++
 
 [tcnksm/go-latest](https://github.com/tcnksm/go-latest)
 
 Webアプリケーションとは異なり，コマンドラインツールやモバイルアプリはバージョンアップがユーザに委ねられる．そのため一度リリースしてしまうとバージョンアップをしてもらうのが難しくなる（バグを含めてしまった場合にロールバックもできない cf. ["Mobile First Development at COOKPAD #deploygate"](https://speakerdeck.com/gfx/mobile-first-development-at-cookpad-number-deploygate)）．とにかくしっかりテストをしてそもそもバクを含めないというのも大切だが，完璧なソフトウェアは存在しないので，アップデートは常に必要になる．
 
-モバイルアプリとは異なり，Go言語でツールを書いた場合は，最新のバージョンがすでに存在していることをユーザに伝える仕組みはそもそもない．ので，ユーザが使っているツールが最新バージョンであるかをチェックし，古い場合にそれを伝えバージョンアップを促すということを可能にする[go-latest](https://github.com/tcnksm/go-latest)というパッケージを書いた．
+モバイルアプリとは異なり，Go言語でツールを書いきバイナリとして配布した場合は，最新のバージョンがすでに存在していることをユーザに伝える仕組みはそもそもない．ので，最新のバージョンをリリースしたことをユーザに伝えることが難しくなる．[go-latest](https://github.com/tcnksm/go-latest)を使うと，ユーザが使っているツールが最新バージョンであるかをチェックし，古い場合にそれを伝えバージョンアップを促すということが可能になる．
 
 ## インストール
 
@@ -18,7 +17,7 @@ Webアプリケーションとは異なり，コマンドラインツールや�
 $ go get -d github.com/tcnksm/go-latest
 ```
 
-## 使いかた
+## 使い方
 
 `go-latest`には`Source`という概念がある．`Source`は最新バージョンの問い合わせ先である．デフォルトではGitHub上のタグ，HTMLのmetaタグ（もしくはオリジナルのスクレイピング），JSONレスポンスを利用することができる（`Source`はただのインターフェースなので自分で実装することもできる）．
 
@@ -26,7 +25,7 @@ $ go get -d github.com/tcnksm/go-latest
 
 ### GithubTag
 
-まず，GitHub上のタグに最新バージョンを問い合わせる方法について説明する．例えば，[https://github.com/tcnksm/ghr](https://github.com/tcnksm/ghr)というツールにおいて，バージョン`0.1.0`が最新であるかをチェックするには以下のようにする．
+まず，GitHub上のタグを使う方法．例えば，[https://github.com/tcnksm/ghr](https://github.com/tcnksm/ghr)というツールにおいて，バージョン`0.1.0`が最新であるかをチェックするには以下のようにする．
 
 ```golang
 githubTag := &latest.GithubTag{
@@ -44,7 +43,7 @@ if res.Outdated {
 
 ### HTML metaタグ
 
-次に，HTMLページにmetaタグを仕込み，そこに対して問い合わせる方法について説明する．例えば，`reduce-worker`というツールがあるとする．この場合は，まず，以下のような最新のバージョン情報を含んだmetaタグをHTMLに仕込んでおく，
+次に，特定のmetaタグをHTMLに仕込む方法．例えば，`reduce-worker`というツールがあるとする．この場合は，まず，以下のようなバージョン情報を含んだmetaタグをHTMLに仕込んでおく，
 
 ```html
 <meta name="go-latest" content="reduce-worker 0.1.2 New version include security update">
@@ -73,7 +72,7 @@ if res.Outdated {
 
 ### JSON
 
-最後にJSON APIに問い合わせる方法について．例えば，以下のようなJSONレスポンスを返すAPIがあるとする．
+最後にJSON APIを使う方法．例えば，以下のようなJSONレスポンスを返すAPIがあるとする．
 
 ```json
 {
@@ -100,7 +99,7 @@ if res.Outdated {
 この方法は，APIクライアントを作成しているときに便利．自分でオリジナルの構造体を定義して好きなJSONレスポンスを受け取ることもできる．詳しくは，[https://godoc.org/github.com/tcnksm/go-latest](https://godoc.org/github.com/tcnksm/go-latest)を参照．
 
 
-## 使いどころ
+## 使い所
 
 例えば，自分が作っているコマンドラインツールの場合は，`--version`が呼ばれたときに`go-latest`を実行し，最新版かどうかを提示するようにしている．
 
@@ -109,5 +108,13 @@ $ my-tool --version
 my-tool version v0.3.1, build aded5ca
 Your version is out of date! The latest version is v0.4.0
 ```
+
+ベータ版のリリースなどで開発のサイクルが早く，どんどんアップデートを促したい場合は，コマンドが実行される度に呼び出しても良いかもしれない（今回は社内向けのツールでこれをしたくてつくった）．またデーモンとして動くツールなどでは`SIGHUP`で実行しても良さそう．
+
+## まとめ
+
+バグや要望はGitHubの[Issue](https://github.com/tcnksm/go-latest/issues)，もしくは[@deeeet](https://twitter.com/deeeet)までお願いします．
+
+
 
 

@@ -10,7 +10,7 @@ Docker1.6が出た．コンテナやイメージのラベリング（RancherOS�
 
 今までDocker Regitryを介したイメージのやりとりはイメージの名前とタグ（e.g., `tcnksm/golang:1.2`）しか使うことができなかった．タグはイメージの作成者によって付与されるのもであり，同じタグであっても必ず同じイメージが利用できるという保証はなかった（Gitでいうとコミットハッシュが使えず，タグのみしか使えないという状況）．
 
-Docker1.6と同時に発表されたRegistry2.0（[docker/distribution](https://github.com/docker/distribution)）によりイメージにユニークなID（`digest`）が付与されるようになり，確実に同じイメージをやりとりすることが可能になった．
+Docker1.6と同時に発表されたRegistry2.0（[docker/distribution](https://github.com/docker/distribution)）によりイメージにユニークなID（`digest`）が付与されるようになり，確実に同じイメージ（immutable image references）をやりとりすることが可能になった．
 
 ## 使ってみる
 
@@ -107,7 +107,7 @@ Digest: sha256:4675f7a9d45932e3043058ef032680d76e8aacccda94b74374efe156e2940ee5
 
 簡単な仕組みを説明する．`digest`は手元で生成されるわけではない．`push`してRegistry側で生成される．
 
-まずclientはイメージと共にManifestをRegistryに送る．ManifestはGolangのstructでいうと以下のようなものでイメージの名前やタグ，FSレイヤーといった情報が書かれる（manifestに関するリンク）．
+まずclientはイメージと共にImage ManifestをRegistryに送る．Image ManifestはそのDocker Imageの内容をJSONで定義したもの．Golangのstructでいうと以下のようなものでイメージの名前やタグ，FSレイヤーといった情報が書かれる（Manifestは[ここ](https://github.com/docker/distribution/blob/master/docs/spec/manifest-v2-1.md)に定義されている）．
 
 ```golang
 type ManifestData struct {
@@ -125,7 +125,6 @@ APIを叩くとManifestの中身を見ることができる．
 ```bash
 $ curl $(boot2docker ip):5000/v2/tcnksm/test-digest/manifests/latest
 ```
-
 
 そしてRegistryは以下の関数内でリクエストされたManifestを元に`digest`を生成する（[registry/handlers/images.go](https://github.com/docker/distribution/blob/master/registry/handlers/images.go)）．
 
@@ -161,10 +160,16 @@ Digest: sha256:e4c425e28a3cfe41efdfceda7ccce6be4efd6fc775b24d5ae26477c96fb5eaa4
 
 ## Registry2.0
 
-- Signatureの仕組み（今までと比較する），まだ実装されてない..?pullを読む
-- Registryの他のトピック
-- https://github.com/docker/distribution/pull/317
-- https://github.com/docker/distribution/pull/211
+[Faster and Better Image Distribution with Registry 2.0 and Engine 1.6 | Docker Blog](http://blog.docker.com/2015/04/faster-and-better-image-distribution-with-registry-2-0-and-engine-1-6/)
+
+[docker/distribution](https://github.com/docker/distribution)は新しいRegistryの実装で，APIやセキュリティなど今までのRegistryの問題を解決しようとしている．今まではPythonで実装されていたがGo言語で再実装されている．
+
+特徴的なのは，
+
+- Push/Pullのパフォーマンスの改善，ref
+- バックエンドのストレージのPluggable化，ref
+- Webhookの実装（PushしたらIRCに通知を送るとか），https://github.com/docker/distribution/pull/317
+- Signature，ref
 
 
 ## References
@@ -173,6 +178,5 @@ Digest: sha256:e4c425e28a3cfe41efdfceda7ccce6be4efd6fc775b24d5ae26477c96fb5eaa4
 - [Docker Registry HTTP API V2](https://github.com/docker/distribution/blob/master/docs/spec/api.md), [#Detail](https://github.com/docker/distribution/blob/master/docs/spec/api.md#detail)
 - [Docker Registry v2 authentication via central service](https://github.com/docker/distribution/blob/master/docs/spec/auth/token.md)
 - [Deploying a registry service](https://github.com/docker/distribution/blob/master/docs/deploying.md)
-- [Faster and Better Image Distribution with Registry 2.0 and Engine 1.6 | Docker Blog](http://blog.docker.com/2015/04/faster-and-better-image-distribution-with-registry-2-0-and-engine-1-6/)
 - [kelseyhightower/docker-registry-osx-setup-guide](https://github.com/kelseyhightower/docker-registry-osx-setup-guide)
 

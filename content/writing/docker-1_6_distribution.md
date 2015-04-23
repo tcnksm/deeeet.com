@@ -1,6 +1,5 @@
 +++
 date = "2015-04-20T22:55:35+09:00"
-draft = true
 title = "Content Addressable DockerイメージとRegistry2.0"
 +++
 
@@ -10,7 +9,7 @@ Docker1.6が出た．コンテナやイメージのラベリング（RancherOS�
 
 今までDocker Regitryを介したイメージのやりとりはイメージの名前とタグ（e.g., `tcnksm/golang:1.2`）しか使うことができなかった．タグはイメージの作成者によって付与されるのもであり，同じタグであっても必ず同じイメージが利用できるという保証はなかった（Gitでいうとコミットハッシュが使えず，タグのみしか使えないという状況）．
 
-Docker1.6と同時に発表されたRegistry2.0（[docker/distribution](https://github.com/docker/distribution)）によりイメージにユニークなID（`digest`）が付与されるようになり，確実に同じイメージ（immutable image references）をやりとりすることが可能になった．
+Docker1.6と同時に発表されたRegistry2.0（[docker/distribution](https://github.com/docker/distribution)）によりイメージにユニークなID（`digest`）が付与されるようになり，確実に同じイメージを参照することができるようになった（immutable image references）．
 
 ## 使ってみる
 
@@ -105,9 +104,9 @@ Digest: sha256:4675f7a9d45932e3043058ef032680d76e8aacccda94b74374efe156e2940ee5
 
 ## 仕組み
 
-簡単な仕組みを説明する．`digest`は手元で生成されるわけではない．`push`してRegistry側で生成される．
+簡単に仕組みを説明する．`digest`は手元で生成されるわけではない．`push`してRegistry側で生成される．
 
-まずclientはイメージと共にImage ManifestをRegistryに送る．Image ManifestはそのDocker Imageの内容をJSONで定義したもの．Golangのstructでいうと以下のようなものでイメージの名前やタグ，FSレイヤーといった情報が書かれる（Manifestは[ここ](https://github.com/docker/distribution/blob/master/docs/spec/manifest-v2-1.md)に定義されている）．
+まずclientはイメージと共にImage ManifestをRegistryに送る（署名する）．Image ManifestはそのDocker Imageの内容をJSONで定義したもの．Golangのstructでいうと以下のようなものでイメージの名前やタグ，FSレイヤーといった情報が書かれる（Manifestは[ここ](https://github.com/docker/distribution/blob/master/docs/spec/manifest-v2-1.md)に定義されている）．
 
 ```golang
 type ManifestData struct {
@@ -166,16 +165,16 @@ Digest: sha256:e4c425e28a3cfe41efdfceda7ccce6be4efd6fc775b24d5ae26477c96fb5eaa4
 
 特徴的なのは，
 
-- Push/Pullのパフォーマンスの改善，ref
-- バックエンドのストレージのPluggable化，ref
-- Webhookの実装（PushしたらIRCに通知を送るとか），https://github.com/docker/distribution/pull/317
-- Signature，ref
+- イメージManifestの再定義（[Image Manifest Version 2, Schema 1](https://github.com/docker/distribution/blob/master/docs/spec/manifest-v2-1.md)） - [#8093](https://github.com/docker/docker/issues/8093)を参照．セキュリティの改善が主な目的．
+- APIの刷新（[Docker Registry HTTP API V2](https://github.com/docker/distribution/blob/master/docs/spec/api.md), [#Detail](https://github.com/docker/distribution/blob/master/docs/spec/api.md#detail)）- URIの改善，Manifest V2を利用できるようにする，Push/Pullが途中で死んでも終わったところから再開できるようにする，などなど（詳しく見てないけどclientはGo言語のinterfaceとして定義されていたので自分で独自のものをつくれる...?）
+- バックエンドのストレージをPluggable化（[Docker-Registry Storage Driver](https://github.com/docker/distribution/blob/master/docs/storagedrivers.md)）- 現在は，インメモリ，ファイルシステム，S3，Azure Blob Storageが選択できる．Go言語のinterfaceとして定義されてるので自分で実装することもできる．
+- Webhookの実装（[Notifications](https://github.com/docker/distribution/blob/master/docs/notifications.md)）- Push/Pullといったイベントが発生するごとに設定したendopointにリクエストを送ることができる．
 
+あとまだスケルトンしかないが`dist`コマンドというものを作ろうとしている（[dist](https://github.com/docker/distribution/tree/master/cmd/dist)）．これはDockerデーモンなしでDockerイメージのpull/pushを行うコマンド．Dockerの少し嫌な部分としてrumtimeとイメージのダウンロードが分かれていないというのがあったが，それをここで解決しようとしているっぽい．
 
 ## References
 
 - [Docker Registry 2.0](https://docs.docker.com/registry/overview/)
-- [Docker Registry HTTP API V2](https://github.com/docker/distribution/blob/master/docs/spec/api.md), [#Detail](https://github.com/docker/distribution/blob/master/docs/spec/api.md#detail)
 - [Docker Registry v2 authentication via central service](https://github.com/docker/distribution/blob/master/docs/spec/auth/token.md)
 - [Deploying a registry service](https://github.com/docker/distribution/blob/master/docs/deploying.md)
 - [kelseyhightower/docker-registry-osx-setup-guide](https://github.com/kelseyhightower/docker-registry-osx-setup-guide)

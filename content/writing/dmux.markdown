@@ -3,6 +3,7 @@
 title: 'Dockerとtmuxを連携するdmuxというツールをつくった'
 date: 2014-06-15
 comments: true
+draft: true
 categories: docker golang
 ---
 

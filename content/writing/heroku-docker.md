@@ -1,17 +1,16 @@
 +++
-date = "2015-05-06T19:08:55+09:00"
-draft = true
-title = "HerokuのDocker対応について"
+date = "2015-05-07T09:08:55+09:00"
+title = "Herokuの'docker:release'の動き"
 +++
 
 [Introducing 'heroku docker:release': Build & Deploy Heroku Apps with Docker](https://blog.heroku.com/archives/2015/5/5/introducing_heroku_docker_release_build_deploy_heroku_apps_with_docker)
 
-HerokuがDockerの利用を始めた．一通り触ってコードもちょっと読んでみたので現時点でできること，内部の動きについてまとめる．
+HerokuがDockerを使ったツールを提供し始めた．一通り触ってコードもちょっと読んでみたので現時点でできること，内部の動きについてまとめる．
 
 ## TL;DR
 
-- Herokuの本番環境とローカル開発環境を一致させることができる（プラグインによるDockerコマンドの抽象化）
-- Buildpackなしで`Dockerfile`からSlugを作れる
+- [Herokuのデプロイ環境とおなじものをDockerでつくれる](https://twitter.com/miyagawa/status/596020653540528128)
+- Buildpackを使わないで`Dockerfile`からSlugを作れる
 
 自分の好きなDockerイメージをHeroku上で動かせるようになるわけではない．
 
@@ -23,7 +22,7 @@ HerokuがDockerの利用を始めた．一通り触ってコードもちょっ�
 $ heroku plugins:install heroku-docker
 ```
 
-カレントディレクトリの言語/フレームワークに応じた`Dockerfile`を生成する．
+カレントディレクトリの言語/フレームワークに応じた専用の`Dockerfile`を生成する（これはなんでも好きに書ける`Dockerfile`ではないことに注意）．
 
 ```bash
 $ heroku docker:init
@@ -44,7 +43,7 @@ web process will be available at http://192.168.59.103:3000/
 $ heroku docker:exec bundle exec rake db:migrate
 ```
 
-開発が終わったら上記のDockerイメージから[Slug](https://devcenter.heroku.com/articles/slug-compiler)（アプリケーションのソースとその依存関係を全て含めた`.tar`）を作成してそれをそのままHeroku上にデプロイすることができる．デプロイされるとそれは通常通りに[Dyno](https://devcenter.heroku.com/articles/dynos#the-dyno-manager)になりアクセスできるようになる．
+開発が終わったら上記のDockerイメージから[Slug](https://devcenter.heroku.com/articles/slug-compiler)（アプリケーションのソースとその依存関係を全て含めた`.tgz`）を作成してそれをそのままHeroku上にデプロイすることができる．デプロイされるとそれは通常通りに[Dyno](https://devcenter.heroku.com/articles/dynos#the-dyno-manager)になりアクセスできるようになる．
 
 ```bash
 $ heroku docker:release
@@ -54,7 +53,7 @@ $ heroku open
 以下の制約を満たせば生成された`Dockerfile`を自分なりに編集することもできる．
 
 - `heroku:cedar`イメージをベースにする
-- `/app`ディレクトリ以下に変更が含まれる
+- `/app`ディレクトリ以下に変更が入るようにする
 
 詳しくは以下で説明する．
 
@@ -113,7 +112,7 @@ var imageId = `${execImageId}-start`;
 var filename = `.Dockerfile-${uuid.v1()}`;
 ```
 
-上で見たように生成された`Dockerfile`においてアプリケーションのコードをイメージに含める部分は`ONBUILD`が使われていた．このステップは`ONBUILD`を実行するために行われる．この仕組みにより，同じ`Dockerfile`＋同じ言語のアプリケーションである場合にベースイメージの再度ビルドが不要になる（つまりアプリケーションコードの追加と依存関係の解決のみが走る）．
+上で見たように生成された`Dockerfile`においてアプリケーションのコードをイメージに含める部分は`ONBUILD`が使われていた．このステップは`ONBUILD`を実行するために行われる．この仕組みにより，同じ`Dockerfile`＋同じ言語のアプリケーションである場合にベースイメージの再度ビルドが不要になる（つまりアプリケーションコードの追加と依存関係の解決のみが走る）．このステップが`git push`したことと同じになる．
 
 最後にコンテナの起動は以下のコマンドが実行される．
 
@@ -127,7 +126,7 @@ docker run -w /app/src -p 3000:3000 --rm -it ${mountComponent} ${envArgComponent
 
 ### release
 
-最後に`docker:release`コマンドでslugがHerokuにデプロイされる仕組み．このコマンドでは以下の3つのことを行う．
+最後に`docker:release`コマンドでSlugがHerokuにデプロイされる仕組み．このコマンドでは以下の3つのことを行う．
 
 - Slug（`slug.tgz`）の作成
 - 起動コマンド（`process_types`）の設定
@@ -142,7 +141,7 @@ $ docker wait ${containerId}
 $ docker cp ${containerId}:/tmp/slug.tgz ${slugPath}
 ```
 
-`/app`以下を`tar`で固めて`cp`コマンドでそれを取り出しているだけ．なので独自の`Dockerfile`を書く時は注意が必要で`/app`以下に依存をちゃんと含めるように書く必要がある．
+`/app`以下を`tgz`で固めて`cp`コマンドでそれを取り出している．なので`Dockerfile`に独自の変更を加えるときは注意が必要で`/app`以下に依存をちゃんと含めるように書く必要がある．
 
 例えば[GraphicsMagick](http://www.graphicsmagick.org/)を依存に含めたいときは以下のように`Dockerfile`を書いて`/app`以下に変更が加わるように意識しなければならない．
 
@@ -154,15 +153,13 @@ RUN make DESTDIR=/app install
 RUN echo "export PATH=\"/app/usr/local/bin:\$PATH\"" >> /app/.profile.d/nodejs.sh
 ENV PATH /app/usr/local/bin:$PATH
 ```
-（Go言語で書かれた静的リンクされたバイナリを使うのは楽そうだな）
+（Go言語で書かれた静的リンクされたバイナリを使うのは楽そう）
 
-起動コマンド（process_types）の設定とSlugのアップロードはPlatform APIを叩いているだけ，詳しくは["Creating Slugs from Scratch"](https://devcenter.heroku.com/articles/platform-api-deploying-slugs)を参考．
+起動コマンド（`process_types`）の設定とSlugのアップロードはPlatform APIを叩いているだけ，詳しくは["Creating Slugs from Scratch"](https://devcenter.heroku.com/articles/platform-api-deploying-slugs)を参考．
 
 ## まとめ
 
-Dockerを使えるようにするというよりは，Dockerを使うことでHerokuアプリの開発をやりやすくしたという印象．SlugはHeroku上で作られて一体どうなっているのかわからなかったけど手元で同じものを再現できるのは強い．Buildpackとの連携も進むのではないか（Buildpack+Dockerだと[building](http://www.centurylinklabs.com/heroku-on-docker/)かなあ）．
-
-ローカル開発環境にDocker（boot2docker）はあるっしょという前提でツールを提供する流れだ．Dockerコマンドをラップするとかね．
+Dockerを使うことでHerokuアプリの開発をやりやすくしたという印象．Buildpackとの連携も進むのではないか（Buildpack+Dockerだと[building](http://www.centurylinklabs.com/heroku-on-docker/)かなあ）．ローカル開発環境にDocker（boot2docker）はあるっしょという前提でツールを提供する流れだ．Dockerコマンドをラップしたり`Dockerfile`を自動生成したりね．
 
 ## 参考
 

@@ -1,17 +1,16 @@
 +++
 date = "2015-05-11T22:35:55+09:00"
-draft = true
 title = "Golang Cross Compiler on Heroku (with Docker)"
 en = true
 +++
 
-Heroku unveils new CLI functionality `heroku docker:release` (cf. ["Heroku | Introducing 'heroku docker:release': Build & Deploy Heroku Apps with Docker"](https://blog.heroku.com/archives/2015/5/5/introducing_heroku_docker_release_build_deploy_heroku_apps_with_docker)). You can run Heroku's [Cedar](https://devcenter.heroku.com/articles/cedar) environment on Docker container and test your application in local environment. In addition to that, you can create [Slug](https://devcenter.heroku.com/articles/platform-api-deploying-slugs) from that docker image and deploy it directly to Heroku.
+Heroku unveils new CLI functionality `heroku docker:release` (cf. ["Heroku | Introducing 'heroku docker:release': Build & Deploy Heroku Apps with Docker"](https://blog.heroku.com/archives/2015/5/5/introducing_heroku_docker_release_build_deploy_heroku_apps_with_docker)). You can run Heroku's [Cedar](https://devcenter.heroku.com/articles/cedar) environment on Docker container and test your application in local environment (Environment parity). In addition to that, you can create [Slug](https://devcenter.heroku.com/articles/platform-api-deploying-slugs) from that docker image and deploy it directly to Heroku.
 
-Before this release, Heroku provided the way to create Slug by [Buildpack](https://devcenter.heroku.com/articles/buildpacks). Buildpack is powerful but for me it's a little bit complex and hard to write from scratch. This release enables you to create slug from `Dockerfile`. It's more clearly and easy to understand.
+Before this release, Heroku provided the way to create Slug by [Buildpack](https://devcenter.heroku.com/articles/buildpacks). Buildpack is powerful but for me it's a little bit complex and hard to write from scratch. From this release you can create Slug from `Dockerfile`. It's more clearly and easy to understand.
 
-So I played it and wrote a simple service, [tcnksm/gox-server](https://github.com/tcnksm/gox-server). This is a golang cross compile service and you can run it on Heroku (Sample application is on [https://gox-server.herokuapp.com/](https://gox-server.herokuapp.com/)). You don't need to prepare golang runtime on your local PC. You can get a binary from it.
+So I played it and wrote a simple service, [tcnksm/gox-server](https://github.com/tcnksm/gox-server). This is a golang cross compile service and you can run it on Heroku (Sample application is on [https://gox-server.herokuapp.com/](https://gox-server.herokuapp.com/)). You don't need to prepare golang runtime on your local PC. You can get a binary from it (Currently support platform is Darwin/Linux/Windows, 386/amd64 and repository must be on Github). 
 
-Usage is simple. Just provide github repository and user name. For example, if you want to get github.com/Soulou/curl-unix-socket compiled binary,
+Usage is simple. Just provide github repository and user name. For example, if you want to get [github.com/Soulou/curl-unix-socket](https://github.com/Soulou/curl-unix-socket) compiled binary,
 
 ```bash
 $ curl -A "`uname -sp`" https://gox-server.herokuapp.com/Soulou/curl-unix-socket > curl-unix-socket
@@ -31,7 +30,7 @@ $ heroku docker:init --template minimal
 Wrote Dockerfile (minimal)
 ```
 
-While I was writing `Dockefile` for creating Heroku slug, I got some tips for it. So I'll share it.
+While I was writing `Dockefile` for Heroku Slug, I got some tips. So I'll share them.
 
 ### Minimal requirement
 
@@ -42,11 +41,13 @@ You must follow below,
 
 ### Debugging
 
-You can run application by `heroku docker:start` command. Actually this is just docker container, so you can enter it for debugging it. Docker image name is `heroku-docker-${hash}-start`,
+You can run application by `heroku docker:start` command. Actually this is just docker container, so you can enter it like you do `heroku run bash` for debug. Docker image name is `heroku-docker-${hash}-start`,
 
 ```bash
 $ docker run -it heroku-docker-${hash}-start /bin/bash
 ```
+
+Or using `exec` to running container.
 
 ### Slug size
 
@@ -68,7 +69,7 @@ In `Procfile`, you should not include environmental variable like `$PORT`. It wo
 
 ### WORDIR
 
-You may set `WORKDIR` on `Dockerfile`, root directory of `docker run`. To enable it on Heroku environment, you need to write `.procfile.d`, so that directory is changed.
+You may set `WORKDIR` on `Dockerfile`, root directory of `docker run`. To enable it on Heroku environment, you need to write `.procfile.d`, so that directory is changed when starting application.
 
 ```bash
 ONBUILD RUN echo "cd /app/src/root"  >> /app/.profile.d/init.sh

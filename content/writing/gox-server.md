@@ -21,7 +21,7 @@ $ chmod a+x curl-unix-socket
 
 ## Tips of writing Dockefile for Heroku
 
-`Dockerfile` is [https://github.com/tcnksm/gox-server/blob/master/Dockerfile](https://github.com/tcnksm/gox-server/blob/master/Dockerfile).
+`Dockerfile` for this project is [https://github.com/tcnksm/gox-server/blob/master/Dockerfile](https://github.com/tcnksm/gox-server/blob/master/Dockerfile).
 
 I've started from minimal template,
 
@@ -30,14 +30,12 @@ $ heroku docker:init --template minimal
 Wrote Dockerfile (minimal)
 ```
 
-While I was writing `Dockefile` for Heroku Slug, I got some tips. So I'll share them.
-
-### Minimal requirement
-
-You must follow below,
+Miminal requirement we must follow is below,
 
 - Start `FROM heroku:cedar:14`
 - Changes localized to the `/app` directory
+
+While I was writing `Dockefile` for Heroku Slug, I got some tips. So I'll share them.
 
 ### Debugging
 

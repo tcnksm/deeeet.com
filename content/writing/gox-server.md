@@ -65,7 +65,7 @@ You need to prepare `Procfile` to run the application.
 
 In `Procfile`, you should not include environmental variable like `$PORT`. It works on Heroku, but doesn't work on local environment with `heroku docekr:start`. Because `Procfile` is  directly used for `docker run` command and environmental variable in `Procfile` would extract from your host machine, not docker container. So your need to read environment variable from your source code.
 
-### WORDIR
+### WORKDIR
 
 You may set `WORKDIR` on `Dockerfile`, root directory of `docker run`. To enable it on Heroku environment, you need to write `.procfile.d`, so that directory is changed when starting application.
 

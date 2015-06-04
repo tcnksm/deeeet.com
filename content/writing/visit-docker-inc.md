@@ -60,7 +60,7 @@ Nathanの（自作）スタンディングデスク
 
 Nathanは今年のYAPC::2015で発表する予定になっているので絶対聞きに行きましょう！（["Docker For Polyglots : Where We've Come From, and Where We Can Go"](http://yapcasia.org/2015/talk/show/21cb8176-065b-11e5-9492-79c97d574c3a)）．日本でDockerのエンジニアの話を聞けるのはめちゃめちゃ貴重だと思います．
 
-Thanks, Nathan for inviting me :)
+Thanks, Nathan :)
 
 
 

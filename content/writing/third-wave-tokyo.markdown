@@ -16,6 +16,7 @@ categories:
 - [OBSCURA COFFEE](http://www.cafe-obscura.com/shop-laboratory/) @三軒茶屋, Siphon
 - [THE COFFEESHOP](http://www.thecoffeeshop.jp/) @代官山, French Press
 - [ARISE COFFEE ROASTERS](http://arisecoffee.jp/) @清澄白河, Drip
+- [WOODBERRY COFFEE](http://woodberrycoffee.com/) @用賀, Drip
 - [猿田彦珈琲](http://shop.sarutahiko.co/) @恵比寿, Drip
 
 

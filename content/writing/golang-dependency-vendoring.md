@@ -7,17 +7,17 @@ Go言語のDependency/Vendoringは長く批判の的になってきた（cf. ["0
 
 ## Dependencyの問題
 
-最初にGo言語におけるDependecy（依存解決）の問題．Go言語のDependencyで問題なのはビルドの再現性が保証できないこと．この原因は`import`文にある．
+最初にGo言語におけるDependecy（依存解決）の問題についてまとめる．Go言語のDependencyで問題なのはビルドの再現性が保証できないこと．この原因は`import`文にある．
 
-Go言語では外部パッケージを利用したいときにそれを`import`文を使ってソースコード内に記述する．この`import`文は2通りの解釈のされ方をする．`go get`はリモートレポジトリのfetch URLとして解釈し，コンパイラはローカルディスク上のソースのPathとして解釈する．例えばコマンドラインツールを作るときに外部パッケージとして[mitchellh/cli](https://github.com/mitchellh/cli)を使いたい場合は以下のように記述する．
+Go言語で外部パッケージを利用したいときは`import`文を使ってソースコード内にそれを記述する．この`import`文は2通りの解釈のされ方をする．`go get`はリモートレポジトリのfetch URLとして解釈し，コンパイラはローカルディスク上のソースのPathとして解釈する．例えばコマンドラインツールを作るときに外部パッケージとして[mitchellh/cli](https://github.com/mitchellh/cli)を使いたい場合は以下のように記述する．
 
 ```go
 import "github.com/mitchellh/cli"
 ```
 
-これが書かれたコードを`go get`すると，ローカルディスクに[mitchellh/cli](https://github.com/mitchellh/cli)がなければ`$GOPATH/src`以下にそれをfetchする．ビルド時はそのPathに存在するコードを利用する．
+これが書かれたコードを`go get`すると，ローカルディスクに[mitchellh/cli](https://github.com/mitchellh/cli)がなければ`$GOPATH/src`以下にそれがfetchされる．ビルド時はそのPathに存在するコードが利用される．
 
-`import`が問題なのは，そこにバージョン（もしくはタグ，Revision）を指定できないこと．そのため独立した2つの`go get`が異なるコードをfetchしてしまう可能性がある．そのコードが互換をぶっ壊していたらビルドは失敗するかもしれない．つまり現状何もしないとビルドの再現性は保証できない．
+`import`で問題になるのは，そこにバージョン（もしくはタグ，Revision）を指定できないこと．そのため独立した2つの`go get`が異なるコードをfetchしてしまう可能性がある．そのコードが互換をぶっ壊していたらビルドは失敗するかもしれない．つまり現状何もしないとビルドの再現性は保証できない．
 
 では以下のようにタグやバージョンを書けるようにすれば?となる．が，これは言語の互換を壊すことになる．
 

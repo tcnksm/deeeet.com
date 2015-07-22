@@ -19,7 +19,7 @@ $ GOOS=${TARGET_OS} GOARCH=${TARGET_ARCH} ./make.bash --no-clean
 $ gox -build-toolchain 
 ```
 
-この作業は1つの環境で一度だけ行えばよいのでそれほど煩雑な問題ではない．しかし，例えばDockerなどでクロスコンパイル環境を提供すると（e.g., [tcnksm/dockerfile-gox](https://github.com/tcnksm/dockerfile-gox)），ビルドに時間がかかったりイメージが無駄に重くなったりという問題がおこる．初めてクロスコンパイルをしようとするひとにとってもつまづいてしまうポイントだったと思う．
+この作業は1つの環境で一度だけ行えばよいのでそれほど煩雑ではない．しかし，例えばDockerなどでクロスコンパイル環境を提供すると（e.g., [tcnksm/dockerfile-gox](https://github.com/tcnksm/dockerfile-gox)），ビルドに時間がかかったりイメージが無駄に重くなったりという問題がおこる．初めてクロスコンパイルをしようとするひとにとってもつまづいてしまうポイントだったと思う．
 
 Go1.5ではコンパイラがGoで書き直された（cf. [Go in Go](http://talks.golang.org/2015/gogo.slide#1)）ため，この準備作業が不要になる．`go`はコンパイル前に必要な標準パッケージを検出しそれらをターゲットのプラットフォーム向けにビルドする．
 

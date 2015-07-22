@@ -8,7 +8,7 @@ title = "Go1.5はクロスコンパイルがより簡単"
 
 Go言語の良さの一つにあらゆるOS/Archに対するクロスコンパイルがとても簡単に行えることが挙げられる．今まで（Go1.4以前）も十分に便利だったが[Go 1.5](http://tip.golang.org/doc/go1.5)ではさらに良くなる．
 
-今までの問題を敢えて挙げるとターゲットとするプラットフォーム向けのビルドtoolchain準備する必要があった（cf. [Go のクロスコンパイル環境構築 - Qiita](http://qiita.com/Jxck_/items/02185f51162e92759ebe)）
+今までの問題を敢えて挙げるとターゲットとするプラットフォーム向けのビルドtool-chain準備する必要があるのが煩雑だった（cf. [Go のクロスコンパイル環境構築 - Qiita](http://qiita.com/Jxck_/items/02185f51162e92759ebe)）
 
 ```bash
 $ cd $(go env GOROOT)/src
@@ -21,7 +21,7 @@ $ gox -build-toolchain
 
 この作業は1つの環境で一度行えばよいのでそれほど煩雑な問題ではない．しかし，例えばDockerなどでクロスコンパイル環境を提供すると（e.g., [tcnksm/dockerfile-gox](https://github.com/tcnksm/dockerfile-gox)，ちなみにこれは[Wercker](http://wercker.com/)の公式ドキュメントに[紹介](http://devcenter.wercker.com/docs/languages/golang.html)されている），ビルドに時間がかかったりイメージが無駄に重くなったりという問題がおこる．初心者もつまづいてしまうポイントだと思う．
 
-Go1.5ではコンパイラがGoで書き直された（cf. [Go in Go](http://talks.golang.org/2015/gogo.slide#1)）ため，この準備作業が不要になる．
+Go1.5ではコンパイラがGoで書き直された（cf. [Go in Go](http://talks.golang.org/2015/gogo.slide#1)）ため，この準備作業が不要になる．`go`はコンパイル前に必要な標準パッケージを検出しそれらをターゲットのプラットフォーム向けにビルドする．
 
 ## 使ってみる
 
@@ -65,8 +65,6 @@ Number of parallel builds: 4
 -->     linux/amd64: github.com/tcnksm/hello
 -->    darwin/amd64: github.com/tcnksm/hello
 ```
-
-最高．`go`はコンパイル前に必要な標準パッケージを検出しそれをターゲットのプラットフォーム向けにビルドしてくれる．
 
 ちなみに上の例はcgoが必要ない場合，cgoが必要な場合は`CC`と`CXX`環境変数でCとC++のコンパイラを指定することができる（cf. [Go 1.5: Cross compilation](https://medium.com/@rakyll/go-1-5-cross-compilation-488092ba44ec)）．
 

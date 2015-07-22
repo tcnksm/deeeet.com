@@ -20,13 +20,13 @@ $ fleetctl start unit-files/instances/base/*
 To release load-balancing service,
 
 ```bash
-$ fleetctl start unit-files/static/basic/deeeet-com-lb.service
+$ fleetctl start unit-files/static/base/deeeet-com-lb.service
 ```
 
 To release hook service (which is hooked dockerhub work and re-release base services),
 
 ```bash
-$ fleetctl start unit-files/static/basic/deeeet-com-hook.service
+$ fleetctl start unit-files/static/base/deeeet-com-hook.service
 ```
 
 ### Monitoring

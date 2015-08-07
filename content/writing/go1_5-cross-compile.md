@@ -21,7 +21,7 @@ $ gox -build-toolchain
 
 この作業は1つの環境で一度だけ行えばよいのでそれほど煩雑ではない．しかし，例えばDockerなどでクロスコンパイル環境を提供すると（e.g., [tcnksm/dockerfile-gox](https://github.com/tcnksm/dockerfile-gox)），ビルドに時間がかかったりイメージが無駄に重くなったりという問題がおこる．初めてクロスコンパイルをしようとするひとにとってもつまづいてしまうポイントだったと思う．
 
-Go1.5ではコンパイラがGoで書き直された（cf. [Go in Go](http://talks.golang.org/2015/gogo.slide#1)）ため，この準備作業が不要になる．`go`はコンパイル前に必要な標準パッケージを検出しそれらをターゲットのプラットフォーム向けにビルドする．
+Go1.5ではコンパイラがGoで書き直された（cf. [Go in Go](http://talks.golang.org/2015/gogo.slide#1)）ため，この準備作業が不要になる．`go`はコンパイル前に必要な標準パッケージを検出しそれらをターゲットのプラットフォーム向けにビルドしてくれる．
 
 ## 使ってみる
 
@@ -71,3 +71,15 @@ Number of parallel builds: 4
 ```bash
 $ CGO_ENABLED=1 CC=android-armeabi-gcc CXX=android-armeabi-g++ GOOS=android GOARCH=arm GOARM=7 go build .
 ```
+
+## 留意事項
+
+(2015年8月7日追記)
+
+`-v` オプションをつけてクロスコンパイルをするとわかるが毎回ターゲットプラットホーム向けに標準ライブラリをビルドするためコンパイル時間は長くなる（cf ["https://twitter.com/upthecyberpunks/status/629092265391095809"](https://twitter.com/upthecyberpunks/status/629092265391095809)）．同じ環境で使い回すならば標準パッケージを事前にビルドしておくと良い．
+
+```bash
+$ env GOOS=linux GOARCH=amd64 go install std
+```
+
+

@@ -76,7 +76,7 @@ $ CGO_ENABLED=1 CC=android-armeabi-gcc CXX=android-armeabi-g++ GOOS=android GOAR
 
 (2015年8月7日追記)
 
-`-v` オプションをつけてクロスコンパイルをするとわかるが毎回ターゲットプラットホーム向けに標準ライブラリをビルドするためコンパイル時間は長くなる（cf ["https://twitter.com/upthecyberpunks/status/629092265391095809"](https://twitter.com/upthecyberpunks/status/629092265391095809)）．同じ環境で使い回すならば標準パッケージを事前にビルドしておくと良い．
+`-v` オプションをつけてクロスコンパイルをするとわかるが毎回ターゲットプラットホーム向けに標準ライブラリをビルドするためコンパイル時間は長くなる（cf ["https://twitter.com/upthecyberpunks/status/629092265391095809"](https://twitter.com/upthecyberpunks/status/629092265391095809)）．同じ環境で使い回すならば今まで通り標準パッケージを事前にビルドしておくと良い．
 
 ```bash
 $ env GOOS=linux GOARCH=amd64 go install std

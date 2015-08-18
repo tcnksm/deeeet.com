@@ -49,7 +49,7 @@ Dockerを使ってシングルNodeのKubernetesクラスタをローカル開発
 
 同じように1コマンドでKubernetesクラスタを立ち上げる試みとして["1 command to Kubernetes with Docker compose"](http://sebgoa.blogspot.jp/2015/04/1-command-to-kubernetes-with-docker.html)がある．これは`docker-compose`を使っている．同様に`boot2k8s`は`docker-compose`のGo言語実装である[libcompose](https://github.com/docker/libcompose)をライブラリとして利用して複数コンテナを立ち上げている（`boot2k8s`のcomposeファイルは[k8s.yml](https://github.com/tcnksm/boot2kubernetes/blob/0.1.0/config/k8s.yml)にあるので`docker-compose`のみを使いたい人はこれをそのまま利用できる）．
 
-`boot2k8s`は[go-bindata](https://github.com/jteeuwen/go-bindata)でcomposeファイルをバイナリとして埋め込み`libcompose`で起動する．コードで示すと以下のようになる．
+`boot2k8s`は[go-bindata](https://github.com/jteeuwen/go-bindata)でcomposeファイルをbyteとして埋め込み`libcompose`で起動する．コードで示すと以下のようになる．
 
 ```golang
 // Read .yml file as bytes by go-bindata

@@ -1,12 +1,11 @@
 +++
 date = "2015-08-17T23:47:14+09:00"
-draft = true
-title = "1コマンドでkubernetesクラスタを立ち上げるboot2kubernetesというツールをつくった"
+title = "1コマンドでkubernetesを立ち上げるboot2kubernetesというツールをつくった"
 +++
 
-[kubernetes 1.0がリリースされた](http://googlecloudplatform.blogspot.jp/2015/07/Kubernetes-V1-Released.html)．これから実際に試す機会も増えそうなので，Dockerを使って簡単に（1コマンドで）kubernetesクラスタを立てられるコマンドをつくった．
-
 [tcnksm/boot2kubernetes](https://github.com/tcnksm/boot2kubernetes)
+
+[kubernetes 1.0がリリースされた](http://googlecloudplatform.blogspot.jp/2015/07/Kubernetes-V1-Released.html)．これから実際に試す機会も増えそうなのでDockerを使って簡単に（1コマンドで）kubernetesクラスタを立てるコマンドをつくった．
 
 ## デモ
 
@@ -48,9 +47,9 @@ $ brew install boot2k8s
 
 Dockerを使ってシングルNodeのKubernetesクラスタをローカル開発環境に立てる方法はkubernetesの公式が提供している（cf. [Running Kubernetes locally via Docker](https://github.com/kubernetes/kubernetes/blob/release-1.0/docs/getting-started-guides/docker.md)）．基本はこのドキュメントとやっていることは同じで，面倒な部分を含めて全てを1つのコマンドにまとめている．
 
-同じように1コマンドでKubernetesクラスタを立ち上げる試みとして["1 command to Kubernetes with Docker compose"](http://sebgoa.blogspot.jp/2015/04/1-command-to-kubernetes-with-docker.html)がある．これは`docker-compose`を使っている．`boot2k8s`も[libcompose](https://github.com/docker/libcompose)を利用してこれを実現している．`libcompose`はPython実装である`docker-compose`のGo言語実装でありライブラリとして自分のツールで使うことができる．
+同じように1コマンドでKubernetesクラスタを立ち上げる試みとして["1 command to Kubernetes with Docker compose"](http://sebgoa.blogspot.jp/2015/04/1-command-to-kubernetes-with-docker.html)がある．これは`docker-compose`を使っている．同様に`boot2k8s`は`docker-compose`のGo言語実装である[libcompose](https://github.com/docker/libcompose)をライブラリとして利用して複数コンテナを立ち上げている（`boot2k8s`のcomposeファイルは[k8s.yml](https://github.com/tcnksm/boot2kubernetes/blob/0.1.0/config/k8s.yml)にあるので`docker-compose`のみを使いたい人はこれをそのまま利用できる）．
 
-`boot2k8s`は`docker-compose`の設定ファイル[k8s.yml](https://github.com/tcnksm/boot2kubernetes/blob/0.1.0/config/k8s.yml)を準備し，それを[go-bindata](https://github.com/jteeuwen/go-bindata)でそれを埋め込み，`libcompose`で起動する．コードで示すと以下のようになる．
+`boot2k8s`は[go-bindata](https://github.com/jteeuwen/go-bindata)でcomposeファイルをバイナリとして埋め込み`libcompose`で起動する．コードで示すと以下のようになる．
 
 ```golang
 // Read .yml file as bytes by go-bindata
@@ -69,11 +68,7 @@ project, _ := docker.NewProject(context)
 project.Up()
 ```
 
-これに加えてport forwardingやコンテナの削除機能をもたせている．
-
-## 今後の予定
-
-Docker machineと連携して立ち上げられる場所を増やす予定．
+`boot2k8s`の利点はport forwardingやコンテナの削除機能を持っていることが挙げられる．さらに今後はDocker machineと連携して様々な環境でkubernetesを簡単に立ち上げられるようにする予定．
 
 ## 最後に
 

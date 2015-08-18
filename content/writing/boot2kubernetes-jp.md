@@ -72,7 +72,7 @@ project.Up()
 
 ## 最後に
 
-バグや意見はGitHubの[Issue](https://github.com/tcnksm/boot2kubernetes/issues), もしくは[@deeeet](https://twitter.com/deeeet)までお願いします．
+バグや意見はGitHubの[Issue](https://github.com/tcnksm/boot2kubernetes/issues)，もしくは[@deeeet](https://twitter.com/deeeet)までお願いします．
 
 [@rrreeeyyy](https://twitter.com/rrreeeyyy)くんに事前に意見をもらいました．ありがとう．
 

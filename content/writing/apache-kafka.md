@@ -1,6 +1,5 @@
 +++
 date = "2015-09-01T18:13:38+09:00"
-draft = true
 title = "Apache Kafkaに入門した"
 cover_image = "kafka-logo-wide.png"
 +++
@@ -76,7 +75,7 @@ BrokerはConsumerがメッセージを購読したかに関わらず設定され
 
 ## 高速にメッセージを消費する
 
-Kafkaの肝はBrokerからConsumerへの高スループットである（と思う）．これをどのように実現しているかを説明する．
+Kafkaで面白いのはConsumerがBrokerから高速にメッセージを読み込むための仕組みであると思う．これをどのように実現しているかを説明する．
 
 **並列でキューを読むのは大変**
 
@@ -120,17 +119,26 @@ Partition内，つまりConsumer内では順序性が確保される．つまり
 
 ProducerはBrokerにメッセージを配信するときにKeyを指定することができる．このKeyにより同じKeyが指定されたメッセージを同じPartitionに保存することができる．Partition内の順序性とKeyで大抵のアプリケーションには問題ない（とのこと）．完全な順序性を確保したければPartitionを1つにすれば良い（Consumerも一つになってしまうが）．
 
+## 高スループットへの挑戦
+
+Brokerへの書き込み/読み込みはとにかく速い．LinkedInのベンチマークでは200万 write/sec（[Benchmarking Apache Kafka: 2 Million Writes Per Second (On Three Cheap Machines)](https://engineering.linkedin.com/kafka/benchmarking-apache-kafka-2-million-writes-second-three-cheap-machines)）とある．なぜこれだけ速いのか．以下の2つを組み合わせることにより実現している．
+
+- **write** バッファ書き込みを自分たちで実装するのではなくてカーネルのメモリキャシュ機構をがっつり使うようにした（Brokerが動いているサーバーのメモリ32GBのうち28-30GBがキャッシュに使われている）
+- **read** ページキャッシュからネットワークのsocketへ効率よくデータを受け渡すために`sendfile()`を使ってる
+
 ## まとめ
 
-先に紹介した論文["Building LinkedIn's Real-time Activity Data Pipeline"](http://sites.computer.org/debull/A12june/pipeline.pdf)は他にも面白いことがたくさん書いてある．例えば高スループットを実現するためにBrokerのバッファ書き込みを自分たちで実装するのではなくてカーネルのメモリキャシュ機構をちゃんと使うようにした（Brokerが動いているサーバーのメモリ32GBのうち28-30GBがキャッシュに使われている）とか．のでKafkaを使おうとしているひとはぜひ一度目を通してみるといいと思う．
+先に紹介した論文["Building LinkedIn's Real-time Activity Data Pipeline"](http://sites.computer.org/debull/A12june/pipeline.pdf)は他にも面白いことがたくさん書いてあるのでKafkaを使おうとしているひとはぜひ一度目を通してみるといいと思う．
 
-次はGo言語を使ってProducerとConsumerを実装する話を書く．
+次回はGo言語を使ってProducerとConsumerを実装する話を書く．
 
 ## 参考
 
 - [Building LinkedIn's Real-time Activity Data Pipeline](http://sites.computer.org/debull/A12june/pipeline.pdf)
 - [Apache Kafka入門](http://www.amazon.co.jp/Apache-Kafka%E5%85%A5%E9%96%80-%E4%BC%8A%E6%A9%8B-%E6%AD%A3%E7%BE%A9-ebook/dp/B00JU43ONW)
 - （["Apache Kafka, Samza, and the Unix Philosophy of Distributed Data"](http://www.confluent.io/blog/apache-kafka-samza-and-the-unix-philosophy-of-distributed-data)はApache KafkaをUnix哲学/パイプという観点から説明していてわかりやすい）
+- [Apache Kafka 0.8 basic training - Verisign](http://www.slideshare.net/miguno/apache-kafka-08-basic-training-verisign)
+- [Benchmarking Apache Kafka: 2 Million Writes Per Second (On Three Cheap Machines)](https://engineering.linkedin.com/kafka/benchmarking-apache-kafka-2-million-writes-second-three-cheap-machines)
 - [Apache Kafka 0.8.0の新機能／変更点 - 夢とガラクタの集積場](http://kimutansk.hatenablog.com/entry/20130703/1372803004)
 - [Apache Kafka, 他とは異なるメッセージングシステム](http://www.infoq.com/jp/news/2014/01/apache-afka-messaging-system)
 - [StormとKafkaによるリアルタイムデータ処理 - Yahoo! JAPAN Tech Blog](http://techblog.yahoo.co.jp/programming/storm/)

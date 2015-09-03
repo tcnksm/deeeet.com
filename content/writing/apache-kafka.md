@@ -60,11 +60,11 @@ KafkaはTopicを介してメッセージのやりとりを行う．Topicとは�
 
 **Pull vs Push**
 
-BrokerがConsumerにデータをpushするのか（fluentd，logstash，flume），もしくはConsumerがBrokerからデータをpullするのかはメッセージシステムのデザインに大きな影響を与える．もちろんそれぞれにPros/Consはある．KafkaはPull型のConsumerを採用している．それは以下の理由による．
+BrokerがConsumerにデータをPushするのか（fluentd，logstash，flume），もしくはConsumerがBrokerからデータをPullするのかはメッセージシステムのデザインに大きな影響を与える．もちろんそれぞれにPros/Consはある．KafkaはPull型のConsumerを採用している．それは以下の理由による．
 
-- pushだと様々なConsumerを扱うのが難しく，Brokerがデータの転送量などを意識しないといけない．Kafkaの目標は最大限のスピードでデータを消費することだが，（予期せぬアクセスなどで）転送量を見誤るとConsumerを圧倒してまう．PullだとConsumerが消費量を自らが管理できる．
-- pullだとバッチ処理にも対応できる．pushだと自らそれを溜め込んだ上でConsumerがそれを扱えるか否かに関わらずそれを送らないといけない
-- (pullでしんどいのはBrokerにデータがまだ届いてない場合のコストだがlong pollingなどでそれに対応している)
+- Pushだと様々なConsumerを扱うのが難しく，Brokerがデータの転送量などを意識しないといけない．Kafkaの目標は最大限のスピードでデータを消費することだが，（予期せぬアクセスなどで）転送量を見誤るとConsumerを圧倒してまう．PullだとConsumerが消費量を自らが管理できる．
+- Pullだとバッチ処理にも対応できる．Pushだと自らそれを溜め込んだ上でConsumerがそれを扱えるか否かに関わらずそれを送らないといけない
+- (PullでしんどいのはBrokerにデータがまだ届いてない場合のコストだがlong pollingなどでそれに対応している)
 
 **メッセージのライフサイクル**
 

@@ -21,7 +21,7 @@ cover_image = "kafka-logo-wide.png"
 
 ## どこで使われているのか?
 
-[Use Cases](http://kafka.apache.org/documentation.html#uses)をあげると，メッセージキューやウェブサイトのアクティビティのトラッキング（LinkedInのもともとのUse Case），メトリクスやログの収集，[Storm](https://storm.apache.org/)や[Samza](http://samza.apache.org/)を使ったストリーム処理などにおいて
+[Use Cases](http://kafka.apache.org/documentation.html#uses)をあげると，メッセージキューやウェブサイトのアクティビティのトラッキング（LinkedInのもともとのUse Case），メトリクスやログの収集，[Storm](https://storm.apache.org/)や[Samza](http://samza.apache.org/)を使ったストリーム処理などがあげられる．
 
 利用している企業は例えばTwitterやNetflix，Square，Spotify，Uberなどがある（cf. [Powered By](https://cwiki.apache.org/confluence/display/KAFKA/Powered+By)）．
 

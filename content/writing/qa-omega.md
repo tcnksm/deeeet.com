@@ -1,6 +1,5 @@
 +++
-date = "2015-09-01T18:47:11+09:00"
-draft = true
+date = "2015-09-17T18:47:11+09:00"
 title = "Google Omegaとは何か? Kubernetesとの関連は? 論文著者とのQA（翻訳）"
 +++
 

@@ -23,6 +23,12 @@ To release load-balancing service,
 $ fleetctl start unit-files/static/base/deeeet-com-lb.service
 ```
 
+To list service IPs,
+
+```bash
+$ etcdctl ls /services/deeeet-com
+```
+
 To release hook service (which is hooked dockerhub work and re-release base services),
 
 ```bash

@@ -1,7 +1,6 @@
 package main
 
 import (
-	"bufio"
 	"bytes"
 	"fmt"
 	"os"
@@ -35,20 +34,6 @@ coreos:
         ExecStart=/usr/bin/timedatectl set-timezone UTC
         RemainAfterExit=yes
         Type=oneshot
-    - name: download-crypt.service
-      command: start
-      content: |
-         [Unit]
-         Description=Install crypt
-         Documentation=https://github.com/xordataexchange/crypt
-
-         Requires=network-online.target
-         After=network-online.target
-         
-         [Service]
-         Type=oneshot
-         ExecStartPre=-/usr/bin/mkdir -p /opt/bin         
-         ExecStart=/usr/bin/sh -c '/usr/bin/wget -N -O /opt/bin/crypt https://github.com/xordataexchange/crypt/releases/download/v0.0.1/crypt-0.0.1-linux-amd64; /usr/bin/chmod +x /opt/bin/crypt'
 
   update:
     group: alpha
@@ -66,9 +51,6 @@ write_files:
       restrict default nomodify nopeer noquery limited kod
       restrict 127.0.0.1
       restrict [::1]
-  - path: /etc/deeeet-com-secring.gpg
-    content: |
-%s 
 `
 
 func main() {
@@ -79,41 +61,30 @@ func _main() int {
 	// Usage: go run generate.go
 	var err error
 
-	// If DEBUG mode or DISCOVERY_URL is not generated
-	// get new discovery url and use it
-	var discovery string
-	if os.Getenv("DEBUG") != "" || os.Getenv("DISCOVERY_URL") == "" {
-		discovery, err = newDiscovery()
-		if err != nil {
-			fmt.Fprint(os.Stderr, err)
-			return 1
-		}
-	} else {
-		discovery = os.Getenv("DISCOVERY_URL")
-	}
-
-	key, err := retrieveKey()
+	discovery, err := newDiscovery()
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "[Error] Failed to read key: %s", err)
+		fmt.Fprint(os.Stderr, err)
 		return 1
 	}
+	fmt.Fprintf(os.Stdout, "Use DISCOVERY_URL: %s\n", discovery)
 
 	var etcd_addr string
 	etcd_addr = "$private_ipv4"
-	err = genConfig("lb", discovery, etcd_addr, key)
+	err = genConfig("lb", discovery, etcd_addr)
 	if err != nil {
 		return 1
 	}
 
 	etcd_addr = "$public_ipv4"
-	err = genConfig("web", discovery, etcd_addr, key)
+	err = genConfig("web", discovery, etcd_addr)
 	if err != nil {
 		return 1
 	}
+	fmt.Fprintf(os.Stdout, "Successfuly generated\n")
 	return 0
 }
 
-func genConfig(role, discovery, etcd_addr, key string) error {
+func genConfig(role, discovery, etcd_addr string) error {
 	filename := fmt.Sprintf("%s.yml", role)
 	file, err := os.OpenFile(filename, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0644)
 	if err != nil {
@@ -121,23 +92,8 @@ func genConfig(role, discovery, etcd_addr, key string) error {
 	}
 	defer file.Close()
 
-	fmt.Fprintf(file, CloudConfigFmt, discovery, etcd_addr, role, key)
+	fmt.Fprintf(file, CloudConfigFmt, discovery, etcd_addr, role)
 	return nil
-}
-
-func retrieveKey() (string, error) {
-	filename := "pgp-key/deeeet-com-secring.gpg"
-	file, err := os.Open(filename)
-	if err != nil {
-		return "", err
-	}
-
-	var key string
-	scanner := bufio.NewScanner(file)
-	for scanner.Scan() {
-		key += fmt.Sprintf("      %s\n", scanner.Text())
-	}
-	return key, nil
 }
 
 func newDiscovery() (string, error) {

@@ -1,6 +1,5 @@
 +++
 date = "2015-10-04T22:07:21+09:00"
-draft = true
 title = "Hashicorp Ottoを読む"
 cover_image = "otto.png"
 +++
@@ -61,13 +60,13 @@ Ottoには[Foundation](https://ottoproject.io/docs/concepts/foundations.html)と
 - [Vault](https://vaultproject.io/)によるパスワード管理 (Future)
 - [Nomad](https://nomadproject.io/)によるスケジューリング (Future)
 
-このレイヤーはモダンなアーキテクチャーではBest Practiceとされつつも構築はなかなか難しい．OttoはVagrantでローカル開発環境を構築するとき，本番環境のインフラを整備するときにこのレイヤーの整備も一緒に行ってくれる．
+このレイヤーはモダンなアーキテクチャーではBest Practiceとされつつも構築はなかなか難しい．OttoはVagrantでローカル開発環境を構築するとき，本番環境のインフラを整備するときにこのレイヤーの整備も一緒に行う．
 
 ## Ottoの設定ファイル
 
 単純なことをするならばOttoには設定ファイルは**必要ない**．プロジェクトのルートディレクトリで`compile`を実行すれば言語/フレームワークを判定し，それにあった`Vagrantfile`とインフラを整備するためのTerraformの`.tf`ファイルなどを生成してくれる．
 
-より複雑なことをしたければそれだけでは不十分である．Ottoは専用の`Appfile`という設定ファイルでカスタマイズを行うことができる．`Appfile`は[HCL](https://github.com/hashicorp/hcl)で記述する．例えば，以下のように依存するサービスを記述することができる
+より複雑なことをしたければ不十分である．Ottoは専用の`Appfile`という設定ファイルでカスタマイズを行うことができる．`Appfile`は[HCL](https://github.com/hashicorp/hcl)で記述する．例えば，以下のように依存するサービスを記述することができる
 
 ```ruby
 application {
@@ -91,14 +90,21 @@ application {
 
 - `compile`
     - 依存サービスがある場合はそれらを全て`.otto`以下のディレクトリにfetchする（依存先も`Appfile`と`.ottoid`を持っている必要がある）
-    - `Appfile`と言語/フレームワークを判別結果をマージして`.otto`ディレクトリ以下に各種設定ファイルを生成する
+    - 各`Appfile`と言語/フレームワークを判別結果をマージして`.otto`ディレクトリ以下に各種設定ファイルを生成する
 - コマンドごとに`otto/compiled`以下の決められたディレクトリ内の設定ファイルをもとにバイナリを実行する
-    - 例えば`build`を実行するとPackerのマシンテンプレートである`.otto/compiled/app/build/template.json`が使われる
+    - e.g., `build`を実行するとPackerのマシンテンプレートである`.otto/compiled/app/build/template.json`が使われる
 
 
 ### コア
 
 Ottoのコアは[https://github.com/hashicorp/otto/blob/v0.1.1/otto/core.go](https://github.com/hashicorp/otto/blob/v0.1.1/otto/core.go)にある．基本的にどのコマンドもここに到達する．やっていることは単純でコンテキストをもとに実行するべき設定ファイルを決めてそれを元にバイナリを実行するだけ．
+
+以下をみると各バイナリをどのように実行しているかをみることができる．
+
+- [https://github.com/hashicorp/otto/tree/v0.1.1/helper/vagrant](https://github.com/hashicorp/otto/tree/v0.1.1/helper/vagrant)
+- [https://github.com/hashicorp/otto/tree/v0.1.1/helper/terraform](https://github.com/hashicorp/otto/tree/v0.1.1/helper/terraform)
+- [https://github.com/hashicorp/otto/tree/v0.1.1/helper/packer](https://github.com/hashicorp/otto/tree/v0.1.1/helper/packer)
+
 
 
 ### インストーラー
@@ -115,7 +121,7 @@ url := fmt.Sprintf(
 
 ### 言語/フレームワークの判定
 
-まず`compile`のときにアプリケーションの言語/フレームワークの判定する方法．これはHerokuのBuildpackに似ているが，まさに同じことをしている．アプリケーションに特有なファイル，例えばRubyならば`Gemfile`，が存在するかをチェックする．判定のルールは以下のような`struct`で保持する．
+まず`compile`のときにアプリケーションの言語/フレームワークの判定する方法．これはHerokuのBuildpackに似たことをする．アプリケーションに特有なファイル，例えばRubyならば`Gemfile`，が存在するかをチェックする．判定のルールは以下のような`struct`で保持する．
 
 ```golang
 detectors := []*detect.Detector{

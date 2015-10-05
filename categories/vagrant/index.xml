@@ -1,0 +1,388 @@
+<?xml version="1.0" encoding="utf-8" standalone="yes" ?>
+<rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom">
+  <channel>
+    <title>Vagrant on SOTA</title>
+    <link>http://deeeet.com/categories/vagrant/</link>
+    <description>Recent content in Vagrant on SOTA</description>
+    <generator>Hugo -- gohugo.io</generator>
+    <language>ja-jp</language>
+    <copyright>Copyright (C) 2013-2015 Taichi Nakashima All Right Reserved.</copyright>
+    <lastBuildDate>Tue, 11 Mar 2014 00:00:00 +0000</lastBuildDate>
+    <atom:link href="http://deeeet.com/categories/vagrant/index.xml" rel="self" type="application/rss+xml" />
+    
+    <item>
+      <title>Vagrant shareとngrokを使ってみた</title>
+      <link>http://deeeet.com/writing/2014/03/11/vagrant-share/</link>
+      <pubDate>Tue, 11 Mar 2014 00:00:00 +0000</pubDate>
+      
+      <guid>http://deeeet.com/writing/2014/03/11/vagrant-share/</guid>
+      <description>
+
+&lt;p&gt;&lt;a href=&#34;http://www.vagrantup.com/blog/vagrant-1-5-and-vagrant-cloud.html&#34;&gt;Vagrant 1.5 and Vagrant Cloud&lt;/a&gt;&lt;/p&gt;
+
+&lt;p&gt;Vagrant shareを使ってみた．今までは&lt;code&gt;private_network&lt;/code&gt;によるローカルマシンから仮想マシンへのアクセスや，&lt;code&gt;public_network&lt;/code&gt;によるLAN内のマシンから仮想マシンへのアクセスが可能だった．今回のアップデートで，外部ネットワークのマシンから，ローカルに立てた仮想マシンへのアクセスが可能になった．&lt;/p&gt;
+
+&lt;p&gt;主なアクセスは以下の2つ．&lt;/p&gt;
+
+&lt;ul&gt;
+&lt;li&gt;仮想マシン内に立てたHTTPサーバーへのアクセス&lt;/li&gt;
+&lt;li&gt;SSHによる仮想マシンへのログイン&lt;/li&gt;
+&lt;/ul&gt;
+
+&lt;p&gt;試してみた．&lt;/p&gt;
+
+&lt;h2 id=&#34;準備:1d85e956a6cdd5f11e7748aad846c500&#34;&gt;準備&lt;/h2&gt;
+
+&lt;p&gt;&lt;a href=&#34;https://vagrantcloud.com&#34;&gt;Vagrant Cloud&lt;/a&gt;でアカウントを作成し，ログインする．&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-bash&#34;&gt;$ vagrant login
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;また，例として以下のようなVagrantfileを準備し，仮想マシンを起動しておく．&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-ruby&#34;&gt;Vagrant.configure(&amp;quot;2&amp;quot;) do |config|
+    config.vm.box = &amp;quot;precise64&amp;quot;
+    config.vm.box_url = &amp;quot;http://files.vagrantup.com/precise64.box&amp;quot;
+    config.vm.network :forwarded_port, guest: 80, host: 8080
+    config.vm.provision :shell, :inline =&amp;gt; &amp;lt;&amp;lt;-PREPARE
+apt-get -y update
+apt-get install -y apache2
+PREPARE
+    end
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-bash&#34;&gt;$ vagarnt up
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;（やっているのは，8080-&amp;gt;80のport forwardとapacheのインストールのみ）&lt;/p&gt;
+
+&lt;h2 id=&#34;http-access:1d85e956a6cdd5f11e7748aad846c500&#34;&gt;HTTP Access&lt;/h2&gt;
+
+&lt;p&gt;まず，PulicなHTTP URLを介して仮想マシン内のHTTPサーバにアクセスする方法．この場合は，共有相手のマシンにVagrantがインストールされている必要はない．&lt;/p&gt;
+
+&lt;p&gt;以下を実行する．&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-bash&#34;&gt;$ vagrant share
+...
+==&amp;gt; default: Your Vagrant Share is running! Name: terrible-moose-1613
+==&amp;gt; default: URL: http://terrible-moose-1613.vagrantshare.com
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;すると，&lt;a href=&#34;http://terrible-moose-1613.vagrantshare.com&#34;&gt;http://terrible-moose-1613.vagrantshare.com&lt;/a&gt;のような一時的なURLが発行される（現在はアクセス不可）．&lt;/p&gt;
+
+&lt;p&gt;あとは，そのURIを共有するだけ． 共有相手はブラウザから仮想マシン内のHTTPサーバにアクセスできる．&lt;/p&gt;
+
+&lt;p&gt;以下のように，&lt;a href=&#34;vagrantshare.com&#34;&gt;vagrantshare.com&lt;/a&gt;からローカルマシンまでTCPセッションを確立して，それをそのまま仮想マシンにport forwardすることで実現している．&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;http://terrible-moose-1613.vagrantshare.com -&amp;gt; 127.0.0.1:8080 (Host) -&amp;gt; 127.0.0.1:80 (Guest) 
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;h2 id=&#34;ssh-access:1d85e956a6cdd5f11e7748aad846c500&#34;&gt;SSH Access&lt;/h2&gt;
+
+&lt;p&gt;ローカルで&lt;code&gt;vagrant ssh&lt;/code&gt;で仮想マシンにログインするように，外部ネットワークのマシンからローカルに立てた仮想マシンにsshでログインすることもできる．この場合は，共有相手のマシンにVagrant 1.5以上がインストールされている必要がある．&lt;/p&gt;
+
+&lt;p&gt;以下を実行する．今回は，sshログインのためのパスワードの入力が要求される．&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;$ vagrant share --ssh
+==&amp;gt; default: Your Vagrant Share is running! Name: bulky-mitchell-9363
+==&amp;gt; default: URL: http://bulky-mitchell-9363.vagrantshare.com
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;すると，同様に&lt;code&gt;bulky-mitchell-9363&lt;/code&gt;のようなshare nameが発行されるので，その名前と入力したパスワードを共有する．&lt;/p&gt;
+
+&lt;p&gt;共有相手は以下を実行することでsshで仮想マシンにログインする．&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;$ vagrant connect --ssh bulky-mitchell-9363
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;セキュリティ的に不安な場合は，共有の際に以下のようにすれば，共有相手は一度しかsshでログインできなくなる．&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-bash&#34;&gt;$ vagrant share --ssh --ssh-once
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;h2 id=&#34;disable-http-url-access:1d85e956a6cdd5f11e7748aad846c500&#34;&gt;Disable HTTP URL Access&lt;/h2&gt;
+
+&lt;p&gt;&lt;a href=&#34;http://terrible-moose-1613.vagrantshare.com&#34;&gt;http://terrible-moose-1613.vagrantshare.com&lt;/a&gt;のようなpublicなHTTP URLを無効にした共有もできる．この場合も共有相手にVagrant 1.5以上がインストールされている必要がある．&lt;/p&gt;
+
+&lt;p&gt;以下を実行する．&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-bash&#34;&gt;$ vagrant share --disable-http
+==&amp;gt; default: Your Vagrant Share is running! Name: hopeful-kangaroo-2431
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;すると，&lt;code&gt;hopeful-kangaroo-2431&lt;/code&gt;のようなshare nameのみが発行されるので，それを共有する．&lt;/p&gt;
+
+&lt;p&gt;共有相手は，以下を実行する．&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-bash&#34;&gt;vagrant connect hopeful-kangaroo-2431
+==&amp;gt; connect: SOCKS address: 127.0.0.1:53298
+==&amp;gt; connect: Machine IP: 172.16.0.2
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;すると，共有相手には，固定のIPが割り振られ，ローカルネットワーク内に仮想マシンが存在しているように見える（ローカルで&lt;code&gt;private_network&lt;/code&gt;で&lt;code&gt;vagrant up&lt;/code&gt;した感じかな）．&lt;/p&gt;
+
+&lt;p&gt;共有相手は，&lt;a href=&#34;172.16.0.2&#34;&gt;172.16.0.2&lt;/a&gt;でブラウザから仮想マシン内のHTTPサーバーにアクセスできる．&lt;/p&gt;
+
+&lt;h2 id=&#34;ngrok:1d85e956a6cdd5f11e7748aad846c500&#34;&gt;ngrok&lt;/h2&gt;
+
+&lt;p&gt;twitterを眺めていたら，同様の技術に&lt;a href=&#34;https://ngrok.com/&#34;&gt;ngrok&lt;/a&gt;というものがあるのを知った．ローカルに立てたサーバを&lt;a href=&#34;https://ngrok.com/&#34;&gt;ngrok.com&lt;/a&gt;を介して外部に晒すことができる．こちらも試してみた．&lt;/p&gt;
+
+&lt;p&gt;まずサーバを立てる．&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-bash&#34;&gt;$ python -m SimpleHTTPServer
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;あとは，以下を実行するだけ．&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-bash&#34;&gt;$ ngrok 8000
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;すると，&lt;a href=&#34;http://3d0dbc48.ngrok.com&#34;&gt;http://3d0dbc48.ngrok.com&lt;/a&gt;のようなURLが発行され，以下のようにforwardingされる．&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;http://3d0dbc48.ngrok.com -&amp;gt; 127.0.0.1:8000
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;URLを共有すると，サーバを実行したローカルディレクトリがURLを介して外部に晒される（ファイルの共有とかできちゃう）．&lt;/p&gt;
+
+&lt;h2 id=&#34;まとめ:1d85e956a6cdd5f11e7748aad846c500&#34;&gt;まとめ&lt;/h2&gt;
+
+&lt;p&gt;Vagrant share素晴らしい．リモートで働いているときとか便利そう（社内なら&lt;code&gt;public_network&lt;/code&gt;で事足りそう）．SSHアクセスはエンジニアとの共同作業に，HTTP Accessはエンジニア以外のひとに成果物を見せるときに使えそうだなと思った．&lt;/p&gt;
+</description>
+    </item>
+    
+    <item>
+      <title>OSXのVagrant box</title>
+      <link>http://deeeet.com/writing/2014/03/10/osx-vagrant-box/</link>
+      <pubDate>Mon, 10 Mar 2014 00:00:00 +0000</pubDate>
+      
+      <guid>http://deeeet.com/writing/2014/03/10/osx-vagrant-box/</guid>
+      <description>&lt;ul&gt;
+&lt;li&gt;&lt;a href=&#34;http://ntk.me/2012/09/07/os-x-on-os-x/&#34;&gt;OS X on OS X&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a href=&#34;http://www.youtube.com/watch?v=3kKDf-E5AiQ&#34;&gt;Virtualize OS X Mavericks with VirtualBox&lt;/a&gt;&lt;/li&gt;
+&lt;/ul&gt;
+
+&lt;p&gt;VirtualBoxで動かせるならVagrantでも使えるなと思って探してみたらやってるひといた．&lt;/p&gt;
+
+&lt;ul&gt;
+&lt;li&gt;&lt;a href=&#34;http://www.skoblenick.com/vagrant/vmware-fusion/creating-an-osx-base-box/&#34;&gt;Creating an OS X Vagrant base box for VMware Fusion&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a href=&#34;https://groups.google.com/forum/#!topic/vagrant-up/HKL0FXR6QmE&#34;&gt;Troubles creating OS X 10.9 box with VirtualBox&lt;/a&gt;&lt;/li&gt;
+&lt;/ul&gt;
+
+&lt;p&gt;それならPackerでもできるなと思って探してみたらやってるひといた．&lt;/p&gt;
+
+&lt;ul&gt;
+&lt;li&gt;&lt;a href=&#34;http://grahamgilbert.com/blog/2013/08/23/creating-an-os-x-base-box-for-vagrant-with-packer/&#34;&gt;Creating an OS X Base Box for Vagrant With Packer&lt;/a&gt;&lt;/li&gt;
+&lt;/ul&gt;
+
+&lt;p&gt;面白いなと思ったけど，やる気は全くない．&lt;/p&gt;
+</description>
+    </item>
+    
+    <item>
+      <title>VagrantでOracle DB環境をつくる</title>
+      <link>http://deeeet.com/writing/2014/02/24/vagrant-oracle-db/</link>
+      <pubDate>Mon, 24 Feb 2014 00:00:00 +0000</pubDate>
+      
+      <guid>http://deeeet.com/writing/2014/02/24/vagrant-oracle-db/</guid>
+      <description>&lt;p&gt;&lt;a href=&#34;https://github.com/hilverd/vagrant-ubuntu-oracle-xe&#34;&gt;hilverd/vagrant-ubuntu-oracle-xe&lt;/a&gt;&lt;/p&gt;
+
+&lt;p&gt;を使う． VirtualBox Guest Additionsを使うため，事前に&lt;a href=&#34;https://github.com/dotless-de/vagrant-vbguest&#34;&gt;vagrant-vbguest&lt;/a&gt;をインストールしておく．あとは，&lt;a href=&#34;https://github.com/hilverd/vagrant-ubuntu-oracle-xe&#34;&gt;hilverd/vagrant-ubuntu-oracle-xe&lt;/a&gt;をcloneして&lt;code&gt;vagrant up&lt;/code&gt;するだけ．&lt;/p&gt;
+</description>
+    </item>
+    
+    <item>
+      <title>他人に共有したくない設定をVagrantfileに書くためのpluginつくった</title>
+      <link>http://deeeet.com/writing/2014/02/24/vagrant-secret/</link>
+      <pubDate>Mon, 24 Feb 2014 00:00:00 +0000</pubDate>
+      
+      <guid>http://deeeet.com/writing/2014/02/24/vagrant-secret/</guid>
+      <description>
+
+&lt;p&gt;（追記）&lt;a href=&#34;https://github.com/bkeepers/dotenv&#34;&gt;dotenv&lt;/a&gt;というもっと便利なツールがありました．僕のは，pluginを作る際の参考にしてください．dotenvとvagrantの連携は，glidenoteさんの&lt;a href=&#34;http://blog.glidenote.com/blog/2014/02/26/vagrant-dotenv/&#34;&gt;&amp;ldquo;dotenvを利用して環境ごとでVagrantfileの設定値を変更してみる&amp;rdquo;&lt;/a&gt;を参考にしてください．&lt;/p&gt;
+
+&lt;p&gt;&lt;a href=&#34;https://github.com/tcnksm/vagrant-secret&#34;&gt;vagrant-secret&lt;/a&gt;&lt;/p&gt;
+
+&lt;p&gt;例えば，VagrantでDigital Oceanを使う場合，以下のように&lt;code&gt;client_id&lt;/code&gt;や&lt;code&gt;api_key&lt;/code&gt;のような他人には共有したくない設定をVagrantfileに記述する．&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-ruby&#34;&gt;Vagrant.configure(&#39;2&#39;) do |config|
+    config.vm.provider :digital_ocean do |provider, override|
+        provider.client_id = &#39;****&#39;
+        provider.api_key   = &#39;****&#39;
+    end
+end
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;ローカルで自分だけが使う場合は問題ないが，Githubに上げて他人に共有した場合は面倒になる．&lt;a href=&#34;https://github.com/tcnksm/vagrant-secret&#34;&gt;vagrant-secret&lt;/a&gt;を使えば，専用のyamlファイルに設定を分けて記述することができる．&lt;/p&gt;
+
+&lt;h2 id=&#34;インストール:192dad6d3b110aff8c4ffef323294de8&#34;&gt;インストール&lt;/h2&gt;
+
+&lt;p&gt;Vagrantのpluginとしてインストールする．&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-bash&#34;&gt;$ vagrant plugin install vagrant-secret
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;h2 id=&#34;使い方:192dad6d3b110aff8c4ffef323294de8&#34;&gt;使い方&lt;/h2&gt;
+
+&lt;p&gt;まず，以下のコマンドで設定ファイルを書き出す．&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-bash&#34;&gt;$ vagrant secret-init
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;すると，&lt;code&gt;.vagrant/secret.yaml&lt;/code&gt;が生成されるので，そこに公開したくない設定を記述する．例えば，以下のようにDigital Oceanで必要な&lt;code&gt;client_id&lt;/code&gt;と&lt;code&gt;api_key&lt;/code&gt;を記述する．&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-ruby&#34;&gt;client_id: &amp;quot;*******&amp;quot;
+api_key: &amp;quot;********&amp;quot;
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;後は，これらをVagrantfileで使うだけ．yamlのkeyが&lt;code&gt;Secret&lt;/code&gt;という専用のクラスのクラス変数に割り当てられ，それを通してvalueを取り出すことができる．&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-ruby&#34;&gt;Vagrant.configure(&#39;2&#39;) do |config|
+    config.vm.provider :digital_ocean do |provider, override|
+        provider.client_id = Secret.client_id
+        provider.api_key   = Secret.api_key
+    end
+end
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;&lt;code&gt;.vagrant/&lt;/code&gt;以下は普通はgitignoreするので，&lt;code&gt;secret.yaml&lt;/code&gt;をわざわざgitignoreする必要はない．&lt;/p&gt;
+
+&lt;p&gt;バグなどはGithubのissueか&lt;a href=&#34;https://twitter.com/deeeet&#34;&gt;@deeeet&lt;/a&gt;までお願いします．&lt;/p&gt;
+
+&lt;p&gt;参考&lt;/p&gt;
+
+&lt;ul&gt;
+&lt;li&gt;&lt;a href=&#34;http://blog.glidenote.com/blog/2013/12/05/digital-ocean-with-vagrant/&#34;&gt;VagrantとSSDなVPS(Digital Ocean)で1時間1円の使い捨て高速サーバ環境を構築する&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a href=&#34;http://deeeet.com/writing/2014/02/19/vagrant-pushover/&#34;&gt;プロビジョニングの終了をiOS/Androidに通知するVagrantのpluginつくった&lt;/a&gt;&lt;/li&gt;
+&lt;/ul&gt;
+</description>
+    </item>
+    
+    <item>
+      <title>プロビジョニングの終了をiOS/Androidに通知するVagrantのpluginつくった</title>
+      <link>http://deeeet.com/writing/2014/02/19/vagrant-pushover/</link>
+      <pubDate>Wed, 19 Feb 2014 00:00:00 +0000</pubDate>
+      
+      <guid>http://deeeet.com/writing/2014/02/19/vagrant-pushover/</guid>
+      <description>
+
+&lt;p&gt;&lt;a href=&#34;https://github.com/tcnksm/vagrant-pushover&#34;&gt;tcnksm/vagrant-pushover&lt;/a&gt;&lt;/p&gt;
+
+&lt;p&gt;Vagrantのプロビジョニングはものすごく時間がかかる．その時間を使って美味しい珈琲を淹れたい．でも，席を外したらいつプロビジョニングが終わったかわからない．プロビジョニングの終了を告げる通知が欲しい．&lt;/p&gt;
+
+&lt;p&gt;少し前から&lt;a href=&#34;https://pushover.net/&#34;&gt;Pushover&lt;/a&gt;というiOS/Androidアプリで遊んでいる．シンプルなHTTP POSTを介してアプリに通知が送れる（詳しくは，&lt;a href=&#34;http://deeeet.com/writing/2014/02/09/pushover/&#34;&gt;&amp;ldquo;Pushover使ってみた&amp;rdquo;&lt;/a&gt;に書いた）．メールで通知でもよかったんだけど，せっかくなので，Pushoverに通知が送れるVagrantプラグインを作った．&lt;/p&gt;
+
+&lt;p&gt;以下のような通知を受け取ることができる．&lt;/p&gt;
+
+&lt;p&gt;&lt;img src=&#34;http://deeeet.com/images/vagrant-pushover.png&#34; class=&#34;image&#34;&gt;&lt;/p&gt;
+
+&lt;h2 id=&#34;インストール:606fff50e41ab1fc56aeccfb0ef2e776&#34;&gt;インストール&lt;/h2&gt;
+
+&lt;p&gt;Vagrantのプラグインとしてインストールする．&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-bash&#34;&gt;$ vagrant plugin install vagrant-pushover
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;h2 id=&#34;使い方:606fff50e41ab1fc56aeccfb0ef2e776&#34;&gt;使い方&lt;/h2&gt;
+
+&lt;p&gt;以下のようにVagrantfileに設定を記述するだけ．&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-ruby&#34;&gt;Vagrant.configure(&amp;quot;2&amp;quot;) do |config|
+    config.pushover.set do |p|
+        p.user  = &amp;quot;YOUR KEY&amp;quot;
+        p.token = &amp;quot;YOUR APP TOKEN&amp;quot;
+    end
+end                        
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;&lt;code&gt;user&lt;/code&gt;はPushoverにサインアップ後に&lt;a href=&#34;https://pushover.net/&#34;&gt;Dashboard&lt;/a&gt;から，&lt;code&gt;token&lt;/code&gt;はアプリケーションの登録をすると取得できる．&lt;/p&gt;
+
+&lt;p&gt;既存コマンドのフックとして記述してあるので，他に特別なことをする必要はなく，いつも通りにコマンドを実行するだけでよい．通知が行われるのは，プロビジョニングが行われる以下の場合のみ．&lt;/p&gt;
+
+&lt;ul&gt;
+&lt;li&gt;&lt;code&gt;vagrant up&lt;/code&gt;&lt;/li&gt;
+&lt;li&gt;&lt;code&gt;vagrant up --provision&lt;/code&gt;&lt;/li&gt;
+&lt;li&gt;&lt;code&gt;vagrant reload --provision&lt;/code&gt;&lt;/li&gt;
+&lt;li&gt;&lt;code&gt;vagrant provision&lt;/code&gt;&lt;/li&gt;
+&lt;/ul&gt;
+
+&lt;p&gt;ただし&lt;code&gt;vagrant up&lt;/code&gt;は，マシンの状態が&lt;code&gt;:running&lt;/code&gt;でない場合，プロビジョニングが一度も行われていない場合に通知が行われる．&lt;/p&gt;
+
+&lt;p&gt;他にも，通知のメッセージのタイトルや本文，通知音もVagrantfileの設定から行うことができる．API通りに実装してあるので，詳しくは&lt;a href=&#34;https://pushover.net/api&#34;&gt;公式ドキュメント&lt;/a&gt;を参照してください．&lt;/p&gt;
+
+&lt;h2 id=&#34;vagrantfileを共有したい場合:606fff50e41ab1fc56aeccfb0ef2e776&#34;&gt;Vagrantfileを共有したい場合&lt;/h2&gt;
+
+&lt;p&gt;&lt;code&gt;token&lt;/code&gt;や&lt;code&gt;user&lt;/code&gt;がベタ書きされているのはよろしくないので，別ファイルとして記述できるようにもしてある．&lt;/p&gt;
+
+&lt;p&gt;以下のコマンドで設定ファイルを吐き出す．&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-bash&#34;&gt;$ vagrant pushover-init
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;設定ファイルは，&lt;code&gt;.vagrant/pushover.rb&lt;/code&gt;として吐き出されるので，中身を編集して&lt;code&gt;token&lt;/code&gt;と&lt;code&gt;user&lt;/code&gt;を記述する．設定の読み込みを有効にするには，Vagrantfileを以下のように記述するだけ．&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-ruby&#34;&gt;Vagrant.configure(&amp;quot;2&amp;quot;) do |config|
+    config.pushover.read_key
+end
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;以上．&lt;/p&gt;
+
+&lt;p&gt;Vagrantのプラグインを作るのはとても簡単（実際2日もかかってない）．また，プラグインを作ることでVagrantの内部でどのようなことが行われているのか大分理解できる．作成には，&lt;a href=&#34;http://www.amazon.co.jp/%E5%AE%9F%E8%B7%B5-Vagrant-Mitchell-Hashimoto/dp/4873116651&#34;&gt;&amp;ldquo;実践Vagrant&amp;rdquo;&lt;/a&gt;を参考にした．&lt;a href=&#34;http://docs.vagrantup.com/v2/plugins/&#34;&gt;公式ドキュメント&lt;/a&gt;も充実している．すべてのVagrantのコマンドはプラグインとして実装されているので，作るときは参考になる．Mitchell Hashimotoさんが自らつくったプラグイン&lt;a href=&#34;https://github.com/mitchellh/vagrant-aws&#34;&gt;vagrant-aws&lt;/a&gt;も参考になった．プラグインの作り方は，そのうちまとめる．&lt;/p&gt;
+
+&lt;p&gt;Pushoverを使ってるひとにしか使えないかなりニッチなプラグインだけど，プロビジョニング中に美味しい珈琲を淹れたいひとは是非使ってください．バグなどはGithubのissueか&lt;a href=&#34;https://twitter.com/deeeet&#34;&gt;@deeeet&lt;/a&gt;までお願いします．&lt;/p&gt;
+
+&lt;p&gt;参考&lt;/p&gt;
+
+&lt;ul&gt;
+&lt;li&gt;&lt;a href=&#34;http://deeeet.com/writing/2014/01/21/third-wave-tokyo/&#34;&gt;東京サードウェーブコーヒー&lt;/a&gt;&lt;/li&gt;
+&lt;/ul&gt;
+</description>
+    </item>
+    
+    <item>
+      <title>シンプルにVagrantのprovisioningでchef-soloを使い始める</title>
+      <link>http://deeeet.com/writing/2014/02/16/vagrant-chef-minimum/</link>
+      <pubDate>Sun, 16 Feb 2014 00:00:00 +0000</pubDate>
+      
+      <guid>http://deeeet.com/writing/2014/02/16/vagrant-chef-minimum/</guid>
+      <description>&lt;p&gt;とにかくシンプルに始めたい．cookbookの作成には&lt;code&gt;knife-solo&lt;/code&gt;を使う．例としてapacheのインストールをして，共有フォルダをホストのブラウザから閲覧できるようにする．&lt;/p&gt;
+
+&lt;p&gt;まずレシピの雛形を生成する．&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-bash&#34;&gt;$ knife cookbook create apache -o site-cookbook
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;次にレシピの編集する．&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-ruby&#34;&gt;# recipes/default.rb
+
+# Install apache
+execute &amp;quot;apt-get update&amp;quot;
+package &amp;quot;apache2&amp;quot; do
+    action :install
+end
+
+# Link to share folder
+execute &amp;quot;rm -fr /var/www&amp;quot;
+link &amp;quot;var/www&amp;quot; do
+    to &amp;quot;/vagrant&amp;quot;
+end
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;Vagrantfileは以下のようにする．&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;Vagrant.configure(&amp;quot;2&amp;quot;) do |config|
+    config.vm.box = &amp;quot;precise64&amp;quot;
+    config.vm.box_url = &amp;quot;http://files.vagrantup.com/precise64.box&amp;quot;
+    config.vm.network :forwarded_port, guest: 80, host: 8080
+    config.vm.provision :chef_solo do |chef|
+        chef.cookbooks_path = &amp;quot;site-cookbooks&amp;quot;
+        chef.run_list = [&amp;quot;apache::default&amp;quot;]
+    end
+end
+&lt;/code&gt;&lt;/pre&gt;
+</description>
+    </item>
+    
+  </channel>
+</rss>

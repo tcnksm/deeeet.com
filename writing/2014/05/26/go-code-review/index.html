@@ -1,0 +1,336 @@
+<!doctype html>
+<html>
+  <head>
+    <meta http-equiv="content-type" content="text/html; charset=utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    
+    <title>Go言語のコードレビュー | SOTA</title>
+    
+    <link href="https://fonts.googleapis.com/css?family=Lato%3a900" rel="stylesheet" type="text/css">
+    <link rel="stylesheet" href="/css/main.css">
+    <link rel="shortcut icon" href="/favicon.png" type="image/x-icon" />
+    <link href="http://deeeet.com//index.xml" rel="alternate" type="application/rss+xml" title="" />
+    <meta name="title" content="http://deeeet.com/writing/2014/05/26/go-code-review/">
+    <link rel="canonical" href="http://deeeet.com/writing/2014/05/26/go-code-review/">
+    
+    <meta property="og:title" content="Go言語のコードレビュー"/>
+    <meta property="og:url" content="http://deeeet.com/writing/2014/05/26/go-code-review/"/>
+  </head>
+  
+  <body>
+    <section class="site-nav">
+      <header>
+        <nav id="navigation">
+          <ul class="menu">
+            <li><a href="https://github.com/tcnksm/talks">Talks</a></li>
+            <li><a href="https://tcnksm.exposure.co/">Photos</a></li>
+          </ul>
+
+          <a class="name" href="/">SOTA</a>
+        </nav>        
+      </header>
+    </section>
+    
+
+
+<article>
+  <div class="container">
+    <header>
+      <div class="meta">
+        <time pubdate datetime="2014-05-26" title="2014-05-26">May 26, 2014</time>
+      </div>
+      <h1 class="title">Go言語のコードレビュー</h1>
+    </header>
+    
+    <section>
+      
+
+<p>SoundCloudが2年半ほどGo言語を利用したプロダクトを本番で運用した知見を<a href="http://www.gophercon.com/">GopherCon</a>で発表していた（<a href="http://peter.bourgon.org/go-in-production/">&ldquo;Go: Best Practices for Production Environments&rdquo;</a>）．その中で<a href="https://code.google.com/p/go-wiki/wiki/CodeReviewComments">&ldquo;CodeReviewComments</a>というGoogleでのGo言語のコードレビューにおいてよくあるコメントをまとめたサイトが紹介されていた．</p>
+
+<p>最近Go言語を書くようになり，使えそうなのでざっと抄訳してみた．<a href="http://www.amazon.co.jp/%E3%83%AA%E3%83%BC%E3%83%80%E3%83%96%E3%83%AB%E3%82%B3%E3%83%BC%E3%83%89-%E2%80%95%E3%82%88%E3%82%8A%E8%89%AF%E3%81%84%E3%82%B3%E3%83%BC%E3%83%89%E3%82%92%E6%9B%B8%E3%81%8F%E3%81%9F%E3%82%81%E3%81%AE%E3%82%B7%E3%83%B3%E3%83%97%E3%83%AB%E3%81%A7%E5%AE%9F%E8%B7%B5%E7%9A%84%E3%81%AA%E3%83%86%E3%82%AF%E3%83%8B%E3%83%83%E3%82%AF-Theory-practice-Boswell/dp/4873115655">&ldquo;リーダブルコード&rdquo;</a>的な視点も含まれており，Go以外の言語でも使えそう．</p>
+
+<ul>
+<li><a href="http://golang.org/cmd/gofmt/">gofmt</a>でコードの整形をすること</li>
+<li><a href="http://golang.org/doc/effective_go.html#commentary">コメント</a>は文章で書くこと．<code>godoc</code>がいい感じに抜き出してくれる．対象となる関数（変数）名で初めて，ピリオドで終わること</li>
+</ul>
+
+<pre><code class="language-go">// A Request represents a request to run a command.
+type Request struct { ...
+</code></pre>
+
+<pre><code class="language-go">// Encode writes the JSON encoding of req to w.
+func Encode(w io.Writer, req *Request) { ...
+</code></pre>
+
+<ul>
+<li>外から参照されるトップレベルの識別子にはコメントを書くべき</li>
+<li>通常の<a href="http://golang.org/doc/effective_go.html#errors">エラー処理</a>に<code>panic</code>を使わないこと．errorと複数の戻り値を使うこと</li>
+
+<li><p>エラー文字列は他の出力で利用されることが多いので，（固有名詞や頭字語でない限り）大文字で始めたり，句読点で終わったりしないこと</p>
+
+<ul>
+<li>例えば，<code>fmt.Errorf(&quot;Something bad&quot;)</code>のように大文字で始めるのではなく，<code>fmt.Errorf(&quot;something bad&quot;)</code>のようにしておくことで，<code>log.Print(&quot;Reading %s: %v&quot;, filename, err)</code>としても，文の途中に大文字が入るようなことがなくなる</li>
+</ul></li>
+
+<li><p>エラーの戻り値を<code>_</code>で破棄しないこと．関数がエラーを返すなら，関数が成功したかをチェックすること．エラーハンドリングをして，どうしようもないときに<code>panic</code>とする</p></li>
+
+<li><p>パッケージのインポートは空行を入れることでグループとしてまとめるとよい</p></li>
+</ul>
+
+<pre><code class="language-go">import (
+    &quot;fmt&quot;
+    &quot;hash/adler32&quot;
+    &quot;os&quot;
+
+    &quot;appengine/user&quot;
+    &quot;appengine/foo&quot;
+        
+    &quot;code.google.com/p/x/y&quot;
+    &quot;github.com/foo/bar&quot;
+)    
+</code></pre>
+
+<ul>
+<li><code>.</code>によるパッケージのインポートはテストで使える
+
+<ul>
+<li>例えば，以下のように依存の問題で，テストしたいパッケージ名が使えない場合に使える</li>
+</ul></li>
+</ul>
+
+<pre><code class="language-go">package foo_test
+
+import (
+    . &quot;foo&quot;
+    &quot;bar/testutil&quot;  // &quot;foo&quot;をimportしている
+)
+</code></pre>
+
+<p>（上の場合，<code>bar/testutil</code>が<code>foo</code>パッケージをインポートしているため，テストファイルは<code>foo</code>パッケージにはなれない．<code>.</code>をつかって<code>foo</code>をインポートすると，このテストファイルが<code>foo</code>パッケージであるかのように見なすことができる．ただし，このようなケースを除いて<code>.</code>をつかったインポートは可読性が落ちるため使うべきではない）</p>
+
+<ul>
+<li>通常の処理はなるべく浅いネストで記述すること．最初にエラー処理をネストして記述すること．これにより可読性が高まる．例えば，</li>
+</ul>
+
+<pre><code class="language-go">if err != nil {
+    // エラー処理
+} else {
+    // 通常処理
+}
+</code></pre>
+
+<p>のように書くのではなく，以下のようにする．</p>
+
+<pre><code class="language-go">if err != nil {
+    // エラー処理
+    return // or continue, etc.
+}
+// 通常処理       
+</code></pre>
+
+<ul>
+<li>&ldquo;URL&rdquo;や&rdquo;NATO&rdquo;といった頭字語は大文字もしくは小文字で一貫して記述すること
+
+<ul>
+<li>例えば，&rdquo;URL&rdquo;は&rdquo;URL&rdquo;もしくは&rdquo;url&rdquo;とすること，つまり&rdquo;urlPony&rdquo;か&rdquo;URLPony&rdquo;とする</li>
+</ul></li>
+<li>1行の文字数に厳格な決まりはないが，長過ぎるのは避けるべき．同様に，読みやすさを犠牲にしてまで行を短くしようとするのも避けるべき．コメントは見やすさを考慮して80文字以内に抑えるべきである</li>
+<li>複数の単語から成る名前をつけるときはアンダースコアを使わずに，MixedCapsまたはmixedCapsのように単語の先頭だけ大文字を用いる．外部から参照されない定数は，mixedCapsとし，最初の単語の先頭を小文字にする</li>
+<li>関数の戻り値に同じ型が2つ以上含まれる，もしくはコンテキストから返り値が推測できないような場合は戻り値に名前をつけるとよい．例えば，</li>
+</ul>
+
+<pre><code class="language-go">func (f *Foo) Location() (float64, float64, error)
+</code></pre>
+
+<p>と書くより，以下のように名前をつけたほうが分かりやすい</p>
+
+<pre><code class="language-go">func (f *Foo) Location() (lat, long float64, err error)
+</code></pre>
+
+<ul>
+<li>数行程度の小さな関数であれば，戻り値に名前は必要ない．中規模な関数であれば，戻り値には明示的に名前をつけるべき</li>
+<li><a href="http://golang.org/doc/effective_go.html#commentary">パッケージのコメント</a>は，空行なしでパッケージ名のすぐ上にかくこと</li>
+</ul>
+
+<pre><code class="language-go">// Package math provides basic constants and mathematical functions.
+package math
+</code></pre>
+
+<pre><code class="language-go">/*
+Package template implements data-driven templates for generating textual
+output such as HTML.
+....
+*/
+package template
+</code></pre>
+
+<ul>
+<li><a href="http://golang.org/doc/effective_go.html#package-names">パッケージ名</a>でパッケージの内部を参照することになるので，その内部でパッケージ名を使った変数名などをつくらなくてよい
+
+<ul>
+<li>例えば，<code>chubby</code>という名前のパッケージを作ってる場合に，<code>ChubbyFile</code>という型は必要ない．このパッケージを使うユーザは<code>chubby.ChubbyFile</code>などと書くことになる．代わりに<code>File</code>とすれば，<code>chubby.File</code>とシンプルになり，可読性も落ちない</li>
+</ul></li>
+<li>メソッドのレシーバの名前は，それ自体を反映したものとすること
+
+<ul>
+<li>普通は型名の省略形とする（例えば，&rdquo;Client&rdquo;なら&rdquo;c&rdquo;や&rdquo;cl&rdquo;）</li>
+<li>&ldquo;me&rdquo;や&rdquo;this&rdquo;，&rdquo;self&rdquo;といった一般的な名前は使うべきではない</li>
+<li>一貫した名前を使うこと．例えば，一度&rdquo;c&rdquo;としたら，他の関数でも&rdquo;c&rdquo;をつかうこと．&rdquo;cl&rdquo;としない</li>
+</ul></li>
+<li>Goが初めての場合は，メソッドのレシーバを値型にするのか，ポインタ型にするのかを判断するのは難しい．迷った場合はポインタ型にすればよいが，小さな変更の少ないStructや基本型の値の場合は効率的な視点で値型にするのがよい．以下にいくつかのルールを列挙する．
+
+<ul>
+<li>もしレシーバがmapや関数，chanであれば，ポインタを使わないこと</li>
+<li>もしレシーバがsliceでメソッドがそれをresliceやreallocateしないのであれば，ポインタを使わないこと</li>
+<li>もしメソッドがレシーバに変更を加えるのであれば，ポインタを使うこと</li>
+<li>もしレシーバが大きなstructやarrayであれば，ポインタを使うこと</li>
+<li>もしレシーバがarrayやsliceでその要素がポインタであれば，ポインタを使うのがよい</li>
+<li>最後に，迷ったらポインタを使うこと</li>
+</ul></li>
+<li>テストがこけるときには，何が悪いのか，入力は何か，期待した結果は何か，実際の結果は何かを出力するべき
+
+<ul>
+<li>例えば，典型的なGoのテストはこける際に以下のような出力をする</li>
+</ul></li>
+</ul>
+
+<pre><code class="language-go">if got != tt.want {
+    t.Errorf(&quot;Foo(%q) = %d; want %d&quot;, tt.in, got, tt.want)    // or Fatalf, if test can't test anything more past this point
+}
+</code></pre>
+
+<p>（順番は<code>実際の値!=期待値</code>で，<code>Errorf</code>の出力も同じ順番になっている．いくつかのテストフレームワークは，この逆で書くことを奨励しているが，Goの場合はこの順番とする）</p>
+
+<ul>
+<li>ヘルパー関数を使い，異なる入力に対するテストをする場合は，その呼び出しを異なる<code>TestFoo</code>関数でラップすれば，その名前でテストが落ちる．例えば以下のようにする</li>
+</ul>
+
+<pre><code class="language-go"> func TestSingleValue(t *testing.T) { testHelper(t, []int{80}) }
+ func TestNoValues(t *testing.T) { testHelper(t, []int{}) }
+</code></pre>
+
+<p>（とにかく，将来コードをデバッグするひとへ丁寧な出力を提示するのは書き手に責任がある）</p>
+
+<ul>
+<li>記述量が多い場合は，<a href="https://code.google.com/p/go-wiki/wiki/TableDrivenTests">Table Driven Test</a>を使うことを考えるとよい</li>
+<li>変数名は，短いほうがよい．得にスコープが狭い場合などは短くする．例えば，<code>lineCount</code>より<code>c</code>，<code>sliceIndex</code>より<code>i</code>が好ましい．以下に基本的なルールを列挙する
+
+<ul>
+<li>変数がその宣言から離れた場所で使われるのであれば，説明的な名前にする</li>
+<li>グローバル変数は，説明的な名前にする</li>
+<li>メソッドレシーバは，1，2文字の短い名前にする</li>
+<li>ループ変数は1文字（<code>i</code>や<code>r</code>）の短い名前にする</li>
+</ul></li>
+</ul>
+
+<h2 id="soundcloundの場合:3770ffff5a3eb742f7c6715987fc23cb">SoundCloundの場合</h2>
+
+<p>SoundCloudは上を少し改良して利用している．</p>
+
+<ul>
+<li>曖昧な場合や可読性が大きく高まる場合を除いて，名前付き返り値は使わないこと</li>
+<li>必要な場合（<code>new(int)</code>や<code>make(chan int)</code>）や事前に割り当てるサイズが分かっている場合（<code>make(map[int]string, n)</code>や<code>make([]int, 0, 256)</code>）を除いて，<code>make</code>や<code>new</code>を使わないこと</li>
+<li>番兵（sentinel value）には，<code>bool</code>や<code>interface{}</code>よりも<code>struct{}</code>を使うこと
+
+<ul>
+<li>例えば，<code>map[string]struct{}</code>や<code>chan struct{}</code></li>
+</ul></li>
+<li>パラメータが多く，1行が長くなる場合は，改行すること．例えば，</li>
+</ul>
+
+<pre><code class="language-go">func process(dst io.Writer, readTimeout,
+    writeTimeout time.Duration, allowInvalid bool,
+        max int, src &lt;-chan util.Job) {
+    // ...
+}
+</code></pre>
+
+<p>とするのではなく，以下のようにする．</p>
+
+<pre><code class="language-go">func process(
+    dst io.Writer,
+    readTimeout, writeTimeout time.Duration,
+    allowInvalid bool,
+    max int,
+    src &lt;-chan util.Job,
+) {
+    // ...
+}
+</code></pre>
+
+<p>同様に以下のように要素を割り当てる場合も，</p>
+
+<pre><code class="language-go">f := &amp;Foo{} // or, even worse: new(Foo)
+f.Site = &quot;zombo.com&quot;
+f.Out = os.Stdout
+f.Dest.Key = &quot;gophercon&quot;
+f.Dest.Value = 2014
+</code></pre>
+
+<p>とするのではなく，以下のようにする．</p>
+
+<pre><code class="language-go">f := foo.New(foo.Config{ 
+    Site: &quot;zombo.com&quot;, 
+    Out:  os.Stdout, 
+    Dest: conference.KeyPair{ 
+    Key:   &quot;gophercon&quot;,
+    Value: 2014,
+    },
+})
+</code></pre>
+
+      <div class="social">
+  
+  
+  <a href="https://twitter.com/share" class="twitter-share-button" data-via="deeeet" data-count="none">Tweet</a>
+  
+  
+</div>
+
+    </section>
+
+    <footer>
+      <address>
+        
+        <img src="/images/bio.jpeg"/>
+        
+        <p>Written by <strong><a rel="author" href="https://twitter.com/deeeet" title="Taichi Nakashima" target="_blank">Taichi Nakashima</a></strong><br>
+          <span class="muted">A Tokyo based PaaS engineer. Please contact me via twitter.</span>
+        </p>
+      </address>
+
+    </footer>
+
+  </div>
+</article>
+
+<script type="text/javascript" src="//ajax.googleapis.com/ajax/libs/jquery/1.7.2/jquery.min.js"></script>
+<script type="text/javascript" src="/js/main.js"></script>
+
+<script>!function(d,s,id){var js,fjs=d.getElementsByTagName(s)[0],p=/^http:/.test(d.location)?'http':'https';if(!d.getElementById(id)){js=d.createElement(s);js.id=id;js.src=p+'://platform.twitter.com/widgets.js';fjs.parentNode.insertBefore(js,fjs);}}(document, 'script', 'twitter-wjs');</script>
+
+
+<script type="text/javascript">var HN=[];HN.factory=function(e){return function(){HN.push([e].concat(Array.prototype.slice.call(arguments,0)))};},HN.on=HN.factory("on"),HN.once=HN.factory("once"),HN.off=HN.factory("off"),HN.emit=HN.factory("emit"),HN.load=function(){var e="hn-button.js";if(document.getElementById(e))return;var t=document.createElement("script");t.id=e,t.src="//hn-button.herokuapp.com/hn-button.js";var n=document.getElementsByTagName("script")[0];n.parentNode.insertBefore(t,n)},HN.load();</script>
+
+
+  <script>
+  (function(i,s,o,g,r,a,m){i['GoogleAnalyticsObject']=r;i[r]=i[r]||function(){
+  (i[r].q=i[r].q||[]).push(arguments)},i[r].l=1*new Date();a=s.createElement(o),
+  m=s.getElementsByTagName(o)[0];a.async=1;a.src=g;m.parentNode.insertBefore(a,m)
+  })(window,document,'script','//www.google-analytics.com/analytics.js','ga');
+
+  ga('create', 'UA-45390253-1', 'auto');
+  ga('send', 'pageview');
+
+</script>
+
+
+
+<script>
+  $(document).ready(function() {
+  
+  $('p:has(img)').css('text-align', 'center');
+  $('iframe').css('style', 'display: block; margin: 0px auto;');
+  });
+</script>
+

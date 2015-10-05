@@ -1,0 +1,167 @@
+<!doctype html>
+<html>
+  <head>
+    <meta http-equiv="content-type" content="text/html; charset=utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    
+    <title>UNIXのワイルドカードがワイルド | SOTA</title>
+    
+    <link href="https://fonts.googleapis.com/css?family=Lato%3a900" rel="stylesheet" type="text/css">
+    <link rel="stylesheet" href="/css/main.css">
+    <link rel="shortcut icon" href="/favicon.png" type="image/x-icon" />
+    <link href="http://deeeet.com//index.xml" rel="alternate" type="application/rss+xml" title="" />
+    <meta name="title" content="http://deeeet.com/writing/2014/08/18/unix-wildcards-gone-wild/">
+    <link rel="canonical" href="http://deeeet.com/writing/2014/08/18/unix-wildcards-gone-wild/">
+    
+    <meta property="og:title" content="UNIXのワイルドカードがワイルド"/>
+    <meta property="og:url" content="http://deeeet.com/writing/2014/08/18/unix-wildcards-gone-wild/"/>
+  </head>
+  
+  <body>
+    <section class="site-nav">
+      <header>
+        <nav id="navigation">
+          <ul class="menu">
+            <li><a href="https://github.com/tcnksm/talks">Talks</a></li>
+            <li><a href="https://tcnksm.exposure.co/">Photos</a></li>
+          </ul>
+
+          <a class="name" href="/">SOTA</a>
+        </nav>        
+      </header>
+    </section>
+    
+
+
+<article>
+  <div class="container">
+    <header>
+      <div class="meta">
+        <time pubdate datetime="2014-08-18" title="2014-08-18">August 18, 2014</time>
+      </div>
+      <h1 class="title">UNIXのワイルドカードがワイルド</h1>
+    </header>
+    
+    <section>
+      
+
+<p><a href="http://www.defensecode.com/public/DefenseCode_Unix_WildCards_Gone_Wild.txt">Back To The Future: Unix Wildcards Gone Wild</a></p>
+
+<p>面白かったので．また気をつけようと思ったので．</p>
+
+<h2 id="ワイルドな実例:cf69d8929e8a444f5a218cc4f8637f1d">ワイルドな実例</h2>
+
+<p>例えば，以下のようなファイルとディレクトリがあるとする．</p>
+
+<pre><code class="language-bash">$ ls -al
+total 0
+drwxr-xr-x  9 taichi  staff  306  8 18 22:31 .
+drwxr-xr-x  6 taichi  staff  204  8 18 22:27 ..
+drwxr-xr-x  2 taichi  staff   68  8 18 22:26 DIR1
+drwxr-xr-x  2 taichi  staff   68  8 18 22:26 DIR2
+drwxr-xr-x  2 taichi  staff   68  8 18 22:26 DIR3
+-rw-r--r--  1 taichi  staff    0  8 18 22:26 file1
+-rw-r--r--  1 taichi  staff    0  8 18 22:26 file2
+-rw-r--r--  1 taichi  staff    0  8 18 22:26 file3
+-rw-r--r--  1 taichi  staff    0  8 18 22:30 -rf
+</code></pre>
+
+<p>ここで，以下のようにワイルドカードでファイル指定しファイル削除を実行する．</p>
+
+<pre><code class="language-bash">$ rm *
+</code></pre>
+
+<p>オプションを指定していないので，ディレクトリは消えないはずが，ディレクトリまで消えてしまう．</p>
+
+<pre><code class="language-bash">$ ls -al
+total 0
+-rw-r--r--  1 taichi  staff    0  8 18 22:30 -rf
+drwxr-xr-x  3 taichi  staff  102  8 18 22:32 .
+drwxr-xr-x  4 taichi  staff  136  8 18 22:32 ..
+</code></pre>
+
+<p>これは<code>-rf</code>というファイルが原因．ワイルドカードが展開されると，<code>rm</code>はそれをオプションとして認識してしまい，ディレクトリも消してしまう．すごい野性的．</p>
+
+<h2 id="どう避けるのか:cf69d8929e8a444f5a218cc4f8637f1d">どう避けるのか</h2>
+
+<p>そもそも<code>-</code>で始まるファイル名が存在することがおかしいし，センスを疑うが，ありえないとは言い切れない．</p>
+
+<p>まず，<code>--</code>を使う方法．<code>--</code>を使うとオプションの終了位置を明示的に指定でき，それ以後<code>-</code>で始まるファイルが現れてもそれをファイルとして扱うようになる．</p>
+
+<pre><code class="language-bash">$ rm -- *
+</code></pre>
+
+<p>でも，すべてのコマンドをこれで実行するわけにはいかないし，いつか忘れる．また全てのコマンドが<code>--</code>をサポートしているわけではない．</p>
+
+<p>良さげなのは，<code>./</code>を使う方法．というか，ワイルドカードで始まるファイル指定をしない．</p>
+
+<pre><code class="language-bash">$ rm ./*
+</code></pre>
+
+<h2 id="まとめ:cf69d8929e8a444f5a218cc4f8637f1d">まとめ</h2>
+
+<p>軽い話題のつもりが良い教訓になった．</p>
+
+<p>ワイルドカードを使ったファイルglobはシェルスクリプトではよく使う（例えば<code>for</code>でループするときなど）．<strong>ワイルドカードで始まるファイル指定をしない</strong>ように気をつけること．</p>
+
+<h2 id="さらに学ぶには:cf69d8929e8a444f5a218cc4f8637f1d">さらに学ぶには</h2>
+
+<p>以下の素敵な記事に目を通すのが良さそう．</p>
+
+<p><a href="http://www.dwheeler.com/essays/filenames-in-shell.html">Filenames and Pathnames in Shell (bash, dash, ash, ksh, and so on): How to do it Correctly</a></p>
+
+      <div class="social">
+  
+  
+  <a href="https://twitter.com/share" class="twitter-share-button" data-via="deeeet" data-count="none">Tweet</a>
+  
+  
+</div>
+
+    </section>
+
+    <footer>
+      <address>
+        
+        <img src="/images/bio.jpeg"/>
+        
+        <p>Written by <strong><a rel="author" href="https://twitter.com/deeeet" title="Taichi Nakashima" target="_blank">Taichi Nakashima</a></strong><br>
+          <span class="muted">A Tokyo based PaaS engineer. Please contact me via twitter.</span>
+        </p>
+      </address>
+
+    </footer>
+
+  </div>
+</article>
+
+<script type="text/javascript" src="//ajax.googleapis.com/ajax/libs/jquery/1.7.2/jquery.min.js"></script>
+<script type="text/javascript" src="/js/main.js"></script>
+
+<script>!function(d,s,id){var js,fjs=d.getElementsByTagName(s)[0],p=/^http:/.test(d.location)?'http':'https';if(!d.getElementById(id)){js=d.createElement(s);js.id=id;js.src=p+'://platform.twitter.com/widgets.js';fjs.parentNode.insertBefore(js,fjs);}}(document, 'script', 'twitter-wjs');</script>
+
+
+<script type="text/javascript">var HN=[];HN.factory=function(e){return function(){HN.push([e].concat(Array.prototype.slice.call(arguments,0)))};},HN.on=HN.factory("on"),HN.once=HN.factory("once"),HN.off=HN.factory("off"),HN.emit=HN.factory("emit"),HN.load=function(){var e="hn-button.js";if(document.getElementById(e))return;var t=document.createElement("script");t.id=e,t.src="//hn-button.herokuapp.com/hn-button.js";var n=document.getElementsByTagName("script")[0];n.parentNode.insertBefore(t,n)},HN.load();</script>
+
+
+  <script>
+  (function(i,s,o,g,r,a,m){i['GoogleAnalyticsObject']=r;i[r]=i[r]||function(){
+  (i[r].q=i[r].q||[]).push(arguments)},i[r].l=1*new Date();a=s.createElement(o),
+  m=s.getElementsByTagName(o)[0];a.async=1;a.src=g;m.parentNode.insertBefore(a,m)
+  })(window,document,'script','//www.google-analytics.com/analytics.js','ga');
+
+  ga('create', 'UA-45390253-1', 'auto');
+  ga('send', 'pageview');
+
+</script>
+
+
+
+<script>
+  $(document).ready(function() {
+  
+  $('p:has(img)').css('text-align', 'center');
+  $('iframe').css('style', 'display: block; margin: 0px auto;');
+  });
+</script>
+

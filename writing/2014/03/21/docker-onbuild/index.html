@@ -1,0 +1,228 @@
+<!doctype html>
+<html>
+  <head>
+    <meta http-equiv="content-type" content="text/html; charset=utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    
+    <title>DockerfileのONBUILD | SOTA</title>
+    
+    <link href="https://fonts.googleapis.com/css?family=Lato%3a900" rel="stylesheet" type="text/css">
+    <link rel="stylesheet" href="/css/main.css">
+    <link rel="shortcut icon" href="/favicon.png" type="image/x-icon" />
+    <link href="http://deeeet.com//index.xml" rel="alternate" type="application/rss+xml" title="" />
+    <meta name="title" content="http://deeeet.com/writing/2014/03/21/docker-onbuild/">
+    <link rel="canonical" href="http://deeeet.com/writing/2014/03/21/docker-onbuild/">
+    
+    <meta property="og:title" content="DockerfileのONBUILD"/>
+    <meta property="og:url" content="http://deeeet.com/writing/2014/03/21/docker-onbuild/"/>
+  </head>
+  
+  <body>
+    <section class="site-nav">
+      <header>
+        <nav id="navigation">
+          <ul class="menu">
+            <li><a href="https://github.com/tcnksm/talks">Talks</a></li>
+            <li><a href="https://tcnksm.exposure.co/">Photos</a></li>
+          </ul>
+
+          <a class="name" href="/">SOTA</a>
+        </nav>        
+      </header>
+    </section>
+    
+
+
+<article>
+  <div class="container">
+    <header>
+      <div class="meta">
+        <time pubdate datetime="2014-03-21" title="2014-03-21">March 21, 2014</time>
+      </div>
+      <h1 class="title">DockerfileのONBUILD</h1>
+    </header>
+    
+    <section>
+      
+
+<p>Docker 0.8において<code>ONBUILD</code>というDockerfile用のコマンドが導入された．0.8ではOSXのdocker clientが脚光を浴びたが，この<code>ONBUILD</code>はかなり強力な機能．リリースノートは<a href="http://blog.docker.io/2014/02/docker-0-8-quality-new-builder-features-btrfs-storage-osx-support/">こちら</a>．<code>ONBUILD</code>の公式ドキュメントは<a href="http://docs.docker.io/en/latest/reference/builder/#onbuild">こちら</a>．</p>
+
+<p><code>ONBUILD</code>を使うと，次のビルドで実行するコマンドをイメージに仕込むことができるようになる．つまり，ベースイメージに<code>ONBUILD</code>によるコマンドを仕込み，別のDockerfileでそのベースイメージを読み込みビルドした際に，そのコマンドを実行させるということが可能になる．要するに，<code>親Dockerfile</code>のDockerfileコマンドを<code>子Dockerfile</code>のビルド時に実行させることができる機能．</p>
+
+<p>これは，アプリケーション用のイメージを作るときや，ユーザ特有の設定を組み込んだデーモン用のイメージを作るときなどに有用になる．また，オリジナルのHerokuのBuildpack的なものを作ることもできる．</p>
+
+<p>言葉では伝えられないので簡単に動作例を示す．例えば，以下のような<code>Dockerfile.base</code>を準備する．</p>
+
+<pre><code class="language-bash"># Docekerfile.base
+FROM ubuntu
+ONBUILD RUN echo &quot;See you later&quot;
+</code></pre>
+
+<p>これを<code>tcnksm/echo_base</code>という名前でビルドする．</p>
+
+<pre><code class="language-bash">$ docker build -t tcnksm/echo_base - &lt; Dockerfile.base
+Step 0 : FROM ubuntu
+Pulling repository ubuntu
+...
+f323cf34fd77: Download complete
+---&gt; 9cd978db300e
+Step 1 : ONBUILD RUN echo &quot;See you later&quot;
+---&gt; Running in 9e42ede94d60
+---&gt; e18fdd8d9fa8
+</code></pre>
+
+<p><code>RUN echo</code>は実行されていない．</p>
+
+<p>次に，この<code>tcnksm/echo_base</code>を基にした別のイメージを作成する<code>Dockerfile</code>を準備する．</p>
+
+<pre><code class="language-bash">FROM tcnksm/echo_base
+</code></pre>
+
+<p><code>tcnksm/echo</code>という名前でビルドする．</p>
+
+<pre><code class="language-bash">$ docker build -t tcnksm/echo .
+Uploading context 3.584 kB
+Uploading context
+Step 0 : FROM tcnksm/base
+# Executing 1 build triggers
+Step onbuild-0 : RUN echo &quot;See you later&quot;
+---&gt; Running in cddf3cf85ff8
+See you later
+---&gt; 9f0189c1e902
+---&gt; 9f0189c1e902
+Successfully built 9f0189c1e902
+</code></pre>
+
+<p>ベースイメージ<code>tcnksm/echo_base</code>で仕込んだ<code>RUN echo ..</code>が実行された．これが<code>ONBUILD</code>の機能．</p>
+
+<p>では，実際の開発プロセスにおいてどのように使えるか．</p>
+
+<h2 id="apache-base-image:e98416d84d2886d39c87c946f97d3ab7">Apache base image</h2>
+
+<p>/var/www以下のhtdocsを表示する単純なDockerアプリーションを作るとする．この場合<code>Dockerfile</code>には，apacheのインストール，Apacheの起動コマンドの登録，/var/www/以下へのhtdocsの追加などを書くことになる．あとはこの<code>Dockerfile</code>をコピーしてビルドすれば，どこでもこのアプリケーションを動作させることができる．</p>
+
+<p>新しくhtdocsを更新したい場合は，ビルドし直す，<code>scp</code>できるようにしてファイルをコンテナ内にぶっ込む，<code>volume</code>機能を使ってファイルをマウントする，などが考えられる．</p>
+
+<p><code>ONBUILD</code>を使えば，ファイルの更新を考慮したイメージを作成することができる．つまり，<code>親Dockerfile</code>でApacheのインストールなどの基本的なConfigurationを行う一方で，更新がかかるhtdocsの/var/www/への追加は<code>子Dockerfile</code>のビルド時に実行させることが可能になる．これを実現する<code>親Dockerfile</code>は以下のようになる．</p>
+
+<pre><code class="language-bash"># Dockerfile.base
+FROM ubuntu:12.04
+
+RUN apt-get update
+RUN apt-get install -y apache2
+
+ENV APACHE_RUN_USER www-data
+ENV APACHE_RUN_GROUP www-data
+ENV APACHE_LOG_DIR /var/log/apache2
+
+ONBUILD ADD . /var/www/
+
+EXPOSE 80
+ENTRYPOINT [&quot;/usr/sbin/apache2&quot;]
+CMD [&quot;-D&quot;, &quot;FOREGROUND&quot;]
+</code></pre>
+
+<p>カレントディレクトリを<code>/var/www</code>に追加する部分を<code>ONBUILD</code>で記述する．あとは，ベースイメージをビルドし，レジストリに<code>push</code>しておく</p>
+
+<pre><code class="language-bash">$ docker build -t tcnksm/apache_base - &lt; Dockerfile.base
+$ docker push
+</code></pre>
+
+<h2 id="apache-application-image:e98416d84d2886d39c87c946f97d3ab7">Apache application image</h2>
+
+<p>htdocsを開発する．</p>
+
+<pre><code class="language-bash">$ echo &quot;&lt;h1&gt;Hello, docker&lt;/h1&gt;&quot; &gt; index.html
+</code></pre>
+
+<p>開発が終了したら，以下のような<code>Dockerfile</code>を準備しビルドする．</p>
+
+<pre><code class="language-bash">FROM tcnksm/apache_base
+</code></pre>
+
+<pre><code class="language-bash">$ docker build -t tcnksm/apache .
+</code></pre>
+
+<p>ビルドすると，<code>親Dockerfile</code>で記述した<code>ONBUILD</code>が実行され，カレントディレクトリのhtdocsがイメージの/var/www/以下に追加される．あとは，このイメージを好きなところにデプロイして起動するだけ．</p>
+
+<pre><code class="language-bash">$ docker run -p 80:80 tcnksm/apache
+</code></pre>
+
+<h2 id="開発方法:e98416d84d2886d39c87c946f97d3ab7">開発方法</h2>
+
+<p>htdocsの開発中に実際にapacheを起動して，ブラウザで動作確認などができるとよい．以下のように<code>volume</code>でカレントディレクトリをベースイメージの/var/wwwにマウントして起動すれば，リアルタイムで更新を確認しつつ開発を進めることができる．</p>
+
+<pre><code class="language-bash">$ docker run -p 80:80 -v $(pwd):/var/www -t tcnksm/apache_base
+</code></pre>
+
+<p><code>vagrant share</code>のように外部の開発者とやり取りしつつ開発したいなら，ngrokを使って<a href="http://deeeet.com/writing/2014/03/12/docker-share/">Docker share</a>的なこともできる．</p>
+
+<p>開発が終了したら，上のDockerfileを使って最終イメージをビルドし，イメージをデプロイする．例えば，<a href="https://orchardup.com/">Orchard</a>にデプロイするには以下のようにする（Orchardの使い方は，<a href="http://deeeet.com/writing/2014/03/22/docker-orchard/">&ldquo;OrchardにDockerアプリケーションをデプロイ&rdquo;</a>に書いた）．</p>
+
+<pre><code class="language-bash">$ orchard docker build -t tcnksm/apache .
+$ orchard docker run -d -p 80:80 tcnksm/apache
+</code></pre>
+
+<h2 id="参考:e98416d84d2886d39c87c946f97d3ab7">参考</h2>
+
+<ul>
+<li><a href="http://mindtrove.info/a-reveal.js-docker-base-image-with-onbuild/">A reveal.js Docker Base Image with ONBUILD</a></li>
+<li><a href="http://www.tech-d.net/2014/02/06/docker-quicktip-3-onbuild/">Docker quicktip #3 – ONBUILD</a></li>
+<li><a href="http://www.slideshare.net/profyclub_ru/8-mitchell-hashimoto-hashicorp">&ldquo;Toward FutureOps: Stable, repeatable, environments from dev to prod&rdquo;</a></li>
+</ul>
+
+      <div class="social">
+  
+  
+  <a href="https://twitter.com/share" class="twitter-share-button" data-via="deeeet" data-count="none">Tweet</a>
+  
+  
+</div>
+
+    </section>
+
+    <footer>
+      <address>
+        
+        <img src="/images/bio.jpeg"/>
+        
+        <p>Written by <strong><a rel="author" href="https://twitter.com/deeeet" title="Taichi Nakashima" target="_blank">Taichi Nakashima</a></strong><br>
+          <span class="muted">A Tokyo based PaaS engineer. Please contact me via twitter.</span>
+        </p>
+      </address>
+
+    </footer>
+
+  </div>
+</article>
+
+<script type="text/javascript" src="//ajax.googleapis.com/ajax/libs/jquery/1.7.2/jquery.min.js"></script>
+<script type="text/javascript" src="/js/main.js"></script>
+
+<script>!function(d,s,id){var js,fjs=d.getElementsByTagName(s)[0],p=/^http:/.test(d.location)?'http':'https';if(!d.getElementById(id)){js=d.createElement(s);js.id=id;js.src=p+'://platform.twitter.com/widgets.js';fjs.parentNode.insertBefore(js,fjs);}}(document, 'script', 'twitter-wjs');</script>
+
+
+<script type="text/javascript">var HN=[];HN.factory=function(e){return function(){HN.push([e].concat(Array.prototype.slice.call(arguments,0)))};},HN.on=HN.factory("on"),HN.once=HN.factory("once"),HN.off=HN.factory("off"),HN.emit=HN.factory("emit"),HN.load=function(){var e="hn-button.js";if(document.getElementById(e))return;var t=document.createElement("script");t.id=e,t.src="//hn-button.herokuapp.com/hn-button.js";var n=document.getElementsByTagName("script")[0];n.parentNode.insertBefore(t,n)},HN.load();</script>
+
+
+  <script>
+  (function(i,s,o,g,r,a,m){i['GoogleAnalyticsObject']=r;i[r]=i[r]||function(){
+  (i[r].q=i[r].q||[]).push(arguments)},i[r].l=1*new Date();a=s.createElement(o),
+  m=s.getElementsByTagName(o)[0];a.async=1;a.src=g;m.parentNode.insertBefore(a,m)
+  })(window,document,'script','//www.google-analytics.com/analytics.js','ga');
+
+  ga('create', 'UA-45390253-1', 'auto');
+  ga('send', 'pageview');
+
+</script>
+
+
+
+<script>
+  $(document).ready(function() {
+  
+  $('p:has(img)').css('text-align', 'center');
+  $('iframe').css('style', 'display: block; margin: 0px auto;');
+  });
+</script>
+

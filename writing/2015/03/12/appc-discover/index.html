@@ -1,0 +1,187 @@
+<!doctype html>
+<html>
+  <head>
+    <meta http-equiv="content-type" content="text/html; charset=utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    
+    <title>ACIのディスカバリーの仕様 | SOTA</title>
+    
+    <link href="https://fonts.googleapis.com/css?family=Lato%3a900" rel="stylesheet" type="text/css">
+    <link rel="stylesheet" href="/css/main.css">
+    <link rel="shortcut icon" href="/favicon.png" type="image/x-icon" />
+    <link href="http://deeeet.com//index.xml" rel="alternate" type="application/rss+xml" title="" />
+    <meta name="title" content="http://deeeet.com/writing/2015/03/12/appc-discover/">
+    <link rel="canonical" href="http://deeeet.com/writing/2015/03/12/appc-discover/">
+    
+    <meta property="og:title" content="ACIのディスカバリーの仕様"/>
+    <meta property="og:url" content="http://deeeet.com/writing/2015/03/12/appc-discover/"/>
+  </head>
+  
+  <body>
+    <section class="site-nav">
+      <header>
+        <nav id="navigation">
+          <ul class="menu">
+            <li><a href="https://github.com/tcnksm/talks">Talks</a></li>
+            <li><a href="https://tcnksm.exposure.co/">Photos</a></li>
+          </ul>
+
+          <a class="name" href="/">SOTA</a>
+        </nav>        
+      </header>
+    </section>
+    
+
+
+<article>
+  <div class="container">
+    <header>
+      <div class="meta">
+        <time pubdate datetime="2015-03-12" title="2015-03-12">March 12, 2015</time>
+      </div>
+      <h1 class="title">ACIのディスカバリーの仕様</h1>
+    </header>
+    
+    <section>
+      
+
+<p><a href="https://github.com/appc/spec/blob/master/SPEC.md#app-container-image-discovery">App Container Image Discovery</a></p>
+
+<p><a href="http://deeeet.com/writing/2015/03/12/rocket/">&ldquo;AppcとCoreOS/Rocket&rdquo;</a> に書いたようにAppc Specではインターネット上に配置したApp Container Image（ACI）のURLとそれを検証するための署名のURLをACIの名前から解決する方法も仕様として定めている．その仕様がなかなか面白いので簡単にまとめておく．</p>
+
+<h2 id="なぜ必要か:f02e7f7c7d3ba9df69778d1f040172c9">なぜ必要か</h2>
+
+<p>Dockerではイメージの配布にDockerHubやDocker Registryを使う．使うしかない．イメージ取得をするにはRegistryと話す必要があり拡張性がない．<code>.tar</code>形式にして自分の好きなストレージに置くこともできるが気軽さは失われる．これらを踏まえてAppc specでは普通に使われているWebの技術/仕様（HTTPS+HTML）を用いて誰でもそれを実装できるようにしている．</p>
+
+<h2 id="ディスカバリーの仕様:f02e7f7c7d3ba9df69778d1f040172c9">ディスカバリーの仕様</h2>
+
+<p>ACIの名前は<a href="http://tools.ietf.org/html/rfc1123#page-13">DNS RFC1123</a>で受け入れられる小文字と<code>/</code>から構成する．</p>
+
+<p>ACIの名前はURLのような構造になる．例えば<code>example.com/reduce-worker</code>のようになる．しかし，これには明確なスキーマがないので直接イメージのURLを解決することができない．さらにACIをコンテナとして動かす場合は名前だけではなくバージョンやOS/アーキテクチャといった値も必要になる．Appc specはこの仕様をGo言語の<a href="https://golang.org/cmd/go/#hdr-Remote_import_paths">Remote import path</a>を参考に作成している．</p>
+
+<p>解決するべきURLは以下の3つである．</p>
+
+<ul>
+<li>イメージの場所を示すURL（<code>.aci</code>）</li>
+<li>署名のURL（<code>.asc</code>）</li>
+<li>公開鍵のURL</li>
+</ul>
+
+<p>解決方法は，Simple discoveryとMeta discoveryの2つがあり，どちらもテンプレートを使ってイメージのURLを解決する．これらの2つ方法について簡単に説明する．</p>
+
+<h3 id="simple-discovery:f02e7f7c7d3ba9df69778d1f040172c9">Simple discovery</h3>
+
+<p>Simple discoveryは以下のテンプレートを用いる．</p>
+
+<pre><code class="language-bash">https://{name}-{version}-{os}-{arch}.{ext}
+</code></pre>
+
+<p>例えば，バージョンが<code>1.0.0</code>でプラットフォームが<code>linux/amd64</code>である<code>example.com/reduce-worker</code>という名前のACIのURLは以下のように解決する．</p>
+
+<pre><code class="language-bash">$ https://example.com/reduce-worker-1.0.0-linux-amd64.aci
+</code></pre>
+
+<p>上記のURLによるACIの取得が失敗した場合はMeta discoveryを行う．成功した場合は，以下のURLで署名を取得する．</p>
+
+<pre><code class="language-bash">$ https://example.com/reduce-worker-1.0.0-linux-amd64.aci.asc
+</code></pre>
+
+<p>なおSimple discoveryで公開鍵を見つける方法はない．</p>
+
+<h3 id="meta-discovery:f02e7f7c7d3ba9df69778d1f040172c9">Meta discovery</h3>
+
+<p>Simple discoveryが失敗したらHTTPSとHTMLのmetaタグを用いてACIの名前から各種URLを解決する．</p>
+
+<p>例えば<code>example.com/reduce-worker</code>という名前のACIを見つける場合，まず以下のようなリクエストを送る．</p>
+
+<pre><code class="language-bash">https://example.com/reduce-worker?ac-discovery=1
+</code></pre>
+
+<p>そして，そのリクエストから得られるHTMLに以下のようなMetaタグを含ませる．</p>
+
+<pre><code class="language-html">&lt;meta name=&quot;ac-discovery&quot; content=&quot;prefix-match url-tmpl&quot;&gt;
+&lt;meta name=&quot;ac-discovery-pubkeys&quot; content=&quot;prefix-match url&quot;&gt;
+</code></pre>
+
+<p>構成要素は以下のようになる．</p>
+
+<ul>
+<li><code>ac-discovery</code>にはACI，もしくは署名の場所を示すURLを記述する</li>
+<li><code>ac-disvovery-pubkeys</code>にはACIの署名を検証するための公開鍵の場所を示すURLを記述する</li>
+<li><code>prefix-match</code>はACの名前と一致するかを確認するために利用する</li>
+</ul>
+
+<p>例えば以下のようなmetaタグを含んだHTMLを準備する．<code>http</code>以外のスキーマでも良い．</p>
+
+<pre><code class="language-html">&lt;meta name=&quot;ac-discovery&quot; content=&quot;example.com https://storage.example.com/{os}/{arch}/{name}-{version}.{ext}?torrent&quot;&gt;
+&lt;meta name=&quot;ac-discovery&quot; content=&quot;example.com hdfs://storage.example.com/{name}-{version}-{os}-{arch}.{ext}&quot;&gt;
+&lt;meta name=&quot;ac-discovery-pubkeys&quot; content=&quot;example.com https://example.com/pubkeys.gpg&quot;&gt;
+</code></pre>
+
+<p>バージョンが<code>1.0.0</code>でプラットフォームが<code>linux/amd64</code>の場合は以下の3つのURLが得られる．</p>
+
+<ul>
+<li>署名: <a href="https://storage.example.com/linux/amd64/reduce-worker-1.0.0.aci.asc">https://storage.example.com/linux/amd64/reduce-worker-1.0.0.aci.asc</a></li>
+<li>ACI: <a href="https://storage.example.com/linux/amd64/reduce-worker-1.0.0.aci">https://storage.example.com/linux/amd64/reduce-worker-1.0.0.aci</a></li>
+<li>公開鍵: <a href="https://example.com/pubkeys.gpg">https://example.com/pubkeys.gpg</a></li>
+</ul>
+
+<h3 id="認証とかは:f02e7f7c7d3ba9df69778d1f040172c9">認証とかは?</h3>
+
+<p>HTTPSとHTMLなのでRuntimeに合わせてBasic認証などを準備すればよい．</p>
+
+      <div class="social">
+  
+  
+  <a href="https://twitter.com/share" class="twitter-share-button" data-via="deeeet" data-count="none">Tweet</a>
+  
+  
+</div>
+
+    </section>
+
+    <footer>
+      <address>
+        
+        <img src="/images/bio.jpeg"/>
+        
+        <p>Written by <strong><a rel="author" href="https://twitter.com/deeeet" title="Taichi Nakashima" target="_blank">Taichi Nakashima</a></strong><br>
+          <span class="muted">A Tokyo based PaaS engineer. Please contact me via twitter.</span>
+        </p>
+      </address>
+
+    </footer>
+
+  </div>
+</article>
+
+<script type="text/javascript" src="//ajax.googleapis.com/ajax/libs/jquery/1.7.2/jquery.min.js"></script>
+<script type="text/javascript" src="/js/main.js"></script>
+
+<script>!function(d,s,id){var js,fjs=d.getElementsByTagName(s)[0],p=/^http:/.test(d.location)?'http':'https';if(!d.getElementById(id)){js=d.createElement(s);js.id=id;js.src=p+'://platform.twitter.com/widgets.js';fjs.parentNode.insertBefore(js,fjs);}}(document, 'script', 'twitter-wjs');</script>
+
+
+<script type="text/javascript">var HN=[];HN.factory=function(e){return function(){HN.push([e].concat(Array.prototype.slice.call(arguments,0)))};},HN.on=HN.factory("on"),HN.once=HN.factory("once"),HN.off=HN.factory("off"),HN.emit=HN.factory("emit"),HN.load=function(){var e="hn-button.js";if(document.getElementById(e))return;var t=document.createElement("script");t.id=e,t.src="//hn-button.herokuapp.com/hn-button.js";var n=document.getElementsByTagName("script")[0];n.parentNode.insertBefore(t,n)},HN.load();</script>
+
+
+  <script>
+  (function(i,s,o,g,r,a,m){i['GoogleAnalyticsObject']=r;i[r]=i[r]||function(){
+  (i[r].q=i[r].q||[]).push(arguments)},i[r].l=1*new Date();a=s.createElement(o),
+  m=s.getElementsByTagName(o)[0];a.async=1;a.src=g;m.parentNode.insertBefore(a,m)
+  })(window,document,'script','//www.google-analytics.com/analytics.js','ga');
+
+  ga('create', 'UA-45390253-1', 'auto');
+  ga('send', 'pageview');
+
+</script>
+
+
+
+<script>
+  $(document).ready(function() {
+  
+  $('p:has(img)').css('text-align', 'center');
+  $('iframe').css('style', 'display: block; margin: 0px auto;');
+  });
+</script>
+

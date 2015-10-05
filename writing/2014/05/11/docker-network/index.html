@@ -1,0 +1,231 @@
+<!doctype html>
+<html>
+  <head>
+    <meta http-equiv="content-type" content="text/html; charset=utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    
+    <title>Dockerのネットワークの基礎 | SOTA</title>
+    
+    <link href="https://fonts.googleapis.com/css?family=Lato%3a900" rel="stylesheet" type="text/css">
+    <link rel="stylesheet" href="/css/main.css">
+    <link rel="shortcut icon" href="/favicon.png" type="image/x-icon" />
+    <link href="http://deeeet.com//index.xml" rel="alternate" type="application/rss+xml" title="" />
+    <meta name="title" content="http://deeeet.com/writing/2014/05/11/docker-network/">
+    <link rel="canonical" href="http://deeeet.com/writing/2014/05/11/docker-network/">
+    
+    <meta property="og:title" content="Dockerのネットワークの基礎"/>
+    <meta property="og:url" content="http://deeeet.com/writing/2014/05/11/docker-network/"/>
+  </head>
+  
+  <body>
+    <section class="site-nav">
+      <header>
+        <nav id="navigation">
+          <ul class="menu">
+            <li><a href="https://github.com/tcnksm/talks">Talks</a></li>
+            <li><a href="https://tcnksm.exposure.co/">Photos</a></li>
+          </ul>
+
+          <a class="name" href="/">SOTA</a>
+        </nav>        
+      </header>
+    </section>
+    
+
+
+<article>
+  <div class="container">
+    <header>
+      <div class="meta">
+        <time pubdate datetime="2014-05-11" title="2014-05-11">May 11, 2014</time>
+      </div>
+      <h1 class="title">Dockerのネットワークの基礎</h1>
+    </header>
+    
+    <section>
+      
+
+<p>今までいろいろ触ってきて，Dockerネットワーク周りに関しては何となくは理解していたが，人に説明できるほど理解してなかったのでまとめておく．基本は，<a href="http://docs.docker.io/use/networking">Advanced networking - Docker Documentation</a>がベースになっている．</p>
+
+<h2 id="仮想ブリッジの仕組み:b6bda556bf948c440615bef0942b3980">仮想ブリッジの仕組み</h2>
+
+<p>Dockerのネットワークは，仮想ブリッジ<code>docker0</code>を通じて管理され，他のネットワークとは隔離された環境で動作する．</p>
+
+<p>Dockerデーモンを起動すると，</p>
+
+<ul>
+<li>仮想ブリッジ<code>docker0</code>の作成</li>
+<li>ホストの既存ルートからの空きのIPアドレス空間を検索</li>
+<li>空きから特定の範囲のIPアドレス空間を取得</li>
+<li>取得したIPアドレス空間を<code>docker0</code>に割り当て</li>
+</ul>
+
+<p>が行われる．</p>
+
+<p>コンテナを起動すると，コンテナには以下が割り当てられる．</p>
+
+<ul>
+<li><code>docker0</code>に紐づいた<code>veth</code>（Virtual Ethernet）インターフェース</li>
+<li><code>docker0</code>に割り当てられたIPアドレス空間から専用のIPアドレス</li>
+</ul>
+
+<p>そして<code>docker0</code>はコンテナのデフォルトのgatewayとして利用されるようになる．コンテナに付与される<code>veth</code>は仮想NICで，コンテナ側からは<code>eth0</code>として見える．2つはチューブのように接続され，あらゆるやりとりはここを経由して行われるようになる．</p>
+
+<p>実際にコンテナを起動して確認する．まず，インターフェースから．</p>
+
+<pre><code class="language-bash">$ brctl show
+bridge name     bridge id               STP enabled     interfaces
+docker0         8000.000000000000       no
+</code></pre>
+
+<pre><code class="language-bash">$ docker run -d ubuntu /bin/sh -c &quot;while true; do echo hello world; sleep 1; done&quot;
+b9ffb0800ca5
+</code></pre>
+
+<pre><code class="language-bash">$ docker run -d ubuntu /bin/sh -c &quot;while true; do echo hello world; sleep 1; done&quot;
+4c0d9b786e8f
+</code></pre>
+
+<pre><code class="language-bash">$ brctl show
+bridge name     bridge id               STP enabled     interfaces
+docker0         8000.7ab1e2001566       no              veth29c1, veth9eb7
+</code></pre>
+
+<p><code>b9ffb0800ca5</code>コンテナには<code>veth29c1</code>が，<code>4c0d9b786e8f</code>コンテナには<code>veth9eb7</code>がそれぞれ割り当てられているのがわかる．</p>
+
+<p>次にIPを見てみる．</p>
+
+<pre><code class="language-bash">$ ifconfig docker0
+docker0   Link encap:Ethernet  HWaddr 7a:b1:e2:00:15:66
+          inet addr:172.17.42.1  Bcast:0.0.0.0  Mask:255.255.0.0
+</code></pre>
+
+<pre><code class="language-bash">$ docker inspect --format '{{ .NetworkSettings.IPAddress }}' b9ffb0800ca5
+172.17.0.2
+</code></pre>
+
+<pre><code class="language-bash">$ docker inspect --format '{{ .NetworkSettings.IPAddress }}' 4c0d9b786e8f
+172.17.0.3
+</code></pre>
+
+<p><code>docker0</code>に割り当てられた<code>172.17.42.1/16</code>のうち，<code>b9ffb0800ca5</code>コンテナには<code>172.17.02</code>が，<code>4c0d9b786e8f</code>コンテナには<code>172.17.0.3</code>がそれぞれ割り当てられているのがわかる．</p>
+
+<h2 id="コンテナ同士のやりとり:b6bda556bf948c440615bef0942b3980">コンテナ同士のやりとり</h2>
+
+<p>コンテナ間のやりとりの制御は，Dockerデーモンの<code>-icc</code>パラメータにより行う．Dockerはこれに<code>iptables</code>を使っている．</p>
+
+<ul>
+<li><code>-icc=true</code>とすると，コンテナ間のやりとりが可能になる（default）</li>
+<li><code>-icc=false</code>とすると，コンテナ同士は隔離される</li>
+</ul>
+
+<p>さらに，コンテナ同士でやりとりするにはportを<code>docker0</code>に晒す必要がある．これには，以下の2つの方法がある．</p>
+
+<ul>
+<li>Dockerfileに<code>EXPOSE &lt;port&gt;</code>を記述する</li>
+<li>コンテナ起動時に<code>--expose &lt;port&gt;</code>を指定する</li>
+</ul>
+
+<p>具体的に，<code>docker0</code>を通じてコンテナ同士を接続する場合は，link機能を使う．コンテナを起動する際に，<code>--link コンテナ名:エイリアス名</code>とすると，環境変数を通じて接続したいコンテナのIPやPortを取得できるようになる（詳しくは，<a href="http://deeeet.com/writing/2014/03/20/docker-link-container/">&ldquo;Dockerコンテナ間のlink，database.ymlの書き方&rdquo;</a>に書いた）．</p>
+
+<h2 id="外部ネットワークからコンテナへのアクセス:b6bda556bf948c440615bef0942b3980">外部ネットワークからコンテナへのアクセス</h2>
+
+<p>外部ネットワークからコンテナにアクセスするには，コンテナを起動するときに外部ポートを<code>docker0</code>に晒した内部portにマップする必要がある．</p>
+
+<p>例えば，ホストの8080ポートをコンテナの80ポートにマップして<a href="https://gist.github.com/tcnksm/4381bbe7e8258c1f9e8d">Apacheコンテナ</a>を起動してみる．</p>
+
+<pre><code class="language-bash">$ ID=$(docker run -d -p 8080:80 tcnksm/apache)
+caad0cfc2a0
+</code></pre>
+
+<p>マッピングは以下で確認できる．</p>
+
+<pre><code class="language-bash">$ docker ps
+CONTAINER ID        IMAGE                  COMMAND                CREATED              STATUS              PORTS                  NAMES
+caad0cfc2a03        tcnksm/apache:latest   /usr/sbin/apache2 -D   About a minute ago   Up About a minute   0.0.0.0:8080-&gt;80/tcp   elegant_thompson
+</code></pre>
+
+<p>IDと晒したportを基に確認することもできる．</p>
+
+<pre><code class="language-bash">$ docker port $ID 80
+0.0.0.0:8080
+</code></pre>
+
+<p>実際に接続してみる．</p>
+
+<pre><code class="language-bash">$ curl http://localhost:8080
+Hello, docker
+</code></pre>
+
+<p>ホスト側のIPの指定を省略することもできる．この場合，自動でポートが選ばれる．</p>
+
+<pre><code class="language-bash">$ ID=$(docker run -d -p 80 tcnksm/apache)
+$ docker port $ID 80
+0.0.0.0:49156
+$ curl `docker port $ID 80`
+Hello, docker
+</code></pre>
+
+<h3 id="参考:b6bda556bf948c440615bef0942b3980">参考</h3>
+
+<ul>
+<li><a href="http://d.hatena.ne.jp/enakai00/20140424/1398321672">Dockerのネットワーク管理とnetnsの関係 - めもめも</a></li>
+<li><a href="http://www.slideshare.net/hansode/hack-for-dockers-network">Hack for Docker&rsquo;s Network</a></li>
+<li><a href="http://www.slideshare.net/adrienblind/docker-networking-basics-using-software-defined-networks">Docker networking basics &amp; coupling with Software Defined Networks</a></li>
+</ul>
+
+      <div class="social">
+  
+  
+  <a href="https://twitter.com/share" class="twitter-share-button" data-via="deeeet" data-count="none">Tweet</a>
+  
+  
+</div>
+
+    </section>
+
+    <footer>
+      <address>
+        
+        <img src="/images/bio.jpeg"/>
+        
+        <p>Written by <strong><a rel="author" href="https://twitter.com/deeeet" title="Taichi Nakashima" target="_blank">Taichi Nakashima</a></strong><br>
+          <span class="muted">A Tokyo based PaaS engineer. Please contact me via twitter.</span>
+        </p>
+      </address>
+
+    </footer>
+
+  </div>
+</article>
+
+<script type="text/javascript" src="//ajax.googleapis.com/ajax/libs/jquery/1.7.2/jquery.min.js"></script>
+<script type="text/javascript" src="/js/main.js"></script>
+
+<script>!function(d,s,id){var js,fjs=d.getElementsByTagName(s)[0],p=/^http:/.test(d.location)?'http':'https';if(!d.getElementById(id)){js=d.createElement(s);js.id=id;js.src=p+'://platform.twitter.com/widgets.js';fjs.parentNode.insertBefore(js,fjs);}}(document, 'script', 'twitter-wjs');</script>
+
+
+<script type="text/javascript">var HN=[];HN.factory=function(e){return function(){HN.push([e].concat(Array.prototype.slice.call(arguments,0)))};},HN.on=HN.factory("on"),HN.once=HN.factory("once"),HN.off=HN.factory("off"),HN.emit=HN.factory("emit"),HN.load=function(){var e="hn-button.js";if(document.getElementById(e))return;var t=document.createElement("script");t.id=e,t.src="//hn-button.herokuapp.com/hn-button.js";var n=document.getElementsByTagName("script")[0];n.parentNode.insertBefore(t,n)},HN.load();</script>
+
+
+  <script>
+  (function(i,s,o,g,r,a,m){i['GoogleAnalyticsObject']=r;i[r]=i[r]||function(){
+  (i[r].q=i[r].q||[]).push(arguments)},i[r].l=1*new Date();a=s.createElement(o),
+  m=s.getElementsByTagName(o)[0];a.async=1;a.src=g;m.parentNode.insertBefore(a,m)
+  })(window,document,'script','//www.google-analytics.com/analytics.js','ga');
+
+  ga('create', 'UA-45390253-1', 'auto');
+  ga('send', 'pageview');
+
+</script>
+
+
+
+<script>
+  $(document).ready(function() {
+  
+  $('p:has(img)').css('text-align', 'center');
+  $('iframe').css('style', 'display: block; margin: 0px auto;');
+  });
+</script>
+

@@ -1,0 +1,194 @@
+<!doctype html>
+<html>
+  <head>
+    <meta http-equiv="content-type" content="text/html; charset=utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    
+    <title>OSXからAmazon Glacierに写真を自動バックアップ | SOTA</title>
+    
+    <link href="https://fonts.googleapis.com/css?family=Lato%3a900" rel="stylesheet" type="text/css">
+    <link rel="stylesheet" href="/css/main.css">
+    <link rel="shortcut icon" href="/favicon.png" type="image/x-icon" />
+    <link href="http://deeeet.com//index.xml" rel="alternate" type="application/rss+xml" title="" />
+    <meta name="title" content="http://deeeet.com/writing/2014/04/20/lightroom-s3/">
+    <link rel="canonical" href="http://deeeet.com/writing/2014/04/20/lightroom-s3/">
+    
+    <meta property="og:title" content="OSXからAmazon Glacierに写真を自動バックアップ"/>
+    <meta property="og:url" content="http://deeeet.com/writing/2014/04/20/lightroom-s3/"/>
+  </head>
+  
+  <body>
+    <section class="site-nav">
+      <header>
+        <nav id="navigation">
+          <ul class="menu">
+            <li><a href="https://github.com/tcnksm/talks">Talks</a></li>
+            <li><a href="https://tcnksm.exposure.co/">Photos</a></li>
+          </ul>
+
+          <a class="name" href="/">SOTA</a>
+        </nav>        
+      </header>
+    </section>
+    
+
+
+<article>
+  <div class="container">
+    <header>
+      <div class="meta">
+        <time pubdate datetime="2014-04-20" title="2014-04-20">April 20, 2014</time>
+      </div>
+      <h1 class="title">OSXからAmazon Glacierに写真を自動バックアップ</h1>
+    </header>
+    
+    <section>
+      
+
+<p>今まで惰性でiPhoto使って写真管理をしてきたが，そろそろ本格的な編集/加工をしたいなと思い，Lightroomに移行した（いずれ<a href="http://vsco.co/film">VSCO Film</a>を使いたい）．その際，バックアップも外付けHDDからAmazon Glacierに移行した．</p>
+
+<p>Amazon Glacierは，Amazonの提供するクラウドストレージで，1GBあたり1円/月で使える．S3と比べて値段は1/10だが，データをダウンロードするには解凍する時間が必要になる．データを頻繁に取り出さないバックアップなどの用途に向いている．また，AWS Command Line Interfaceでファイル同期ができるので，スクリプトを少し書いて自動バックアップの設定も簡単にできる．</p>
+
+<p><code>launchctl</code>を使ってLightroomにぶっ込んだ写真を自動でGlacierにバックアップをする仕組みをつくった．</p>
+
+<p>まず，Bucketを作成する．</p>
+
+<pre><code class="language-bash">$ export AWS_CONFIG_FILE=...
+$ export BUCKET=...
+$ aws s3 mb s3://${BUCKET}
+</code></pre>
+
+<p>次に，作成したBucketにファイルのLifecycleルールを設定する．対象はBucket内の全てのファイルで，ファイルが同期され次第すぐにGlacierに移行するようにする．これを実現するため以下のjsonファイルを準備する．</p>
+
+<pre><code class="language-ruby"># lifecycle.json
+{
+    &quot;Rules&quot;: [
+        {
+            &quot;ID&quot;: &quot;Rule for backup&quot;,
+            &quot;Status&quot;: &quot;Enabled&quot;,
+            &quot;Prefix&quot;: null,
+            &quot;Transition&quot;: {
+                &quot;Days&quot;: 0,
+                &quot;StorageClass&quot;: &quot;GLACIER&quot;
+             }
+         }
+    ]
+}
+</code></pre>
+
+<p>作成したルールをBucketに適用する．</p>
+
+<pre><code class="language-bash">$ aws s3api put-bucket-lifecycle --bucket ${BUCKET} --lifecycle file://lifecycle.json
+</code></pre>
+
+<p>ファイルの同期は以下のシェルスクリプトで行う．例えば<code>~/Photo</code>以下を同期する．</p>
+
+<pre><code class="language-bash"># backup.sh
+
+SRC=/Users/tcnksm/Photo
+BUCKET=...
+
+echo &quot;[$(date +%Y-%m-%d-%H-%M)] Start backup to S3&quot;
+export AWS_CONFIG_FILE=...
+/usr/local/bin/aws s3 sync ${SRC} s3://${BUCKET} --delete --exclude '*.DS_Store'
+echo &quot;[$(date +%Y-%m-%d-%H-%M)] End backup to S3&quot;
+</code></pre>
+
+<p>上で作成したシェルスクリプトを<code>launchd</code>で定期実行させる．plist（<code>~/Library/LaunchAgents/com.tcnksm.photo.backup.plist</code>）は以下のようにする．一週間に一度実行する．</p>
+
+<pre><code class="language-xml">&lt;?xml version=&quot;1.0&quot; encoding=&quot;UTF-8&quot;?&gt;
+&lt;!DOCTYPE plist PUBLIC &quot;-//Apple Computer//DTD PLIST 1.0//EN&quot; &quot;http://www.apple.com/DTDs/PropertyList-1.0.dtd&quot;&gt;
+&lt;plist version=&quot;1.0&quot;&gt;
+    &lt;dict&gt;      
+      &lt;key&gt;Label&lt;/key&gt;
+      &lt;string&gt;com.tcnksm.photo.backup&lt;/string&gt;
+      &lt;key&gt;ProgramArguments&lt;/key&gt;
+      &lt;array&gt;
+        &lt;string&gt;/Users/tcnksm/scripts/backup.sh&lt;/string&gt;
+      &lt;/array&gt;
+      &lt;key&gt;StartInterval&lt;/key&gt;
+      &lt;integer&gt;604800&lt;/integer&gt;
+      &lt;key&gt;StandardOutPath&lt;/key&gt;
+      &lt;string&gt;/Users/tcnksm/var/log/s3-backup.log&lt;/string&gt;
+      &lt;key&gt;StandardErrorPath&lt;/key&gt;
+      &lt;string&gt;/Users/tcnksm/var/log/s3-backup.log&lt;/string&gt;
+      &lt;key&gt;Debug&lt;/key&gt;
+      &lt;true/&gt;
+    &lt;/dict&gt;
+&lt;/plist&gt;
+
+</code></pre>
+
+<p>あとは，plistを読み込むだけ．</p>
+
+<pre><code class="language-bash">$ launchctl load ~/Library/LaunchAgents/com.tcnksm.photo.backup.plist
+</code></pre>
+
+<p>（ちなみに，<code>launchctl</code>コマンドの実行はiTerm.appだと<code>launch_msg(): Socket is not connected</code>でこけるので，Terminal.appから実行する．Homebrewの<a href="https://github.com/Homebrew/homebrew/wiki/Common-Issues#launchctl-refuses-to-load-launchd-plist-files">Common Issues</a>を参考）</p>
+
+<p>今回過去の写真も含めて50GB程度アップロードしたけど，それでも月50円程度．素晴らしい．音楽，本などもぶっ込んでおこうと思う．</p>
+
+<h3 id="参考:d61000986347017bfb1311f3ec26ced5">参考</h3>
+
+<ul>
+<li><a href="http://weblog.bulknews.net/post/71259024563/private-photo-sharing-the-hard-way-2013">Private Photo Sharing the Hard Way (2013) - Tatsuhiko Miyagawa&rsquo;s blog</a></li>
+<li><a href="https://developer.apple.com/library/mac/documentation/MacOSX/Conceptual/BPSystemStartup/Chapters/CreatingLaunchdJobs.html">Daemons and Services Programming Guide: Creating Launch Daemons and Agents</a></li>
+<li><a href="http://blog.livedoor.jp/noanoa07/archives/1904513.html">noanoa 日々の日記 : Amazon S3（+ Glacier連携）は写真やビデオのデータを保管するには最適かも</a></li>
+<li><a href="http://dev.classmethod.jp/cloud/aws/aws-cli-1-0-s3-commands/">AWS CLI 1.0と新しいS3コマンド(sync)を試してみた ｜ Developers.IO</a></li>
+</ul>
+
+      <div class="social">
+  
+  
+  <a href="https://twitter.com/share" class="twitter-share-button" data-via="deeeet" data-count="none">Tweet</a>
+  
+  
+</div>
+
+    </section>
+
+    <footer>
+      <address>
+        
+        <img src="/images/bio.jpeg"/>
+        
+        <p>Written by <strong><a rel="author" href="https://twitter.com/deeeet" title="Taichi Nakashima" target="_blank">Taichi Nakashima</a></strong><br>
+          <span class="muted">A Tokyo based PaaS engineer. Please contact me via twitter.</span>
+        </p>
+      </address>
+
+    </footer>
+
+  </div>
+</article>
+
+<script type="text/javascript" src="//ajax.googleapis.com/ajax/libs/jquery/1.7.2/jquery.min.js"></script>
+<script type="text/javascript" src="/js/main.js"></script>
+
+<script>!function(d,s,id){var js,fjs=d.getElementsByTagName(s)[0],p=/^http:/.test(d.location)?'http':'https';if(!d.getElementById(id)){js=d.createElement(s);js.id=id;js.src=p+'://platform.twitter.com/widgets.js';fjs.parentNode.insertBefore(js,fjs);}}(document, 'script', 'twitter-wjs');</script>
+
+
+<script type="text/javascript">var HN=[];HN.factory=function(e){return function(){HN.push([e].concat(Array.prototype.slice.call(arguments,0)))};},HN.on=HN.factory("on"),HN.once=HN.factory("once"),HN.off=HN.factory("off"),HN.emit=HN.factory("emit"),HN.load=function(){var e="hn-button.js";if(document.getElementById(e))return;var t=document.createElement("script");t.id=e,t.src="//hn-button.herokuapp.com/hn-button.js";var n=document.getElementsByTagName("script")[0];n.parentNode.insertBefore(t,n)},HN.load();</script>
+
+
+  <script>
+  (function(i,s,o,g,r,a,m){i['GoogleAnalyticsObject']=r;i[r]=i[r]||function(){
+  (i[r].q=i[r].q||[]).push(arguments)},i[r].l=1*new Date();a=s.createElement(o),
+  m=s.getElementsByTagName(o)[0];a.async=1;a.src=g;m.parentNode.insertBefore(a,m)
+  })(window,document,'script','//www.google-analytics.com/analytics.js','ga');
+
+  ga('create', 'UA-45390253-1', 'auto');
+  ga('send', 'pageview');
+
+</script>
+
+
+
+<script>
+  $(document).ready(function() {
+  
+  $('p:has(img)').css('text-align', 'center');
+  $('iframe').css('style', 'display: block; margin: 0px auto;');
+  });
+</script>
+

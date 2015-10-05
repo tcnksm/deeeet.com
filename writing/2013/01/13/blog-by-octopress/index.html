@@ -1,0 +1,166 @@
+<!doctype html>
+<html>
+  <head>
+    <meta http-equiv="content-type" content="text/html; charset=utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    
+    <title>Octopressへ移行 | SOTA</title>
+    
+    <link href="https://fonts.googleapis.com/css?family=Lato%3a900" rel="stylesheet" type="text/css">
+    <link rel="stylesheet" href="/css/main.css">
+    <link rel="shortcut icon" href="/favicon.png" type="image/x-icon" />
+    <link href="http://deeeet.com//index.xml" rel="alternate" type="application/rss+xml" title="" />
+    <meta name="title" content="http://deeeet.com/writing/2013/01/13/blog-by-octopress/">
+    <link rel="canonical" href="http://deeeet.com/writing/2013/01/13/blog-by-octopress/">
+    
+    <meta property="og:title" content="Octopressへ移行"/>
+    <meta property="og:url" content="http://deeeet.com/writing/2013/01/13/blog-by-octopress/"/>
+  </head>
+  
+  <body>
+    <section class="site-nav">
+      <header>
+        <nav id="navigation">
+          <ul class="menu">
+            <li><a href="https://github.com/tcnksm/talks">Talks</a></li>
+            <li><a href="https://tcnksm.exposure.co/">Photos</a></li>
+          </ul>
+
+          <a class="name" href="/">SOTA</a>
+        </nav>        
+      </header>
+    </section>
+    
+
+
+<article>
+  <div class="container">
+    <header>
+      <div class="meta">
+        <time pubdate datetime="2013-01-13" title="2013-01-13">January 13, 2013</time>
+      </div>
+      <h1 class="title">Octopressへ移行</h1>
+    </header>
+    
+    <section>
+      
+
+<p><a href="http://octopress.org/">Octopress</a>に移行した．
+自分のエディタで手元で書いて，Rsyncでdeployできる．
+デザインは，CompassとSassで作られているので，いじりやすい．</p>
+
+<h3 id="インストール:c4db08d381cf4451c2c30e798494c8d1">インストール</h3>
+
+<p>必要なのは，gitとruby1.9.3．</p>
+
+<pre><code>$ git clone git://github.com/imathis/octopress.git octopress
+$ cd octopress
+$ gem install bundler
+$ bundle install
+$ rake install
+</code></pre>
+
+<p><code>rake install</code>でデザインテーマがインストールされる．</p>
+
+<h3 id="設定ファイルの記述:c4db08d381cf4451c2c30e798494c8d1">設定ファイルの記述</h3>
+
+<p>ブログの名前などの設定は<code>_config.yml</code>に記述する．
+詳細は，Jekyllの<a href="https://github.com/mojombo/jekyll/wiki/Configuration">ドキュメント</a>を参照．</p>
+
+<p>今回は，ホスティングにさくらのVPSを使う．
+Rsyncでdeployするための設定を<code>Rakefile</code>に記述する．
+事前に，公開鍵をサーバーの<code>~/.ssh/authorized_keys</code>に追加しておくこと．</p>
+
+<pre><code>ssh_user        =  &quot;user@domain.com&quot;
+document_root   =  &quot;~/website.com/&quot;
+rsync_delete    =  true
+deploy_default  =  &quot;rsync&quot;
+</code></pre>
+
+<p><code>document_root</code>は，apacheの設定と一致させる．
+以下のコマンドでホスト先にdeployされる．</p>
+
+<pre><code>$ rake generate
+$ rake deploy
+</code></pre>
+
+<h3 id="記事を書く:c4db08d381cf4451c2c30e798494c8d1">記事を書く</h3>
+
+<p>記事を書くときは，以下でテンプレートを作り，それを編集する．</p>
+
+<pre><code>$ rake new_post\[title\]
+</code></pre>
+
+<p>ローカルで表示を確認するときは，以下を実行し，
+ブラウザで<a href="http://localhost:4000/">http://localhost:4000/</a>にアクセスする．</p>
+
+<pre><code>$ rake preview
+</code></pre>
+
+<h3 id="バーション管理:c4db08d381cf4451c2c30e798494c8d1">バーション管理</h3>
+
+<p>GitとGithubを使ってバージョン管理をする．<a href="https://github.com/new">レポジトリを作って</a>
+から以下を行う．ちなみに，このブログのレポジトリは<a href="https://github.com/tcnksm/sota">https://github.com/tcnksm/sota</a>にある．</p>
+
+<pre><code>$ git remote rename origin octopress
+$ git remote add origin (your repository url)
+$ git config branch.master.remote origin)
+</code></pre>
+
+<p>以上．簡単ですね．</p>
+
+      <div class="social">
+  
+  
+  <a href="https://twitter.com/share" class="twitter-share-button" data-via="deeeet" data-count="none">Tweet</a>
+  
+  
+</div>
+
+    </section>
+
+    <footer>
+      <address>
+        
+        <img src="/images/bio.jpeg"/>
+        
+        <p>Written by <strong><a rel="author" href="https://twitter.com/deeeet" title="Taichi Nakashima" target="_blank">Taichi Nakashima</a></strong><br>
+          <span class="muted">A Tokyo based PaaS engineer. Please contact me via twitter.</span>
+        </p>
+      </address>
+
+    </footer>
+
+  </div>
+</article>
+
+<script type="text/javascript" src="//ajax.googleapis.com/ajax/libs/jquery/1.7.2/jquery.min.js"></script>
+<script type="text/javascript" src="/js/main.js"></script>
+
+<script>!function(d,s,id){var js,fjs=d.getElementsByTagName(s)[0],p=/^http:/.test(d.location)?'http':'https';if(!d.getElementById(id)){js=d.createElement(s);js.id=id;js.src=p+'://platform.twitter.com/widgets.js';fjs.parentNode.insertBefore(js,fjs);}}(document, 'script', 'twitter-wjs');</script>
+
+
+<script type="text/javascript">var HN=[];HN.factory=function(e){return function(){HN.push([e].concat(Array.prototype.slice.call(arguments,0)))};},HN.on=HN.factory("on"),HN.once=HN.factory("once"),HN.off=HN.factory("off"),HN.emit=HN.factory("emit"),HN.load=function(){var e="hn-button.js";if(document.getElementById(e))return;var t=document.createElement("script");t.id=e,t.src="//hn-button.herokuapp.com/hn-button.js";var n=document.getElementsByTagName("script")[0];n.parentNode.insertBefore(t,n)},HN.load();</script>
+
+
+  <script>
+  (function(i,s,o,g,r,a,m){i['GoogleAnalyticsObject']=r;i[r]=i[r]||function(){
+  (i[r].q=i[r].q||[]).push(arguments)},i[r].l=1*new Date();a=s.createElement(o),
+  m=s.getElementsByTagName(o)[0];a.async=1;a.src=g;m.parentNode.insertBefore(a,m)
+  })(window,document,'script','//www.google-analytics.com/analytics.js','ga');
+
+  ga('create', 'UA-45390253-1', 'auto');
+  ga('send', 'pageview');
+
+</script>
+
+
+
+<script>
+  $(document).ready(function() {
+  
+  $('p:has(img)').css('text-align', 'center');
+  $('iframe').css('style', 'display: block; margin: 0px auto;');
+  });
+</script>
+

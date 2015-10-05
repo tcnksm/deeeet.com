@@ -1,0 +1,265 @@
+<!doctype html>
+<html>
+  <head>
+    <meta http-equiv="content-type" content="text/html; charset=utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    
+    <title>Apache Kafkaに入門した | SOTA</title>
+    
+    <link href="https://fonts.googleapis.com/css?family=Lato%3a900" rel="stylesheet" type="text/css">
+    <link rel="stylesheet" href="/css/main.css">
+    <link rel="shortcut icon" href="/favicon.png" type="image/x-icon" />
+    <link href="http://deeeet.com//index.xml" rel="alternate" type="application/rss+xml" title="" />
+    <meta name="title" content="http://deeeet.com/writing/2015/09/01/apache-kafka/">
+    <link rel="canonical" href="http://deeeet.com/writing/2015/09/01/apache-kafka/">
+    
+    <meta property="og:title" content="Apache Kafkaに入門した"/>
+    <meta property="og:url" content="http://deeeet.com/writing/2015/09/01/apache-kafka/"/>
+  </head>
+  
+  <body>
+    <section class="site-nav">
+      <header>
+        <nav id="navigation">
+          <ul class="menu">
+            <li><a href="https://github.com/tcnksm/talks">Talks</a></li>
+            <li><a href="https://tcnksm.exposure.co/">Photos</a></li>
+          </ul>
+
+          <a class="name" href="/">SOTA</a>
+        </nav>        
+      </header>
+    </section>
+    
+
+
+<div class="container">
+  <div class="article-cover">
+    <div>
+      <img src="/images/kafka-logo-wide.png" class="image">
+    </div>
+  </div>
+</div>
+
+<article>
+  <div class="container">
+    <header>
+      <div class="meta">
+        <time pubdate datetime="2015-09-01" title="2015-09-01">September 01, 2015</time>
+      </div>
+      <h1 class="title">Apache Kafkaに入門した</h1>
+    </header>
+    
+    <section>
+      
+
+<p><a href="http://kafka.apache.org/">Apache kafka</a></p>
+
+<p>最近仕事で<a href="http://kafka.apache.org/">Apache Kafka</a>の導入を進めている．Kafkaとは何か? どこで使われているのか? どのような理由で作られたのか? どのように動作するのか（特にメッセージの読み出しについて）? を簡単にまとめておく（メッセージングはまだまだ勉強中なのでおかしなところがあればツッコミをいただければ幸いです）．</p>
+
+<p>バージョンは <em>0.8.2</em> を対象に書いている．</p>
+
+<h2 id="apache-kafkaとは:cfaa9629bd29de39c13ad426072a0386">Apache Kafkaとは?</h2>
+
+<p>2011年に<a href="https://www.linkedin.com/">LinkedIn</a>から公開されたオープンソースの分散メッセージングシステムである．Kafkaはウェブサービスなどから発せられる大容量のデータ（e.g., ログやイベント）を高スループット/低レイテンシに収集/配信することを目的に開発されている．公式のトップページに掲載されているセールスポイントは以下の4つ．</p>
+
+<ul>
+<li><strong>Fast</strong> とにかく大量のメッセージを扱うことができる</li>
+<li><strong>Scalable</strong> Kafkaはシングルクラスタで大規模なメッセージを扱うことができダウンタイムなしでElasticかつ透過的にスケールすることができる</li>
+<li><strong>Durable</strong> メッセージはディスクにファイルとして保存され，かつクラスタ内でレプリカが作成されるためデータの損失を防げる（パフォーマンスに影響なくTBのメッセージを扱うことができる）</li>
+<li><strong>Distributed by Design</strong> クラスタは耐障害性のある設計になっている</li>
+</ul>
+
+<h2 id="どこで使われているのか:cfaa9629bd29de39c13ad426072a0386">どこで使われているのか?</h2>
+
+<p><a href="http://kafka.apache.org/documentation.html#uses">Use Cases</a>をあげると，メッセージキューやウェブサイトのアクティビティのトラッキング（LinkedInのもともとのUse Case），メトリクスやログの収集，<a href="https://storm.apache.org/">Storm</a>や<a href="http://samza.apache.org/">Samza</a>を使ったストリーム処理などがあげられる．</p>
+
+<p>利用している企業は例えばTwitterやNetflix，Square，Spotify，Uberなどがある（cf. <a href="https://cwiki.apache.org/confluence/display/KAFKA/Powered+By">Powered By</a>）．</p>
+
+<h2 id="kafkaの初期衝動:cfaa9629bd29de39c13ad426072a0386">Kafkaの初期衝動</h2>
+
+<p>Kafkaのデザインを理解するにはLinkedInでなぜKafkaが必要になったのかを理解するのが早い．それについては2012年のIEEEの論文<a href="http://sites.computer.org/debull/A12june/pipeline.pdf">&ldquo;Building LinkedIn&rsquo;s Real-time Activity Data Pipeline&rdquo;</a>を読むのが良い．簡単にまとめると以下のようになる．</p>
+
+<p>LinkedInでは大きく2つのデータを扱っている．1つはウェブサイトから集められる大量のユーザのアクティビティデータ．これらをHadoop（バッチ処理）を通して機械学習しレコメンド/ニュースフィードなどサービスの改善に用いている．それだけではなくこれらのデータはサービスの監視（セキュリティなど）にも用いている．2つ目はシステムのログ．これらをリアルタイムで処理してサービスのモニタリングを行っている．これらは近年のウェブサービスではよく見かける風景．</p>
+
+<p>問題はそれぞれのデータの流れが1本道になっていたこと．アクティビティデータはバッチ処理に特化していたためリアルタイム処理ができない，つまりサービス監視には遅れが生じていた．同様にシステムのログは，リアルタイム処理のみに特化していたため長期間にわたるキャパシティプランニングやシステムのデバッグには使えなかった．サービスを改善するにはそれぞれタイプの異なるデータフィードを最小コストで統合できるようにする必要があった．またLinkedInのようにデータがビジネスのコアになる企業ではそのデータを様々なチームが簡単に利用できる必要があった．</p>
+
+<p>これら問題を解決するために大ボリュームのあらゆるデータを収集し様々なタイプのシステム（バッチ/リアルタイム）からそれを読めるようにする統一的ななメッセージプラットフォームの構築が始まった．</p>
+
+<p>最初は既存のメッセージシステム（論文にはActiveMQを試したとある）の上に構築しようとした．しかしプロダクションレベルのデータを流すと以下のような問題が生じた．</p>
+
+<ul>
+<li>並列でキューのメッセージを読むにはメッセージごとに誰に読まれたかを記録する必要がある（mutex）．そのため大量のデータを扱うとメモリが足りなくなった．メモリが足りなくなると大量のRamdom IOが発生しパフォーマンスに深刻な影響がでた</li>
+<li>バッチ処理/リアルタイム処理の両方でキューを読むには少なくとも2つのデータのコピーが必要になり非効率になった</li>
+</ul>
+
+<p>このような問題から新しいメッセージシステム，Kafkaの開発が必要になった．Kafkaが目指したのは以下．</p>
+
+<ul>
+<li>あらゆる種類のデータ/大容量のデータを統一的に扱う</li>
+<li>様々なタイプのシステム（バッチ/リアルタイム）が同じデータを読める</li>
+<li>高スループットでデータを処理する（並列でデータを読める）</li>
+</ul>
+
+<h2 id="どのように動作するのか-概要:cfaa9629bd29de39c13ad426072a0386">どのように動作するのか?（概要）</h2>
+
+<p>KafkaはBroker（クラスタ）とProducer，Consumerという3つのコンポーネントで構成される．Producerはメッセージの配信を行いConsumerはメッセージの購読を行う．そしてKafkaのコアであるBrokerはクラスタを構成しProducerとConsumerの間でメッセージの受け渡しを行うキューとして動作する．</p>
+
+<p><img src="http://kafka.apache.org/images/producer_consumer.png" />
+<a href="http://kafka.apache.org/images/producer_consumer.png">http://kafka.apache.org/images/producer_consumer.png</a></p>
+
+<p><strong>メッセージのやりとり</strong></p>
+
+<p>KafkaはTopicを介してメッセージのやりとりを行う．Topicとはメッセージのフィードのようなものである．例えば，検索に関わるデータを&rdquo;Search&rdquo;というTopic名でBrokerに配信しておき，検索に関わるデータが欲しいConsumerは&rdquo;Search&rdquo;というTopic名を使ってそれをBrokerから購読する．</p>
+
+<p><strong>Pull vs Push</strong></p>
+
+<p>BrokerがConsumerにデータをPushするのか（fluentd，logstash，flume），もしくはConsumerがBrokerからデータをPullするのかはメッセージシステムのデザインに大きな影響を与える．もちろんそれぞれにPros/Consはある．KafkaはPull型のConsumerを採用している．それは以下の理由による．</p>
+
+<ul>
+<li>Pushだと様々なConsumerを扱うのが難しく，Brokerがデータの転送量などを意識しないといけない．Kafkaの目標は最大限のスピードでデータを消費することだが，（予期せぬアクセスなどで）転送量を見誤るとConsumerを圧倒してまう．PullだとConsumerが消費量を自らが管理できる．</li>
+<li>Pullだとバッチ処理にも対応できる．Pushだと自らそれを溜め込んだ上でConsumerがそれを扱えるか否かに関わらずそれを送らないといけない</li>
+<li>(PullでしんどいのはBrokerにデータがまだ届いてない場合のコストだがlong pollingなどでそれに対応している)</li>
+</ul>
+
+<p><strong>メッセージのライフサイクル</strong></p>
+
+<p>BrokerはConsumerがメッセージを購読したかに関わらず設定された期間のみ保持してその後削除する．これはKafkaの大きな特徴の1つである．例えば保存期間を2日間に設定すれば配信後2日間のみデータは保持されその後削除される．</p>
+
+<p>このためConsumerサイドがメッセージをどこまで読んだがを自らが管理する（Brokerが管理する必要がない）．普通は順番にメッセージを読んでいくが，Consumerに問題があれば読む位置を巻き戻して復旧することもできる（最悪どれくらいでConsumerを復旧できるかによりデータの保存期間が決まり保持するデータのサイズが決まる）．</p>
+
+<p>この2つの特徴のためConsumerはBrokerにも他のBrokerにも大きな影響を与えない．</p>
+
+<h2 id="高速にメッセージを消費する:cfaa9629bd29de39c13ad426072a0386">高速にメッセージを消費する</h2>
+
+<p>Kafkaで面白いのはConsumerがBrokerから高速にメッセージを読み込むための仕組みであると思う．これをどのように実現しているかを説明する．</p>
+
+<p><strong>並列でキューを読むのは大変</strong></p>
+
+<p>高速にメッセージを消費するにはBrokerのデータを並列に読む必要がある．そもそも&rdquo;初期衝動&rdquo;のところで説明したように複数のConsumerが並列でキューを読むのは大変である．</p>
+
+<ul>
+<li>重複なく送るためにはメッセージごとにどのConsumerに読まれたかを管理する必要がある</li>
+<li>キューの書き込みまでは順序性が確保されるが並列で読むと複数のConsumerに消費された瞬間順序は失われる</li>
+</ul>
+
+<p>Kafkaのデザインはこれらを解決するようになっている．</p>
+
+<p><strong>Brokerにおけるメッセージの保存</strong></p>
+
+<p>まずBrokerのメッセージの保存方法に特徴がある．KafkaはTopicごとに1つ以上のPartitionという単位でメッセージを保存する．メッセージはそれぞれのPartitionの末尾に追記される．これによりPartitionごとにメッセージの順序性が担保される．例えば以下の図はあるTopicの3つのPartitionにメッセージが追記されていることを示す．</p>
+
+<p><img src="http://kafka.apache.org/images/log_anatomy.png" />
+<a href="http://kafka.apache.org/images/log_anatomy.png">http://kafka.apache.org/images/log_anatomy.png</a></p>
+
+<p><strong>Partitionの使われ方</strong></p>
+
+<p>Partitionには大きく以下の2つの目的がある．</p>
+
+<ul>
+<li>複数のサーバーでメッセージを分散させるため（1つのサーバーのキャパを超えてメッセージを保存できる）</li>
+<li>並列処理のため</li>
+</ul>
+
+<p>どのように並列処理するか? Consumerはグループ単位でメッセージを購読する．そして&rdquo;1つのPartitionのデータは1つのConsumerグループ内の1つのConsumerにのみ消費される&rdquo;という制限でこれを実現する（つまりConsumerの並列数はPartition数を超えられない）．以下の図は2つのConsumerグループAとBに属する複数のConsumerが並列にメッセージを購読している様子を示す．グループ内では並列処理だがグループ間で見ると伝統的なPub/Subモデル（1対1）のモデルに見える．</p>
+
+<p><img src="http://kafka.apache.org/images/consumer-groups.png"/>
+<a href="http://kafka.apache.org/images/consumer-groups.png">http://kafka.apache.org/images/consumer-groups.png</a></p>
+
+<p>この仕組みには以下のような利点がある．</p>
+
+<ul>
+<li>あるPartitionを読むConsumerは特定の1つなので，メッセージが誰にどこまで読まれたかまで記録する必要はなくて，単純にどこまで読まれたかを通知しておけばよい</li>
+<li>読んでるConsumerは1つなのでConsumerはlazyに読んだ場所を記録しておけばよくて処理に失敗したら再びよみにいけば良い（at-least-once）</li>
+<li>どのメッセージが読まれたかをlazilyに記録できるためにパフォーマンスを保証できる（Partitionのオーナーを同じように決められ無い場合はスタティックにConsumerを割り当てるか/ランダムにConsumerをロードバランスするしか無い．ランダムにやると複数のプロセスが同時に同じPartitionを購読するのでmutexが必要になりBrokerの処理が重くなる）</li>
+</ul>
+
+<p><strong>順序性の補足</strong></p>
+
+<p>Partition内，つまりConsumer内では順序性が確保される．つまりBrokerに記録された順番で消費される．がPartition間では保証されない．</p>
+
+<p>ProducerはBrokerにメッセージを配信するときにKeyを指定することができる．このKeyにより同じKeyが指定されたメッセージを同じPartitionに保存することができる．Partition内の順序性とKeyで大抵のアプリケーションには問題ない（とのこと）．完全な順序性を確保したければPartitionを1つにすれば良い（Consumerも一つになってしまうが）．</p>
+
+<h2 id="高スループットへの挑戦:cfaa9629bd29de39c13ad426072a0386">高スループットへの挑戦</h2>
+
+<p>Brokerへの書き込み/読み込みはとにかく速い．LinkedInのベンチマークでは200万 write/sec（<a href="https://engineering.linkedin.com/kafka/benchmarking-apache-kafka-2-million-writes-second-three-cheap-machines">Benchmarking Apache Kafka: 2 Million Writes Per Second (On Three Cheap Machines)</a>）とある．なぜこれだけ速いのか．以下の2つを組み合わせることにより実現している．</p>
+
+<ul>
+<li><strong>write</strong> バッファ書き込みを自分たちで実装するのではなくてカーネルのメモリキャシュ機構をがっつり使うようにした（Brokerが動いているサーバーのメモリ32GBのうち28-30GBがキャッシュに使われている）</li>
+<li><strong>read</strong> ページキャッシュからネットワークのsocketへ効率よくデータを受け渡すために<code>sendfile()</code>を使ってる</li>
+</ul>
+
+<h2 id="まとめ:cfaa9629bd29de39c13ad426072a0386">まとめ</h2>
+
+<p>先に紹介した論文<a href="http://sites.computer.org/debull/A12june/pipeline.pdf">&ldquo;Building LinkedIn&rsquo;s Real-time Activity Data Pipeline&rdquo;</a>は他にも面白いことがたくさん書いてあるのでKafkaを使おうとしているひとはぜひ一度目を通してみるといいと思う．</p>
+
+<p>次回はGo言語を使ってProducerとConsumerを実装する話を書く．</p>
+
+<h2 id="参考:cfaa9629bd29de39c13ad426072a0386">参考</h2>
+
+<ul>
+<li><a href="http://sites.computer.org/debull/A12june/pipeline.pdf">Building LinkedIn&rsquo;s Real-time Activity Data Pipeline</a></li>
+<li><a href="http://www.amazon.co.jp/Apache-Kafka%E5%85%A5%E9%96%80-%E4%BC%8A%E6%A9%8B-%E6%AD%A3%E7%BE%A9-ebook/dp/B00JU43ONW">Apache Kafka入門</a></li>
+<li>（<a href="http://www.confluent.io/blog/apache-kafka-samza-and-the-unix-philosophy-of-distributed-data">&ldquo;Apache Kafka, Samza, and the Unix Philosophy of Distributed Data&rdquo;</a>はApache KafkaをUnix哲学/パイプという観点から説明していてわかりやすい）</li>
+<li><a href="http://www.slideshare.net/miguno/apache-kafka-08-basic-training-verisign">Apache Kafka 0.8 basic training - Verisign</a></li>
+<li><a href="https://engineering.linkedin.com/kafka/benchmarking-apache-kafka-2-million-writes-second-three-cheap-machines">Benchmarking Apache Kafka: 2 Million Writes Per Second (On Three Cheap Machines)</a></li>
+<li><a href="http://kimutansk.hatenablog.com/entry/20130703/1372803004">Apache Kafka 0.8.0の新機能／変更点 - 夢とガラクタの集積場</a></li>
+<li><a href="http://www.infoq.com/jp/news/2014/01/apache-afka-messaging-system">Apache Kafka, 他とは異なるメッセージングシステム</a></li>
+<li><a href="http://techblog.yahoo.co.jp/programming/storm/">StormとKafkaによるリアルタイムデータ処理 - Yahoo! JAPAN Tech Blog</a></li>
+</ul>
+
+      <div class="social">
+  
+  
+  <a href="https://twitter.com/share" class="twitter-share-button" data-via="deeeet" data-count="none">Tweet</a>
+  
+  
+</div>
+
+    </section>
+
+    <footer>
+      <address>
+        
+        <img src="/images/bio.jpeg"/>
+        
+        <p>Written by <strong><a rel="author" href="https://twitter.com/deeeet" title="Taichi Nakashima" target="_blank">Taichi Nakashima</a></strong><br>
+          <span class="muted">A Tokyo based PaaS engineer. Please contact me via twitter.</span>
+        </p>
+      </address>
+
+    </footer>
+
+  </div>
+</article>
+
+<script type="text/javascript" src="//ajax.googleapis.com/ajax/libs/jquery/1.7.2/jquery.min.js"></script>
+<script type="text/javascript" src="/js/main.js"></script>
+
+<script>!function(d,s,id){var js,fjs=d.getElementsByTagName(s)[0],p=/^http:/.test(d.location)?'http':'https';if(!d.getElementById(id)){js=d.createElement(s);js.id=id;js.src=p+'://platform.twitter.com/widgets.js';fjs.parentNode.insertBefore(js,fjs);}}(document, 'script', 'twitter-wjs');</script>
+
+
+<script type="text/javascript">var HN=[];HN.factory=function(e){return function(){HN.push([e].concat(Array.prototype.slice.call(arguments,0)))};},HN.on=HN.factory("on"),HN.once=HN.factory("once"),HN.off=HN.factory("off"),HN.emit=HN.factory("emit"),HN.load=function(){var e="hn-button.js";if(document.getElementById(e))return;var t=document.createElement("script");t.id=e,t.src="//hn-button.herokuapp.com/hn-button.js";var n=document.getElementsByTagName("script")[0];n.parentNode.insertBefore(t,n)},HN.load();</script>
+
+
+  <script>
+  (function(i,s,o,g,r,a,m){i['GoogleAnalyticsObject']=r;i[r]=i[r]||function(){
+  (i[r].q=i[r].q||[]).push(arguments)},i[r].l=1*new Date();a=s.createElement(o),
+  m=s.getElementsByTagName(o)[0];a.async=1;a.src=g;m.parentNode.insertBefore(a,m)
+  })(window,document,'script','//www.google-analytics.com/analytics.js','ga');
+
+  ga('create', 'UA-45390253-1', 'auto');
+  ga('send', 'pageview');
+
+</script>
+
+
+
+<script>
+  $(document).ready(function() {
+  
+  $('p:has(img)').css('text-align', 'center');
+  $('iframe').css('style', 'display: block; margin: 0px auto;');
+  });
+</script>
+

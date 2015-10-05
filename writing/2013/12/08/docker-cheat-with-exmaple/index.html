@@ -1,0 +1,227 @@
+<!doctype html>
+<html>
+  <head>
+    <meta http-equiv="content-type" content="text/html; charset=utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    
+    <title>Docker cheat sheet with examples | SOTA</title>
+    
+    <link href="https://fonts.googleapis.com/css?family=Lato%3a900" rel="stylesheet" type="text/css">
+    <link rel="stylesheet" href="/css/main.css">
+    <link rel="shortcut icon" href="/favicon.png" type="image/x-icon" />
+    <link href="http://deeeet.com//index.xml" rel="alternate" type="application/rss+xml" title="" />
+    <meta name="title" content="http://deeeet.com/writing/2013/12/08/docker-cheat-with-exmaple/">
+    <link rel="canonical" href="http://deeeet.com/writing/2013/12/08/docker-cheat-with-exmaple/">
+    
+    <meta property="og:title" content="Docker cheat sheet with examples"/>
+    <meta property="og:url" content="http://deeeet.com/writing/2013/12/08/docker-cheat-with-exmaple/"/>
+  </head>
+  
+  <body>
+    <section class="site-nav">
+      <header>
+        <nav id="navigation">
+          <ul class="menu">
+            <li><a href="https://github.com/tcnksm/talks">Talks</a></li>
+            <li><a href="https://tcnksm.exposure.co/">Photos</a></li>
+          </ul>
+
+          <a class="name" href="/">SOTA</a>
+        </nav>        
+      </header>
+    </section>
+    
+
+
+<article>
+  <div class="container">
+    <header>
+      <div class="meta">
+        <time pubdate datetime="2013-12-08" title="2013-12-08">December 08, 2013</time>
+      </div>
+      <h1 class="title">Docker cheat sheet with examples</h1>
+    </header>
+    
+    <section>
+      
+
+<p><a href="https://gist.github.com/wsargent/7049221">Docker Cheat Sheet</a> is a nice documentation. It provides us Docker basic commands and system and It&rsquo;s easy to understand. But there are less exaples, I reconstructed it with real examples. You should refer above document about installation.</p>
+
+<h2 id="set-up:c1b15089cba9f7a1e3ebcdde68b15ff8">Set up</h2>
+
+<p>Pull a base image.</p>
+
+<pre><code>docker pull ubuntu
+</code></pre>
+
+<p>It&rsquo;s annoy to restore Container ID, you may forget to restore. You can set below alias. With this, you can get the ID of the last-run Container (<a href="http://sssslide.com/speakerdeck.com/bmorearty/15-docker-tips-in-5-minutes">15 Docker tips in 5 minutes</a>)</p>
+
+<pre><code class="language-bash">alias dl='docker ps -l -q'
+</code></pre>
+
+<h2 id="container:c1b15089cba9f7a1e3ebcdde68b15ff8">Container</h2>
+
+<p>To create a Container.</p>
+
+<pre><code class="language-bash">docker run -d ubuntu /bin/sh -c &quot;while true; do echo hello world; sleep 1; done&quot;
+</code></pre>
+
+<p>To stop a Container.</p>
+
+<pre><code class="language-bash">docker stop `dl`
+</code></pre>
+
+<p>To start a Container.</p>
+
+<pre><code class="language-bash">docker start `dl`
+</code></pre>
+
+<p>To restart a Container.</p>
+
+<pre><code class="language-bash">docker restart `dl`
+</code></pre>
+
+<p>To Connect to a running Container.</p>
+
+<pre><code class="language-bash">docker attach `dl`
+</code></pre>
+
+<p>To copy file in a Container to the host.</p>
+
+<pre><code class="language-bash">docker cp `dl`:/etc/passwd .
+</code></pre>
+
+<p>To mount the directory in host to a Container.</p>
+
+<pre><code class="language-bash">docker run -v /home/vagrant/test:/root/test ubuntu echo yo
+</code></pre>
+
+<p>To delete a Container.</p>
+
+<pre><code class="language-bash">dockr rm `dl`
+</code></pre>
+
+<h2 id="info-of-container:c1b15089cba9f7a1e3ebcdde68b15ff8">Info of Container</h2>
+
+<p>To show running Containers. With <code>-a</code> option, it shows running and stopped Containers.</p>
+
+<pre><code class="language-bash">docker ps
+</code></pre>
+
+<p>To show Container information like IP adress.</p>
+
+<pre><code class="language-bash">docker inspect `dl`
+</code></pre>
+
+<p>To show log of a Container.</p>
+
+<pre><code class="language-bash">docker logs `dl`
+</code></pre>
+
+<p>To show running process in a Container.</p>
+
+<pre><code class="language-bash">docker top `dl`
+</code></pre>
+
+<h2 id="image:c1b15089cba9f7a1e3ebcdde68b15ff8">Image</h2>
+
+<p>To create a image from a Container. For tag name, &lt;username&gt;/&lt;imagename&gt; is <a href="http://docs.docker.io/en/latest/use/workingwithrepository/#committing-a-container-to-a-named-image">recommended</a>.</p>
+
+<pre><code class="language-bash">docker run -d ubuntu /bin/sh -c &quot;apt-get install -y hello&quot;
+docker commit -m &quot;My first container&quot; `dl` tcnksm/hello
+</code></pre>
+
+<p>To create a image with Dockerfile.</p>
+
+<pre><code class="language-bash">echo -e &quot;FROM base\nRUN apt-get install hello\nCMD hello&quot; &gt; Dockerfile
+docker build tcnksm/hello .
+</code></pre>
+
+<p>To login to a image.</p>
+
+<pre><code class="language-bash">docker run -rm -t -i tcnksm/hello /bin/bash
+</code></pre>
+
+<p>To push a imges to remote repository. You need to sign up to <a href="https://index.docker.io/">Docker index</a> in advance. <a href="https://index.docker.io/u/tcnksm/hello">Exmple uploaded image</a>.</p>
+
+<pre><code class="language-bash">docker login
+docker push tcnksm/hello
+</code></pre>
+
+<p>To delete a image</p>
+
+<pre><code class="language-bash">docker rmi tcnkms/hello
+</code></pre>
+
+<h2 id="info-of-image:c1b15089cba9f7a1e3ebcdde68b15ff8">Info of Image</h2>
+
+<p>To show all images</p>
+
+<pre><code class="language-bash">docker images
+</code></pre>
+
+<p>To show image information like IP adress.</p>
+
+<pre><code class="language-bash">docker inspect tcnksm/hello
+</code></pre>
+
+<p>To show command history of a image.</p>
+
+<pre><code class="language-bash">docker history tcnksm/hello
+</code></pre>
+
+      <div class="social">
+  
+  
+  <a href="https://twitter.com/share" class="twitter-share-button" data-via="deeeet" data-count="none">Tweet</a>
+  
+  
+</div>
+
+    </section>
+
+    <footer>
+      <address>
+        
+        <img src="/images/bio.jpeg"/>
+        
+        <p>Written by <strong><a rel="author" href="https://twitter.com/deeeet" title="Taichi Nakashima" target="_blank">Taichi Nakashima</a></strong><br>
+          <span class="muted">A Tokyo based PaaS engineer. Please contact me via twitter.</span>
+        </p>
+      </address>
+
+    </footer>
+
+  </div>
+</article>
+
+<script type="text/javascript" src="//ajax.googleapis.com/ajax/libs/jquery/1.7.2/jquery.min.js"></script>
+<script type="text/javascript" src="/js/main.js"></script>
+
+<script>!function(d,s,id){var js,fjs=d.getElementsByTagName(s)[0],p=/^http:/.test(d.location)?'http':'https';if(!d.getElementById(id)){js=d.createElement(s);js.id=id;js.src=p+'://platform.twitter.com/widgets.js';fjs.parentNode.insertBefore(js,fjs);}}(document, 'script', 'twitter-wjs');</script>
+
+
+<script type="text/javascript">var HN=[];HN.factory=function(e){return function(){HN.push([e].concat(Array.prototype.slice.call(arguments,0)))};},HN.on=HN.factory("on"),HN.once=HN.factory("once"),HN.off=HN.factory("off"),HN.emit=HN.factory("emit"),HN.load=function(){var e="hn-button.js";if(document.getElementById(e))return;var t=document.createElement("script");t.id=e,t.src="//hn-button.herokuapp.com/hn-button.js";var n=document.getElementsByTagName("script")[0];n.parentNode.insertBefore(t,n)},HN.load();</script>
+
+
+  <script>
+  (function(i,s,o,g,r,a,m){i['GoogleAnalyticsObject']=r;i[r]=i[r]||function(){
+  (i[r].q=i[r].q||[]).push(arguments)},i[r].l=1*new Date();a=s.createElement(o),
+  m=s.getElementsByTagName(o)[0];a.async=1;a.src=g;m.parentNode.insertBefore(a,m)
+  })(window,document,'script','//www.google-analytics.com/analytics.js','ga');
+
+  ga('create', 'UA-45390253-1', 'auto');
+  ga('send', 'pageview');
+
+</script>
+
+
+
+<script>
+  $(document).ready(function() {
+  
+  $('p:has(img)').css('text-align', 'center');
+  $('iframe').css('style', 'display: block; margin: 0px auto;');
+  });
+</script>
+

@@ -1,0 +1,194 @@
+<?xml version="1.0" encoding="utf-8" standalone="yes" ?>
+<rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom">
+  <channel>
+    <title>Docker Packer on SOTA</title>
+    <link>http://deeeet.com/categories/docker-packer/</link>
+    <description>Recent content in Docker Packer on SOTA</description>
+    <generator>Hugo -- gohugo.io</generator>
+    <language>ja-jp</language>
+    <copyright>Copyright (C) 2013-2015 Taichi Nakashima All Right Reserved.</copyright>
+    <lastBuildDate>Mon, 03 Mar 2014 00:00:00 +0000</lastBuildDate>
+    <atom:link href="http://deeeet.com/categories/docker-packer/index.xml" rel="self" type="application/rss+xml" />
+    
+    <item>
+      <title>DockerイメージのビルドにPackerを使うべき理由</title>
+      <link>http://deeeet.com/writing/2014/03/03/why-building-docker-by-packer/</link>
+      <pubDate>Mon, 03 Mar 2014 00:00:00 +0000</pubDate>
+      
+      <guid>http://deeeet.com/writing/2014/03/03/why-building-docker-by-packer/</guid>
+      <description>&lt;p&gt;&lt;a href=&#34;https://news.ycombinator.com/item?id=7066002&#34;&gt;&amp;ldquo;Ask HN: Do you bake AMIs for AWS deployments?&amp;rdquo;&lt;/a&gt;での，Mitchell Hashimoto氏の&lt;a href=&#34;https://news.ycombinator.com/item?id=7067648&#34;&gt;コメント&lt;/a&gt;より．簡単に抄訳．&lt;/p&gt;
+
+&lt;ul&gt;
+&lt;li&gt;ソフトウェアのインストールや設定の知識は，依然としてShellscriptやChef，Puppetに残っている．Packerを使えば，Dockerのコンテナの作成に現時点で存在している経験やCIプロセスなどを利用できる．&lt;/li&gt;
+&lt;li&gt;共通のフォーマットの設定．Dockerfileの記述は特有である．それは良いが，現状様々なイメージ(AMIやDockerのコンテナ，Virtualboxなど)が存在する．Dockerが全てではないとき，イメージをビルドするために様々なツールをメンテするのは負担になる．Packerを使えば，一つの方法で，さまざまなプラットフォームに対応できる．たとえ企業がDockerのみに移行しても．&lt;/li&gt;
+&lt;li&gt;移植性．Packerは低リスクでDockerのコンテナに対応できる．DockerfileはDockerのためのものである．例えばDockerが気に入らない場合や，Dockerがある状況に対して適切ではない場合に，Dockerfileは別のフォーマットに移し替えられなければならない．&lt;/li&gt;
+&lt;li&gt;拡張性．Packerは簡単にプラグインを作ることができる．Dockerは特別なコマンドの追加をサボートしていないが，Packerなら可能（それが必要かは別にして）．&lt;/li&gt;
+&lt;li&gt;プロセスがシンプル．Packerのイメージのビルドプロセスは，1..Nと順に進むだけで，余計なプロセスはない．DockerのコンテナやAminatorのAMIのビルドは異なるプロセスをもつ．新しいプロセスは，CIの特別な処理や，新人への教育，新たなメンテナンスを生む．&lt;/li&gt;
+&lt;/ul&gt;
+
+&lt;p&gt;最後にPackerの今後についても言及している．現時点では，Packerには，Dockerのようにステップごとにスナップショットをとる機能はない．そのためbuildし直すと処理ははじめからになる．しかし，現時点でそのスナップショットの機能に取り組んでおり，将来サポートされる予定らしい．これができれば，&lt;code&gt;docker build&lt;/code&gt;のように&lt;code&gt;packer build&lt;/code&gt;の場合も，必要なステップから処理が再開されるようになる．クールだ．&lt;/p&gt;
+
+&lt;p&gt;Packerを使ったdockerイメージのビルドは，&lt;a href=&#34;http://deeeet.com/writing/2014/03/02/build-docker-image-by-packer/&#34;&gt;&amp;ldquo;Packerを使ってChef/Puppet/AnsibleでDockerのイメージをつくる&amp;rdquo;&lt;/a&gt;に書いた．とても簡単．&lt;/p&gt;
+</description>
+    </item>
+    
+    <item>
+      <title>Packerを使ってChef/Puppet/AnsibleでDockerのイメージをつくる</title>
+      <link>http://deeeet.com/writing/2014/03/02/build-docker-image-by-packer/</link>
+      <pubDate>Sun, 02 Mar 2014 00:00:00 +0000</pubDate>
+      
+      <guid>http://deeeet.com/writing/2014/03/02/build-docker-image-by-packer/</guid>
+      <description>
+
+&lt;p&gt;&lt;a href=&#34;http://www.packer.io/&#34;&gt;Packer&lt;/a&gt;は，Vagrantの作者であるMitchell Hashimoto氏によって開発が進められているVirtualBoxやVMWare，Amazon EC2などの仮想マシンのテンプレートの作成を行うツール．VagrantのVirtualBox用のBoxを作るveeweeに置き換わるツールとして知られている．最近のアップデートでDockerのイメージのビルドをサポートした．&lt;/p&gt;
+
+&lt;h2 id=&#34;tl-dr:b621108be372951be0849ffe1bfb86f3&#34;&gt;TL;DR&lt;/h2&gt;
+
+&lt;p&gt;&lt;a href=&#34;http://www.packer.io/docs/builders/docker.html#toc_4&#34;&gt;Packerを使えばDockerのイメージをDockerfileを使わずビルドすることができる&lt;/a&gt;&lt;/p&gt;
+
+&lt;p&gt;つまり，Dockerfileの特有な記述を使わず，今まで慣れ親しんできたChefやPuppet，Ansibleのようなプロビジョニングツールを使ってDockerのイメージをビルドできる．&lt;/p&gt;
+
+&lt;p&gt;参考&lt;/p&gt;
+
+&lt;ul&gt;
+&lt;li&gt;&lt;a href=&#34;http://deeeet.com/writing/2014/03/03/why-building-docker-by-packer/&#34;&gt;DockerイメージのビルドにPackerを使うべき理由&lt;/a&gt;&lt;/li&gt;
+&lt;/ul&gt;
+
+&lt;h2 id=&#34;サンプル:b621108be372951be0849ffe1bfb86f3&#34;&gt;サンプル&lt;/h2&gt;
+
+&lt;p&gt;&lt;a href=&#34;https://github.com/tcnksm/packer-docker&#34;&gt;tcnksm/packer-docker&lt;/a&gt;&lt;/p&gt;
+
+&lt;p&gt;サンプルコードは全て上のレポジトリにある．ChefとPuppetとAnsibleで最小限で単純なサンプルを試した．&lt;/p&gt;
+
+&lt;h2 id=&#34;準備-vagrantfile:b621108be372951be0849ffe1bfb86f3&#34;&gt;準備（Vagrantfile）&lt;/h2&gt;
+
+&lt;p&gt;実行はすべてVagrantのVM上で行う．Vagrantの1.4以上がインストールされていれば，以下のVagrantfileを使えばすぐに試せる．&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-ruby&#34;&gt;Vagrant.configure(&amp;quot;2&amp;quot;) do |config|
+    config.vm.box = &amp;quot;precise64&amp;quot;
+    config.vm.box_url = &amp;quot;http://files.vagrantup.com/precise64.box&amp;quot;
+    # 
+    config.vm.provision :docker do |d|
+        d.pull_images &amp;quot;ubuntu&amp;quot;
+    end
+    
+    config.vm.provision :shell, :inline =&amp;gt; &amp;lt;&amp;lt;-PREPARE
+apt-get -y update
+apt-get install -y wget unzip curl
+
+mkdir /home/vagrant/packer
+cd /home/vagrant/packer
+wget https://dl.bintray.com/mitchellh/packer/0.5.2_linux_amd64.zip
+unzip 0.5.2_linux_amd64.zip
+echo &amp;quot;export PATH=$PATH:/home/vagrant/packer&amp;quot; &amp;gt; /home/vagrant/.bashrc
+PREPARE
+
+end
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;DockerとPackerの最新版のインストールしているだけ（注: PackerはOSX上でも動くが，OSXのDocker Clientの&lt;a href=&#34;https://github.com/dotcloud/docker/issues/4023&#34;&gt;バグ&lt;/a&gt;のためにうまく連携できなったので，PackerもVagrant上で実行している）．&lt;/p&gt;
+
+&lt;h2 id=&#34;準備-chef:b621108be372951be0849ffe1bfb86f3&#34;&gt;準備（Chef）&lt;/h2&gt;
+
+&lt;p&gt;ここでは例として，apacheのインストールを行うクックブックとレシピを準備する．&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;$ knife cookbook create apache -o site-cookbooks
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;pre&gt;&lt;code&gt;# site-cookbooks/apache/recipes/default.rb
+execute &amp;quot;apt-get update&amp;quot;
+package &amp;quot;apache2&amp;quot; do
+    action :install
+end
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;h2 id=&#34;テンプレート:b621108be372951be0849ffe1bfb86f3&#34;&gt;テンプレート&lt;/h2&gt;
+
+&lt;p&gt;Packerは，json形式での設定ファイルを基に仮想マシン/イメージのビルドを行う．ここでは，Ubuntuベースイメージから上で作成したChefのレシピを使ってDockerのイメージを作成する．&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-json&#34;&gt;# machine_chef.json
+{
+    &amp;quot;builders&amp;quot;:[{
+        &amp;quot;type&amp;quot;: &amp;quot;docker&amp;quot;,
+        &amp;quot;image&amp;quot;: &amp;quot;ubuntu&amp;quot;,
+        &amp;quot;export_path&amp;quot;: &amp;quot;image.tar&amp;quot;
+    }],
+    
+    &amp;quot;provisioners&amp;quot;:[
+    {
+        &amp;quot;type&amp;quot;: &amp;quot;shell&amp;quot;,
+        &amp;quot;inline&amp;quot;: [
+            &amp;quot;apt-get -y update&amp;quot;,
+            &amp;quot;apt-get install -y curl&amp;quot;
+        ]
+    },
+    {
+        &amp;quot;type&amp;quot;: &amp;quot;chef-solo&amp;quot;,
+        &amp;quot;cookbook_paths&amp;quot;: [&amp;quot;site-cookbooks&amp;quot;],
+        &amp;quot;run_list&amp;quot;: [&amp;quot;apache::default&amp;quot;]
+    }
+    ],
+    
+    &amp;quot;post-processors&amp;quot;: [{
+        &amp;quot;type&amp;quot;: &amp;quot;docker-import&amp;quot;,
+        &amp;quot;repository&amp;quot;: &amp;quot;tcnksm/packer-chef&amp;quot;,
+        &amp;quot;tag&amp;quot;: &amp;quot;0.1&amp;quot;
+    }]
+}
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;Packerの設定ファイルは以下の3つの要素からなる．&lt;/p&gt;
+
+&lt;ul&gt;
+&lt;li&gt;builders&lt;/li&gt;
+&lt;li&gt;provisioners&lt;/li&gt;
+&lt;li&gt;post-processors&lt;/li&gt;
+&lt;/ul&gt;
+
+&lt;p&gt;&lt;strong&gt;builders&lt;/strong&gt;には，主に作成されるテンプレートの種類や詳細の設定を記述する．作りたいマシンの種類，つまり，isoからVagrantのBoxを作りたいのか，Amazon EC2のAMIを作りたいのか，DigitalOcean用のイメージを作りたいのかによって記述は大きく異なる．例では，タイプをDockerとして，ベースイメージにubuntuを指定している．&lt;/p&gt;
+
+&lt;p&gt;&lt;strong&gt;provisioners&lt;/strong&gt;には，プロビジョニングの設定を記述する．どの種類のマシンを作成する場合であっても，ShellscriptからChef，Puppet，Ansibleとった慣れ親しんだプロビジョニングツールが使える．Packerのすごいのはこの部分ではないかと思っている．Vagrantのプロビジョニングを利用したことある人には読みやすいと思う．例では，inline shellによるプロビジョニングとChefによるプロビジョニングを指定している．&lt;/p&gt;
+
+&lt;p&gt;（注: 現時点では，ChefのプロビジョニングのみChefのインストールまで自動で行ってくれる．ただし，その際にcurlを使うのでそれだけは自分でインストールしている．PuppetやAnsibleは事前に自分でインストールする必要がある．詳細は&lt;a href=&#34;https://github.com/tcnksm/packer-docker&#34;&gt;サンプルコード&lt;/a&gt;を参照．）&lt;/p&gt;
+
+&lt;p&gt;&lt;strong&gt;post-processors&lt;/strong&gt;には，作成したテンプレートに対する後処理の設定を記述する．VagrantのBoxであればBoxの名前を指定する．今回の例では，Dockerイメージのレポジトリ名とタグ名を指定している．&lt;/p&gt;
+
+&lt;h2 id=&#34;イメージのビルド:b621108be372951be0849ffe1bfb86f3&#34;&gt;イメージのビルド&lt;/h2&gt;
+
+&lt;p&gt;以下を実行するだけ．&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-bash&#34;&gt;$ packer build machine_chef.json
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;終了すれば，&lt;code&gt;tcnksm/packer-chef:0.1&lt;/code&gt;というDockerイメージが作られている．&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-bash&#34;&gt;$ docker images
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;以上．&lt;/p&gt;
+
+&lt;h2 id=&#34;まとめ:b621108be372951be0849ffe1bfb86f3&#34;&gt;まとめ&lt;/h2&gt;
+
+&lt;p&gt;今まで使ってきたプロビジョニングツールを使えるのはすごくよい．というもの，まだまだChefやPuppetといったツールは使われていくだろうし，知見も多く蓄積されているから．また，Dockerfileはdockerに特有なので他のツールに移植するといったこと難しい．&lt;/p&gt;
+
+&lt;p&gt;かといってDockerfile使われなくなるか，というと全然そんなことはなささそう．現時点でのPackerでDockerのイメージをビルドする際の欠点は，Stepごとのスナップショットをとるといったdockerの良さが使えない（ただ，&lt;a href=&#34;http://deeeet.com/writing/2014/03/03/why-building-docker-by-packer/&#34;&gt;将来サポートされる予定らしい&lt;/a&gt;）ことや，&lt;code&gt;EXPOSE&lt;/code&gt;とかが簡単に書けないことなどがある．&lt;/p&gt;
+
+&lt;ul&gt;
+&lt;li&gt;&lt;a href=&#34;http://ssig33.com/text/Docker%20%E3%82%92%E3%83%97%E3%83%AD%E3%83%80%E3%82%AF%E3%83%88%E3%81%AE%E3%83%87%E3%83%97%E3%83%AD%E3%82%A4%E3%81%AB%E4%BD%BF%E3%81%86&#34;&gt;ssig33.com - Docker をプロダクトのデプロイに使う&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a href=&#34;http://shibayu36.hatenablog.com/entry/2013/12/23/153019&#34;&gt;Docker, Mesos, Sensu等を利用したBlue-Green Deploymentの仕組み - $shibayu36-&amp;gt;blog;&lt;/a&gt;&lt;/li&gt;
+&lt;/ul&gt;
+
+&lt;p&gt;とかを見てると，とインフラレイヤーやアプリケーションレイヤーにわけて差分ビルドをしている．変更が少ないかつ，Chefやpuppetの知見が多くありそうなインフラレイヤーのイメージのビルドにはPacker+Chef，Puppetを使い，変更が多くありそうなアプリケーションレイヤはDockerfileで直接書くとかにすると良さそうと思った．&lt;/p&gt;
+
+&lt;p&gt;参考&lt;/p&gt;
+
+&lt;ul&gt;
+&lt;li&gt;&lt;a href=&#34;http://www.packer.io/docs/builders/docker.html&#34;&gt;Docker builder&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a href=&#34;http://deeeet.com/writing/2014/03/03/why-building-docker-by-packer/&#34;&gt;DockerイメージのビルドにPackerを使うべき理由&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a href=&#34;http://deeeet.com/writing/2014/03/02/packer/&#34;&gt;Packer雑感&lt;/a&gt;&lt;/li&gt;
+&lt;/ul&gt;
+</description>
+    </item>
+    
+  </channel>
+</rss>

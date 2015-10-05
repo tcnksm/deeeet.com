@@ -1,0 +1,458 @@
+<!doctype html>
+<html>
+  <head>
+    <meta http-equiv="content-type" content="text/html; charset=utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    
+    <title>&#34;Microservices&#34;を読んだ | SOTA</title>
+    
+    <link href="https://fonts.googleapis.com/css?family=Lato%3a900" rel="stylesheet" type="text/css">
+    <link rel="stylesheet" href="/css/main.css">
+    <link rel="shortcut icon" href="/favicon.png" type="image/x-icon" />
+    <link href="http://deeeet.com//index.xml" rel="alternate" type="application/rss+xml" title="" />
+    <meta name="title" content="http://deeeet.com/writing/2014/09/10/microservices/">
+    <link rel="canonical" href="http://deeeet.com/writing/2014/09/10/microservices/">
+    
+    <meta property="og:title" content="&#34;Microservices&#34;を読んだ"/>
+    <meta property="og:url" content="http://deeeet.com/writing/2014/09/10/microservices/"/>
+  </head>
+  
+  <body>
+    <section class="site-nav">
+      <header>
+        <nav id="navigation">
+          <ul class="menu">
+            <li><a href="https://github.com/tcnksm/talks">Talks</a></li>
+            <li><a href="https://tcnksm.exposure.co/">Photos</a></li>
+          </ul>
+
+          <a class="name" href="/">SOTA</a>
+        </nav>        
+      </header>
+    </section>
+    
+
+
+<article>
+  <div class="container">
+    <header>
+      <div class="meta">
+        <time pubdate datetime="2014-09-10" title="2014-09-10">September 10, 2014</time>
+      </div>
+      <h1 class="title">&#34;Microservices&#34;を読んだ</h1>
+    </header>
+    
+    <section>
+      
+
+<p><a href="https://twitter.com/boicy">James Lewis</a>氏と<a href="http://www.martinfowler.com/">Martin Fowler</a>氏による<a href="http://martinfowler.com/articles/microservices.html">&ldquo;Microservices&rdquo;</a>を読んだ．以前ざっと目を通したが，最近よく耳にするようになったのでちゃんと読んだ．以下はそのメモ．</p>
+
+<h2 id="概要:6f21f735c9980492850a02630b2789b4">概要</h2>
+
+<ul>
+<li>&ldquo;Microservices&rdquo; とはソフトウェアシステムの開発スタイルである
+
+<ul>
+<li>近年このスタイルでの開発を見てきて良い結果が出ている</li>
+<li>初出は2012年の3月の<a href="http://2012.33degree.org/talk/show/67">&ldquo;Micro services - Java, the Unix Way&rdquo;</a></li>
+</ul></li>
+<li>Microserviceは一連の小さなサービスで1つのアプリケーションを開発する手法
+
+<ul>
+<li>それぞれのサービスは自身のプロセスで動いており，軽量な機構（e.g., HTTP API）を通じて情報をやりとりする</li>
+<li>これらのサービスは独立して自動デプロイされる</li>
+</ul></li>
+<li>一枚岩として構築されるMonolithicスタイルのアプリケーションと比較すると分かりやすい
+
+<ul>
+<li>一般的なエンタープライズのアプリケーションは，クライアントサイドのユーザインターフェース，データベース，サーバーサイドのアプリケーションの3つで構成される</li>
+<li>サーバーサイドのアプリケーションは，HTTPリクエストを受け，データベースとやりとりし，クライアントにHTMLを返す
+
+<ul>
+<li>このようなサーバーサイドアプリケーションはMonolithicであり，システムへの変更は新しいバージョンのアプリケーションのビルドとデプロイを要する</li>
+</ul></li>
+</ul></li>
+<li>Monolithicシステムの構築は一般的には成功したスタイルである
+
+<ul>
+<li>リクエストを処理するロジックは単一のプロセスで動く</li>
+<li>ロードバランサを配置しスケールアウトさせることもできる</li>
+</ul></li>
+<li>クラウドに多くのアプリケーションがデプロイされ始めるとMonolithicアプリケーションはフラストレーションになってきた
+
+<ul>
+<li>システムの変更サイクルは，全て結びついている</li>
+<li>モジュール構造の維持や影響範囲の限定が困難になる</li>
+<li>アプリケーションの一部だけスケールが必要なのに全体をスケールしなければならない</li>
+</ul></li>
+<li>これらのフラストレーションがMicroservicesアーキテクチャーを導きだした，Monolithicなアプリケーションと比較してMicroservicesは:
+
+<ul>
+<li>独立してデプロイできる</li>
+<li>独立してスケールできる</li>
+<li>しっかりしたモジュールの境界をもつ（影響範囲の限定）</li>
+<li>様々なプログラミング言語を利用できる</li>
+<li>異なるチームで運用できる</li>
+</ul></li>
+<li>Microservicesは新しい考え方ではない
+
+<ul>
+<li>少なくともその根源はUNIXのデザイン哲学に立ち戻っている</li>
+</ul></li>
+</ul>
+
+<h2 id="microserviceの特徴:6f21f735c9980492850a02630b2789b4">Microserviceの特徴</h2>
+
+<ul>
+<li>正式な定義はないが，共通の特徴を述べる
+
+<ul>
+<li>すべてのMicroservicesが全ての特徴を満たすわけではない</li>
+</ul></li>
+</ul>
+
+<h3 id="サービスによるコンポーネント化:6f21f735c9980492850a02630b2789b4">サービスによるコンポーネント化</h3>
+
+<ul>
+<li>コンポーネントを組み合わせてシステムを作りたい</li>
+<li><strong>コンポーネント</strong>を入れ替え可能/アップグレード可能な独立したソフトウェアと定義する</li>
+<li>Microservicesはライブラリを使うが，主要なコンポーネント化はサービスへ分割することで行う
+
+<ul>
+<li><strong>ライブラリ</strong>を1つのプログラム内で連結し，インメモリーで関数呼び出しを行うコンポーネントと定義する</li>
+<li><strong>サービス</strong>を別プロセス動作し，HTTPリクエストやRPCなどで連携するコンポーネントと定義する</li>
+</ul></li>
+<li>サービスをコンポーネントとして扱う主要な理由の1つは独立してデプロイできること
+
+<ul>
+<li>良いMicroservicesアーキテクチャーはサービス間をなるべく粗結合にして，変更時のデプロイを少なくする</li>
+</ul></li>
+<li>サービスをコンポーネントとして扱うとインターフェースがより明確になる</li>
+<li>プロセス内のコールと比べてリモートのコールはコストが高いのでAPIはなるべく粗くある必要がある</li>
+</ul>
+
+<h3 id="ビジネス能力に基づく組織化:6f21f735c9980492850a02630b2789b4">ビジネス能力に基づく組織化</h3>
+
+<ul>
+<li>巨大なアプリケーションを分割するとき普通は技術レイヤーでそれを区切る（<a href="http://martinfowler.com/articles/microservices/images/conways-law.png">図</a>）
+
+<ul>
+<li>e.g., UIチーム，サーバーサイドチーム，データベースチーム</li>
+<li>このようなチーム分割は，単純な変更を加えるだけでも際もチーム間の調整や予算承認が必要になる</li>
+<li><a href="http://d.hatena.ne.jp/asakichy/20140502/1398981766">コンウェイの法則 - Strategic Choice</a></li>
+</ul></li>
+<li>Microservicesはビジネス能力に基づきサービスの分割を行う（<a href="http://martinfowler.com/articles/microservices/images/PreferFunctionalStaffOrganization.png">図</a>）
+
+<ul>
+<li>このようなサービスは，そのビジネス分野に対してUIやデータストレージ，外部連携といった幅広いスタックの実装が必要になる</li>
+<li>結果として，チームにはUXからデータベース，プロジェクト管理といったフルスタックな開発スキルが要求される</li>
+</ul></li>
+<li>Micorservicesの適切な粒度は？
+
+<ul>
+<li>1サービスに数十人が参加している場合もあれば，1人で1サービスという例もある<br /></li>
+</ul></li>
+</ul>
+
+<h3 id="プロジェクトではなくプロダクト:6f21f735c9980492850a02630b2789b4">プロジェクトではなくプロダクト</h3>
+
+<ul>
+<li>ほとんどのアプリケーション開発はプロジェクトとして管理され，機能の一部がデプロイされて完遂する
+
+<ul>
+<li>完遂するとソフトウェアはメンテナンスチームに引き渡されて，プロジェクトチームは解散する</li>
+</ul></li>
+<li>Microservicesでは，チームはプロダクトを持っていると意識する
+
+<ul>
+<li>これはAmazonの<a href="https://queue.acm.org/detail.cfm?id=1142065">&ldquo;you build, you run it&rdquo;</a>の考え方に影響を受けている</li>
+<li>開発者は常にプロダクションのソフトウェアの挙動やそれを利用するユーザのことを意識するようになる</li>
+</ul></li>
+<li>プロダクトとして考えることはそのビジネス能力について考えることにもなる
+
+<ul>
+<li>ソフトウェアを1つ1つが完遂するべき機能の集まりとしてではなく，ソフトウェアによりビジネス能力をいかに強化するかを継続して考えることになる</li>
+</ul></li>
+</ul>
+
+<h3 id="スマートなエンドポイントと単純なパイプ:6f21f735c9980492850a02630b2789b4">スマートなエンドポイントと単純なパイプ</h3>
+
+<ul>
+<li>Microservicesアプリケーションは，出来るだけ粗結合であることを目的にする
+
+<ul>
+<li>それぞれが独自のドメインロジックを持っていてUNIXのフィルターのように動作する
+
+<ul>
+<li>リクエストを受けて，適切なロジックを実行して，レスポンスを返す</li>
+</ul></li>
+<li>BPELやWS-Choreographyのような複雑なプロトコルではなく，REST的な単純なプロトコルを用いる</li>
+</ul></li>
+<li>HTTP APIが用いられる
+
+<ul>
+<li>MicroservicesチームはWorld wide webに上に作られた原則やプロトコルを使う</li>
+</ul></li>
+<li>軽量なメッセージングプロトコルも用いられる
+
+<ul>
+<li>RabbitMQやZeroMQなど</li>
+</ul></li>
+<li>Monolithicアプリケーションではメッセージのやりとりはインメモリーのメソッドの実行や関数呼び出しで行われる
+
+<ul>
+<li>MonolithicからMicroserviceへの移行ではパフォーマンスの低下が問題になる</li>
+<li>密なコミュニーションを粗めなコミュニーションと入れ替える必要がある</li>
+</ul></li>
+</ul>
+
+<h3 id="分散ガバナンス:6f21f735c9980492850a02630b2789b4">分散ガバナンス</h3>
+
+<ul>
+<li>中央政権的ガバナンスは単一の技術への統一へ向かう傾向がある
+
+<ul>
+<li>この手法は行き詰まる</li>
+<li>全ての問題が釘でそれに対する全ての解法がハンマーであるわけではない</li>
+</ul></li>
+<li>Microservicesは適切な場所で適切なツールを使うことを好む
+
+<ul>
+<li>Standupの簡単なレポートページを作るのにNode.jsを使っても良いし，リアルタイム性を求められる部分にC++を使っても良い</li>
+<li>データベースも好きに選んでも良い</li>
+</ul></li>
+<li>&ldquo;できる&rdquo;であって&rdquo;すべき&rdquo;ではない，選択肢があるということ</li>
+<li>分散ガバナンスの頂点は，Amazonにより有名になった&rdquo;build it / run it&rdquo;精神かもしれない
+
+<ul>
+<li>チームは運用を含め，構築したソフトウェア全ての側面に責任をもつ</li>
+<li>このレベルの権限の委譲は普通のことではないが多くの企業が開発チームに多くの責任を与え始めている</li>
+<li>毎晩3時に起こされるとなると，コード書くときの質により集中するようになる</li>
+</ul></li>
+</ul>
+
+<h3 id="分散データ管理:6f21f735c9980492850a02630b2789b4">分散データ管理</h3>
+
+<ul>
+<li>データ管理を分散させる方法は多く存在する
+
+<ul>
+<li>抽象的なレベルで言うと，それはシステム間で現実世界の概念モデルが異なることを意味する</li>
+<li>これは大きなエンタープライズ間の統合を行う時の共通の問題である
+
+<ul>
+<li>セールスから見た&rdquo;customer&rdquo;とサポートから見た&rdquo;customer&rdquo;は異なる</li>
+</ul></li>
+</ul></li>
+<li>この問題はアプリケーション間でも共通である
+
+<ul>
+<li>ドメイン駆動開発の<a href="http://martinfowler.com/bliki/BoundedContext.html">&ldquo;境界づけられたコンテキスト&rdquo;</a>で考えると良い
+
+<ul>
+<li>ドメイン駆動開発は，複雑なドメインを複数の境界づけられたコンテキストに分割し，それらの関係性をマップする（<a href="http://martinfowler.com/bliki/images/boundedContext/sketch.png">図</a>）</li>
+</ul></li>
+</ul></li>
+<li>Microservicesはそれぞれのサービスがそれぞれデータベースを管理することを好む
+
+<ul>
+<li>Monolithicアプリケーションは一貫したデータの為に単一のデータベースを用いるのを好む</li>
+</ul></li>
+<li>データの分散管理は更新管理に影響を与える
+
+<ul>
+<li>複数のリソースを更新する際，一般的には，一貫性を保つためにトランザクションを用いる</li>
+<li>この方法は，Monolithicアプリケーションでも行われる</li>
+</ul></li>
+<li>このようなトランザクション処理は，一時的にサービス同士を結びつけることになる
+
+<ul>
+<li>分散トランザクションは実装が難しく，結果としてMicroservicesは<a href="http://www.eaipatterns.com/ramblings/18_starbucks.html">サービス間でのトランザクション処理を行わないようにする</a>
+
+<ul>
+<li>一貫性は結果としての一貫性でしかないかもしれない</li>
+<li>問題は補完的な運用で処理される</li>
+</ul></li>
+</ul></li>
+</ul>
+
+<h3 id="インフラの自動化:6f21f735c9980492850a02630b2789b4">インフラの自動化</h3>
+
+<ul>
+<li>Microservicesアプリケーションは，継続的デリバリーや継続的インテグレーションの経験をもつチームによって構築されている
+
+<ul>
+<li>このようなチームはインフラの自動化も行っている</li>
+<li>ビルドパイプラインを作る（<a href="http://martinfowler.com/articles/microservices/images/basic-pipeline.png">図</a>）</li>
+</ul></li>
+<li>ソフトウェアがちゃんと動作することを確認するために，十分な<strong>自動テスト</strong>を行う
+
+<ul>
+<li>そして新しい環境へ<strong>自動デプロイ</strong>も行う</li>
+</ul></li>
+</ul>
+
+<h3 id="障害設計:6f21f735c9980492850a02630b2789b4">障害設計</h3>
+
+<ul>
+<li>サービスをコンポーネントとして扱うため，アプリケーションはサービスの障害に耐性のあるように設計される必要がある
+
+<ul>
+<li>サービスへのリクエストは失敗する可能性があるので，クライアントは出来る限り正常にこれに対応しなければならない</li>
+<li>Microservicesチームはどのようにサービス障害がUXに影響を与えるかを常に考慮する</li>
+<li>Netflixの<a href="https://github.com/Netflix/SimianArmy">Simian Army</a>は，営業日であっても障害を誘発してアプリケーションの復旧とモニタリングをテストしている</li>
+</ul></li>
+<li>サービス障害はいつでも発生するので，いち早く障害を検知し，可能であれば自動で復旧させることが重要である
+
+<ul>
+<li>Microservicesはリアルタイムのモニタリングを重用視する
+
+<ul>
+<li>アーキテクチャー要素の監視（データベースが秒間どれだけのリクエストを受けているか）</li>
+<li>ビジネスに関連したメトリクスの監視（分間どれだけの注文が発生したか）<br /></li>
+</ul></li>
+</ul></li>
+</ul>
+
+<h3 id="進化的設計:6f21f735c9980492850a02630b2789b4">進化的設計</h3>
+
+<ul>
+<li>サービスの分割により開発者は変化のスピードを落とすことなく変更をコントロールできる</li>
+<li>コンポーネント化するときどのように分割するのがよいか迷う
+
+<ul>
+<li>独立して交換可能か，アップグレード可能かが重要
+
+<ul>
+<li>他のコンポーネントに影響を与えることなく，コンポーネントを書き換えられるか</li>
+</ul></li>
+<li>多くのMicroservicesチームはサービスを長期間で進化させるより，廃棄されることを期待している</li>
+</ul></li>
+<li><a href="http://www.theguardian.com/uk">The Guardian</a>のウェブサイトはMonolithicとして設計されつつ，Microservices舵をきったよい例
+
+<ul>
+<li>まだMonolithicアプリケーションがコアであるが，新機能の追加には，MonolithicアプリケーションのAPIを使ってMicroservicesにより構築されている</li>
+<li>この手法は，そもそも一時的な機能に追加するときに便利</li>
+<li>そのようなウェブサイトの一部は開発速度の速い言語で構築され，簡単に統合することができるし，イベントが終了したらすぐに切り離すこともできる</li>
+</ul></li>
+<li>コンポーネント化するとより粗めのリリーススケジュールが立てられる
+
+<ul>
+<li>Monolithicアプリケーションでは，変更した際にアプリケーション全体をビルドし直してでプロイする必要があるが，Microservicesでは，変更を加えたサービスのみをデプロイし直せばよい
+
+<ul>
+<li>これはリリースのスピードを早める</li>
+</ul></li>
+<li>悪い点としてサービスの利用者に影響を与える
+
+<ul>
+<li>伝統的な手法では，バージョニングによりこれを解決してきたが，Microservicesではそれを最後の手段にする
+
+<ul>
+<li>サプライヤーの変化に対して出来る限り耐性を持つようにデザインすれば多くのバージョニングを避けることができる</li>
+</ul></li>
+</ul></li>
+</ul></li>
+</ul>
+
+<h2 id="microservicesは未来か:6f21f735c9980492850a02630b2789b4">Microservicesは未来か？</h2>
+
+<ul>
+<li>Microservicesアプリケーションの先駆者としては，AmazonやNetflix，The Guardian，UK Government Digital Serviceなどが挙げられる</li>
+<li>Microservicesは経験的に良い結果が出ているが， 将来のソフトウェアアーキテクチャーの進むべき方向であるかは確証はない</li>
+<li>Microservicesはまだ十分に成熟していない
+
+<ul>
+<li>コンポーネントの境界をどこにするか決めるのは難しい</li>
+<li>サービスの境界を超えたコードの移行は難しい</li>
+<li>インターフェースの変更が大変</li>
+<li>後方互換を保つ必要がある</li>
+<li>テストが複雑になる</li>
+<li>高いスキルが求められる</li>
+</ul></li>
+<li>Microservicesアーキテクチャーから始めるべきではない
+
+<ul>
+<li>Monolithicで初めて，モジュール性を保ち，問題になればそれをMicroservicesとして分割するのが良い</li>
+</ul></li>
+</ul>
+
+<h2 id="参考:6f21f735c9980492850a02630b2789b4">参考</h2>
+
+<h3 id="英語:6f21f735c9980492850a02630b2789b4">英語</h3>
+
+<ul>
+<li><a href="http://qconlondon.com/dl/qcon-london-2014/slides/AdrianCockcroft_MigratingToMicroservices.pdf">Migrating to Microservices</a> - <a href="https://twitter.com/adrianco">@adrianco</a>氏によるNetflixにおけるMicroservicesの話．どのような技術を使っているのかや，デプロイはどうしているかなど，具体的な話をざっと掴める．</li>
+<li><a href="http://highscalability.com/blog/2014/4/8/microservices-not-a-free-lunch.html">Microservices - Not A Free Lunch!</a> - Microservicesのしんどい話．オペレーションが複雑になる，高いDevOpsスキルが必要になる，インターフェースの変更が困難，作業の重複，分散システムの複雑さ，テストが難しいなどなど．</li>
+<li><a href="http://martinfowler.com/bliki/MicroservicePrerequisites.html">MicroservicePrerequisites</a> - Martin Fowler氏による&rdquo;Microservices&rdquo;の続編．Microservicesを始めるために最低限必要なものまとめ．高速のプロビジョニング，基本的なモニタリング，高速な自動デプロイなど．</li>
+<li><a href="http://2012.33degree.org/talk/show/67">&ldquo;Micro services - Java, the Unix Way&rdquo;</a></li>
+<li><a href="http://www.infoq.com/articles/microservices-intro">Microservices: Decomposing Applications for Deployability and Scalability</a></li>
+</ul>
+
+<h3 id="日本語:6f21f735c9980492850a02630b2789b4">日本語</h3>
+
+<ul>
+<li><a href="https://recompile.net/posts/microservices.html">マイクロサービス（microservices）とは何か — recompile.net</a></li>
+<li><a href="http://rebuild.fm/55/">Rebuild: 55: Legacy Monolithic Macroservices (Naoya Ito)</a></li>
+<li><a href="http://techlife.cookpad.com/entry/2014/09/08/093000">クックパッドとマイクロサービス - クックパッド開発者ブログ</a></li>
+<li><a href="http://japan.zdnet.com/cio/sp_12executive/35052867/">“マイクロサービス化”で変化に耐えられる組織を目指す&ndash;クックパッド舘野CTO - ZDNet Japan</a></li>
+<li><a href="http://yosuke-furukawa.hatenablog.com/entry/2014/09/09/174601">nodeconf.eu 1日目 (Future Node.js, microservices, hapi) - from scratch</a></li>
+<li><a href="http://www.infoq.com/jp/news/2014/06/introducing-microservices">マイクロサービス設計概論</a></li>
+<li><a href="http://www.infoq.com/jp/news/2014/03/microservices-soa">マイクロサービスとSOA</a></li>
+</ul>
+
+      <div class="social">
+  
+  
+  <a href="https://twitter.com/share" class="twitter-share-button" data-via="deeeet" data-count="none">Tweet</a>
+  
+  
+</div>
+
+    </section>
+
+    <footer>
+      <address>
+        
+        <img src="/images/bio.jpeg"/>
+        
+        <p>Written by <strong><a rel="author" href="https://twitter.com/deeeet" title="Taichi Nakashima" target="_blank">Taichi Nakashima</a></strong><br>
+          <span class="muted">A Tokyo based PaaS engineer. Please contact me via twitter.</span>
+        </p>
+      </address>
+
+    </footer>
+
+  </div>
+</article>
+
+<script type="text/javascript" src="//ajax.googleapis.com/ajax/libs/jquery/1.7.2/jquery.min.js"></script>
+<script type="text/javascript" src="/js/main.js"></script>
+
+<script>!function(d,s,id){var js,fjs=d.getElementsByTagName(s)[0],p=/^http:/.test(d.location)?'http':'https';if(!d.getElementById(id)){js=d.createElement(s);js.id=id;js.src=p+'://platform.twitter.com/widgets.js';fjs.parentNode.insertBefore(js,fjs);}}(document, 'script', 'twitter-wjs');</script>
+
+
+<script type="text/javascript">var HN=[];HN.factory=function(e){return function(){HN.push([e].concat(Array.prototype.slice.call(arguments,0)))};},HN.on=HN.factory("on"),HN.once=HN.factory("once"),HN.off=HN.factory("off"),HN.emit=HN.factory("emit"),HN.load=function(){var e="hn-button.js";if(document.getElementById(e))return;var t=document.createElement("script");t.id=e,t.src="//hn-button.herokuapp.com/hn-button.js";var n=document.getElementsByTagName("script")[0];n.parentNode.insertBefore(t,n)},HN.load();</script>
+
+
+  <script>
+  (function(i,s,o,g,r,a,m){i['GoogleAnalyticsObject']=r;i[r]=i[r]||function(){
+  (i[r].q=i[r].q||[]).push(arguments)},i[r].l=1*new Date();a=s.createElement(o),
+  m=s.getElementsByTagName(o)[0];a.async=1;a.src=g;m.parentNode.insertBefore(a,m)
+  })(window,document,'script','//www.google-analytics.com/analytics.js','ga');
+
+  ga('create', 'UA-45390253-1', 'auto');
+  ga('send', 'pageview');
+
+</script>
+
+
+
+<script>
+  $(document).ready(function() {
+  
+  $('p:has(img)').css('text-align', 'center');
+  $('iframe').css('style', 'display: block; margin: 0px auto;');
+  });
+</script>
+

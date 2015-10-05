@@ -1,0 +1,229 @@
+<!doctype html>
+<html>
+  <head>
+    <meta http-equiv="content-type" content="text/html; charset=utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    
+    <title>logspoutでDockerコンテナのログの集約・ルーティング | SOTA</title>
+    
+    <link href="https://fonts.googleapis.com/css?family=Lato%3a900" rel="stylesheet" type="text/css">
+    <link rel="stylesheet" href="/css/main.css">
+    <link rel="shortcut icon" href="/favicon.png" type="image/x-icon" />
+    <link href="http://deeeet.com//index.xml" rel="alternate" type="application/rss+xml" title="" />
+    <meta name="title" content="http://deeeet.com/writing/2014/05/14/logspout/">
+    <link rel="canonical" href="http://deeeet.com/writing/2014/05/14/logspout/">
+    
+    <meta property="og:title" content="logspoutでDockerコンテナのログの集約・ルーティング"/>
+    <meta property="og:url" content="http://deeeet.com/writing/2014/05/14/logspout/"/>
+  </head>
+  
+  <body>
+    <section class="site-nav">
+      <header>
+        <nav id="navigation">
+          <ul class="menu">
+            <li><a href="https://github.com/tcnksm/talks">Talks</a></li>
+            <li><a href="https://tcnksm.exposure.co/">Photos</a></li>
+          </ul>
+
+          <a class="name" href="/">SOTA</a>
+        </nav>        
+      </header>
+    </section>
+    
+
+
+<article>
+  <div class="container">
+    <header>
+      <div class="meta">
+        <time pubdate datetime="2014-05-14" title="2014-05-14">May 14, 2014</time>
+      </div>
+      <h1 class="title">logspoutでDockerコンテナのログの集約・ルーティング</h1>
+    </header>
+    
+    <section>
+      
+
+<p><a href="https://github.com/progrium/logspout#streaming-endpoints">progrium/logspout</a></p>
+
+<p>logspoutは，ホスト内で動かした全てのDockerコンテナの出力を集約して，好きなところに飛ばす（ルーティングする）ためのツール．開発者はDokkの<a href="https://github.com/progrium">Jeff Lindsay</a>．</p>
+
+<p>以下の2つの特徴がある</p>
+
+<ul>
+<li>コンテナとして起動（ステートレス）</li>
+<li>HTTP APIによるルーティングの設定</li>
+</ul>
+
+<p>ログを貯めて管理したり，検索するといったことはできない．コンテナのログをリアルタイムで好きなところに飛ばすだけ．</p>
+
+<p>これだけだが，Dockerのログの問題をいい感じに解決してくれそう．</p>
+
+<h2 id="dockerのログのしくみ:b75ac6591b168421d8171ffda96d3e4e">Dockerのログのしくみ</h2>
+
+<p>まず，簡単にDockerのログのしくみを説明する．</p>
+
+<p>現時点（2014年5月）でDockerはコンテナ内で吐き出されたstdout/stderrを取得することができる．コンテナのプロセスが<code>stdout</code>と<code>stderr</code>にログを吐き出し，Dockerはそれをホストに<code>json</code>として保存する．<code>docker log</code>コマンドを使うとそれを取得することができる．</p>
+
+<p>これはシンプルだけど欠点でもある．いずれディスクが圧迫されるし，毎回<code>docker log</code>を叩くわけにもいかない．そのため，Dockerのログをどうするかってのはいろいろ試みられている．</p>
+
+<h2 id="dockerのログ収集の試み:b75ac6591b168421d8171ffda96d3e4e">Dockerのログ収集の試み</h2>
+
+<p>Dockerコンテナのログ収集の試みは，大きく分けて3つある．</p>
+
+<ul>
+<li><strong>コンテナの内部で収集する</strong>：コンテナ内でログ収集のプロセスを同時に走らせる（<a href="http://qiita.com/kazunori279/items/1bbb8fce10219217c247">&ldquo;dockerなら5分で動く！ nginxのログをfluentdで集めてnorikraでストリーム分析&rdquo;</a>，<a href="https://blog.logentries.com/2014/03/how-to-run-rsyslog-in-a-docker-container-for-logging/">&ldquo;How To Run Rsyslog in a Docker Container for Logging&rdquo;</a>）</li>
+<li><strong>コンテナの外部で収集する</strong>：ホスト側でログ収集のエージェントを走らせて，コンテナのログの書き出し先をホストからマウントする，もしくは<code>json</code>を直接読む（<a href="http://jasonwilder.com/blog/2014/03/17/docker-log-management-using-fluentd/">&ldquo;Docker Log Management Using Fluentd&rdquo;</a>）</li>
+<li><strong>収集および配信用のコンテナを立てる</strong>：<a href="https://github.com/elasticsearch/logstash-forwarder">logstash-forwarder</a>のようなログの収集および配信を担うエージェントをコンテナ内に立てる．そして各コンテナが起動の際に<code>--volumes-from</code>でそのコンテナを指定する（<a href="https://denibertovic.com/post/docker-and-logstash-smarter-log-management-for-your-containers/">&ldquo;Docker And Logstash: Smarter Log management For Your Containers&rdquo;</a>）</li>
+</ul>
+
+<p>やりようはいろいろあるが，少なくともDocker的に良いのは，</p>
+
+<ul>
+<li>コンテナに複数プロセスを立てない　</li>
+<li>ホストに多くを設定しない</li>
+</ul>
+
+<p>これを満たすのは，3番目の専用のコンテナを立てる方式．ただ，現状の方法は立てるコンテナごとに<code>--volumes-from</code>を駆使しなといけないなど，少しめんどくさい．</p>
+
+<h2 id="logsoutの良い点:b75ac6591b168421d8171ffda96d3e4e">logsoutの良い点</h2>
+
+<p>専用のコンテナ（<a href="https://index.docker.io/u/progrium/logspout/">progrium/logspout</a>）を立てるだけ使える．</p>
+
+<p>つまり，現状動いている他のコンテナになんの設定もなしに使える．当然，ホスト側に特別な設定をする必要がない．</p>
+
+<h2 id="logsoutを使う:b75ac6591b168421d8171ffda96d3e4e">logsoutを使う</h2>
+
+<p>まず，インストール（以下で<code>docker run</code>すればインストールもされるので実際は必要ない）</p>
+
+<pre><code class="language-bash">$ docker pull progrium/logspout
+</code></pre>
+
+<p>例として，&rdquo;hello world&rdquo;を出力し続ける単純なコンテナを立てておく．</p>
+
+<pre><code class="language-bash">$ docker run -d --name hello1 busybox /bin/sh -c &quot;while true; do echo hello world; sleep 1; done&quot;
+$ docker run -d --name hello2 busybox /bin/sh -c &quot;while true; do echo hello world; sleep 1; done&quot;
+</code></pre>
+
+<p>これらに対してログを収集するには以下を実行する．</p>
+
+<pre><code class="language-bash">$ docker run -d -p 8000:8000 --name log -v=/var/run/docker.sock:/tmp/docker.sock progrium/logspout
+</code></pre>
+
+<p>HTTP APIのアクセスを可能にするため<code>8000</code>ポートを解放し，ホストの<code>/var/run/docker.sock</code>をマウントする．</p>
+
+<p>ログを見てみる．</p>
+
+<pre><code class="language-bash">$ curl $(docker port log 8000)/logs
+             log|[martini] Started GET /logs for 172.17.42.1:50859
+             hello2|hello world
+             hello1|hello world
+             hello2|hello world
+             hello1|hello world
+             hello2|hello world
+</code></pre>
+
+<p>リアルタイムの出力が確認できる．出力は色づけもされている．</p>
+
+<h3 id="ルーティング:b75ac6591b168421d8171ffda96d3e4e">ルーティング</h3>
+
+<p>一番単純な方法は，rsyslogに投げること．以下のように起動コマンドにURIを指定するだけ．</p>
+
+<pre><code class="language-bash">$ docker run -v=/var/run/docker.sock:/tmp/docker.sock progrium/logspout syslog://logs.papertrailapp.com:55555
+</code></pre>
+
+<p>以下のようにPOSTを使って，ルーティングの設定をすることもできる．</p>
+
+<pre><code class="language-bash">$ curl $(docker port log 8000)/logs -X POST \
+    -d '{&quot;source&quot;: {&quot;filter&quot;: &quot;db&quot;, &quot;types&quot;: [&quot;stderr&quot;]}, target&quot;: {&quot;type&quot;: &quot;syslog&quot;, &quot;addr&quot;: &quot;logs.papertrailapp.com:55555&quot;}}'
+</code></pre>
+
+<p>上の例では，名前が<code>db</code>であるコンテナの<code>stderr</code>への出力を<code>logs.papertrailapp.com:55555</code>に飛ばすように設定している．<code>addr</code>はDNSで名前解決さえできればいいので，<a href="https://github.com/hashicorp/consul">Consul</a>などのサービスディスカバリを使えば，さらなる道を開けそう．</p>
+
+<p>ルーティングは以下のようにGETでデバッグしつつ設定できる．</p>
+
+<pre><code class="language-bash">GET /logs
+GET /logs/filter:&lt;container-name-substring&gt;
+GET /logs/id:&lt;container-id&gt;
+GET /logs/name:&lt;container-name&gt;
+</code></pre>
+
+<h2 id="coreosの場合:b75ac6591b168421d8171ffda96d3e4e">CoreOSの場合</h2>
+
+<p>Dockerの運用に関しては<a href="https://coreos.com/">CoreOS</a>に多くの知見がある．CoreOSのコンテナのログのルーティング方法について<a href="https://twitter.com/mopemope">@mopemopeさん</a>に教えていただいた（参考：<a href="https://medium.com/coreos-linux-for-massive-server-deployments/defb984185c5">&ldquo;CoreOS logging to remote destinations&rdquo;</a>）．</p>
+
+<p>CoreOSの場合は，上の分類でいうと<strong>コンテナの外部で収集する</strong>方式になる．そもそもCoreOSでは，systemdでコンテナを起動する想定になっている．そのため，ログのルーティングにはsystemd自前のjournalが使える．logspoutと同様のことをするには，以下のようにする．</p>
+
+<pre><code class="language-bash">$ journalctl -o short -f | ncat remote-destination.com 12345
+</code></pre>
+
+<p>どの方法が一番良いかはまだまだ一概には言えないが，コンテナをsystemdで起動することが前提になっていれば，余計な設定などもなく，シンプルだなと．</p>
+
+<h2 id="まとめ:b75ac6591b168421d8171ffda96d3e4e">まとめ</h2>
+
+<p>考慮する問題はいくつかある．</p>
+
+<ul>
+<li>若干の遅れが生じる</li>
+<li>stdout/stderrだけしか取得できない（これはDockerの仕様）</li>
+<li><a href="https://twitter.com/kenjiskywalker/status/466784403020992512">ルーティング用のコンテナが落ちたときにログを保証できない</a></li>
+</ul>
+
+<p>まだ出たばかりなので，1つ目はすぐに解決しそう．2つ目の問題に関しては， 特別なログは<code>volume</code>やマウントを駆使してなんとかするしかない．3つ目に関して，このコンテナはログをルーティングするだけで，保存はできない．つまり，コンテナが落ちている間のログは失われ，再度送信することはできない．コンテナのヘルスチェックや障害対応などまだまだ考えることは多いように思える．</p>
+
+      <div class="social">
+  
+  
+  <a href="https://twitter.com/share" class="twitter-share-button" data-via="deeeet" data-count="none">Tweet</a>
+  
+  
+</div>
+
+    </section>
+
+    <footer>
+      <address>
+        
+        <img src="/images/bio.jpeg"/>
+        
+        <p>Written by <strong><a rel="author" href="https://twitter.com/deeeet" title="Taichi Nakashima" target="_blank">Taichi Nakashima</a></strong><br>
+          <span class="muted">A Tokyo based PaaS engineer. Please contact me via twitter.</span>
+        </p>
+      </address>
+
+    </footer>
+
+  </div>
+</article>
+
+<script type="text/javascript" src="//ajax.googleapis.com/ajax/libs/jquery/1.7.2/jquery.min.js"></script>
+<script type="text/javascript" src="/js/main.js"></script>
+
+<script>!function(d,s,id){var js,fjs=d.getElementsByTagName(s)[0],p=/^http:/.test(d.location)?'http':'https';if(!d.getElementById(id)){js=d.createElement(s);js.id=id;js.src=p+'://platform.twitter.com/widgets.js';fjs.parentNode.insertBefore(js,fjs);}}(document, 'script', 'twitter-wjs');</script>
+
+
+<script type="text/javascript">var HN=[];HN.factory=function(e){return function(){HN.push([e].concat(Array.prototype.slice.call(arguments,0)))};},HN.on=HN.factory("on"),HN.once=HN.factory("once"),HN.off=HN.factory("off"),HN.emit=HN.factory("emit"),HN.load=function(){var e="hn-button.js";if(document.getElementById(e))return;var t=document.createElement("script");t.id=e,t.src="//hn-button.herokuapp.com/hn-button.js";var n=document.getElementsByTagName("script")[0];n.parentNode.insertBefore(t,n)},HN.load();</script>
+
+
+  <script>
+  (function(i,s,o,g,r,a,m){i['GoogleAnalyticsObject']=r;i[r]=i[r]||function(){
+  (i[r].q=i[r].q||[]).push(arguments)},i[r].l=1*new Date();a=s.createElement(o),
+  m=s.getElementsByTagName(o)[0];a.async=1;a.src=g;m.parentNode.insertBefore(a,m)
+  })(window,document,'script','//www.google-analytics.com/analytics.js','ga');
+
+  ga('create', 'UA-45390253-1', 'auto');
+  ga('send', 'pageview');
+
+</script>
+
+
+
+<script>
+  $(document).ready(function() {
+  
+  $('p:has(img)').css('text-align', 'center');
+  $('iframe').css('style', 'display: block; margin: 0px auto;');
+  });
+</script>
+

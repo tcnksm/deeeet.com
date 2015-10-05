@@ -1,0 +1,145 @@
+<?xml version="1.0" encoding="utf-8" standalone="yes" ?>
+<rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom">
+  <channel>
+    <title>Talkings on SOTA</title>
+    <link>http://deeeet.com/talking/</link>
+    <description>Recent content in Talkings on SOTA</description>
+    <generator>Hugo -- gohugo.io</generator>
+    <language>ja-jp</language>
+    <copyright>Copyright (C) 2013-2015 Taichi Nakashima All Right Reserved.</copyright>
+    <lastBuildDate>Wed, 21 Jan 2015 00:00:00 +0000</lastBuildDate>
+    <atom:link href="http://deeeet.com/talking/index.xml" rel="self" type="application/rss+xml" />
+    
+    <item>
+      <title>CoreOSクラスタにDockerコンテナをデプロイする</title>
+      <link>http://deeeet.com/talking/2015/01/21/docker-meetup-4/</link>
+      <pubDate>Wed, 21 Jan 2015 00:00:00 +0000</pubDate>
+      
+      <guid>http://deeeet.com/talking/2015/01/21/docker-meetup-4/</guid>
+      <description>
+
+&lt;script async class=&#34;speakerdeck-embed&#34; data-id=&#34;6d2cf7b07fc001328d145ab31af9093f&#34; data-ratio=&#34;1.77777777777778&#34; src=&#34;https://speakerdeck.com/assets/embed.js&#34;&gt;&lt;/script&gt;
+
+&lt;p&gt;&lt;a href=&#34;http://connpass.com/event/10318/&#34;&gt;Docker Meetup Tokyo #4&lt;/a&gt;&lt;/p&gt;
+
+&lt;p&gt;CoreOSの概要とDockerを実際に運用しようと思ったときにDockerが抱える問題をCoreOSがどのようにそれを解決するかについて発表した．デモでは&lt;a href=&#34;https://www.terraform.io/&#34;&gt;Terraform&lt;/a&gt;を使ってDigitalOcean上にCoreOSクラスタを立てて，デモアプリケーションコンテナを動的にスケールさせる様子を実演した（ソースは全て&lt;a href=&#34;https://github.com/tcnksm/docker-meetup-4-demo&#34;&gt;tcnksm/docker-meetup-4-demo&lt;/a&gt;にある）．&lt;/p&gt;
+
+&lt;h3 id=&#34;雑感:6cac544df46749443b06a7dab95a2513&#34;&gt;雑感&lt;/h3&gt;
+
+&lt;p&gt;簡単にMeetupの感想を書いておく．&lt;/p&gt;
+
+&lt;p&gt;今回はDockerそのものの発表よりも，オーケストレーションやサービスディスカバリーなどの周辺ツールやサービスの発表が多かった．ツール（もしくはDocker専用のOS）では，&lt;a href=&#34;https://coreos.com/&#34;&gt;CoreOS&lt;/a&gt;，&lt;a href=&#34;http://kubernetes.io/&#34;&gt;Kubernetes&lt;/a&gt;，&lt;a href=&#34;http://www.projectatomic.io/&#34;&gt;RedHad Atomic host&lt;/a&gt;，サービスでは&lt;a href=&#34;http://aws.amazon.com/ecs/&#34;&gt;Amazon EC2 Container Service (ECS)&lt;/a&gt;，&lt;a href=&#34;https://cloud.google.com/container-engine/&#34;&gt;Google Container Engine&lt;/a&gt;，&lt;a href=&#34;https://www.tutum.co/&#34;&gt;tutum&lt;/a&gt;といった主要なもの全ての発表があった．完全に周辺ツールへの注目が高まっている．Docker machineやswarmという単語はほとんど聞かなかったので期待感は薄そう．&lt;/p&gt;
+
+&lt;p&gt;得にコンテナの動的なデプロイへの注目が高いと感じた．Dockerによりホストが抽象化されるので，どのマシンにコンテナを動かしても同じように扱うことができる．動的なデプロイとは，複数のマシンをクラスタリングし，マシンのリソースや役割などに基づき適切なマシンにコンテナをデプロイする手法である（つまりデプロイ先が動的に決まる）．周辺ツールは，そのようなマシンのクラスタリングや，スケジューリング，コンテナの連携といった問題を解決する．まだどうなるか分からないが，2015年はこの辺に大きな動きがありそう．&lt;/p&gt;
+
+&lt;p&gt;また，実際にプロダクションへのDocker投入の話がWantedlyとドワンゴからありとても参考になった．共通していたのは，どちらも静的なデプロイをしていたところ．静的なデプロイというのは，動的デプロイと逆で，決まったIPに決まったコンテナをデプロイする方法（プロダクションでのDockerの運用はこの手法を多く見かける）．この理由は，オーケストレーションやスケジューリング系のツールがまだまだ成熟しておらず，プロダクションでは不安定，運用も大変で得られるメリットが少ないため，と推測した．&lt;/p&gt;
+
+&lt;p&gt;とにかく面白い発表をたくさん聞くことができたので，とても良いMeetupだった．今回Docker meetupで発表の機会をもうけて頂いた&lt;a href=&#34;#&#34;&gt;@stanaka&lt;/a&gt;さん，&lt;a href=&#34;#&#34;&gt;@kazunori_279&lt;/a&gt;さんありがとうございました．他のスタッフのかたもありがとうございました．次はDockerCon JPですかね．&lt;/p&gt;
+
+&lt;h3 id=&#34;参考:6cac544df46749443b06a7dab95a2513&#34;&gt;参考&lt;/h3&gt;
+
+&lt;ul&gt;
+&lt;li&gt;&lt;a href=&#34;http://deeeet.com/writing/2014/11/17/coreos/&#34;&gt;CoreOSに入門した&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a href=&#34;http://deeeet.com/writing/2014/11/20/fleet/&#34;&gt;Fleetの使い方，Unitファイルの書き方&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a href=&#34;http://deeeet.com/writing/2014/11/26/coreos-etcd-docker-link/&#34;&gt;CoreOSクラスタ内のDockerコンテナの動的リンク&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a href=&#34;http://deeeet.com/writing/2015/01/07/terraform-coreos/&#34;&gt;TerraformでCoreOSクラスタを構築する&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a href=&#34;http://connpass.com/event/10318/presentation/&#34;&gt;Docker Meetup Tokyo #4 - 資料一覧&lt;/a&gt;&lt;/li&gt;
+&lt;/ul&gt;
+</description>
+    </item>
+    
+    <item>
+      <title>Move Fast, Don&#39;t Break Your Infra Config</title>
+      <link>http://deeeet.com/talking/2014/10/23/communities-meetup/</link>
+      <pubDate>Thu, 23 Oct 2014 22:37:06 +0900</pubDate>
+      
+      <guid>http://deeeet.com/talking/2014/10/23/communities-meetup/</guid>
+      <description>&lt;p&gt;&lt;script async class=&#34;speakerdeck-embed&#34; data-id=&#34;d41b1da03cb60132416d66b4fd40d322&#34; data-ratio=&#34;1.77777777777778&#34; src=&#34;http://speakerdeck.com/assets/embed.js&#34;&gt;&lt;/script&gt;
+&lt;a href=&#34;http://eventregist.com/e/ChefDockerOpenStack&#34;&gt;Communities meetup Chef, Docker, Openstack, Puppet&lt;/a&gt;&lt;/p&gt;
+
+&lt;p&gt;&lt;a href=&#34;http://www.slideshare.net/MichaelDucy/the-future-of-everything-37344357&#34;&gt;Container is Future&lt;/a&gt;. But how to move to new trend (container may not future)? Maybe you already have used Chef or Puppet for your configuration management. Should you trash those tool? Of course No. One of my answer is using &lt;a href=&#34;https://www.packer.io/&#34;&gt;packer&lt;/a&gt;. In this talk, I introduced what is packer and how to use it with docker and chef or puppet.&lt;/p&gt;
+</description>
+    </item>
+    
+    <item>
+      <title>コマンドラインツールについて語るときに僕の語ること</title>
+      <link>http://deeeet.com/talking/2014/08/31/yapc-2014/</link>
+      <pubDate>Sun, 31 Aug 2014 00:00:00 +0000</pubDate>
+      
+      <guid>http://deeeet.com/talking/2014/08/31/yapc-2014/</guid>
+      <description>&lt;script async class=&#34;speakerdeck-embed&#34; data-id=&#34;be2e75b011500132bed77eaf0ae1314a&#34; data-ratio=&#34;1.77777777777778&#34; src=&#34;http://speakerdeck.com/assets/embed.js&#34;&gt;&lt;/script&gt;
+
+&lt;p&gt;&lt;a href=&#34;http://yapcasia.org/2014/&#34;&gt;YAPC::Asia Tokyo 2014&lt;/a&gt;&lt;/p&gt;
+
+&lt;p&gt;語ってきました．言いたいことはすべてスライドに詰め込んだし，参考文献もまとめておいたので興味のあるひとは参考にしてください．また，gihyo.jpさんに素晴らしいレポートを書いて頂いたのでそちらもご覧下さい．&lt;/p&gt;
+
+&lt;ul&gt;
+&lt;li&gt;&lt;a href=&#34;http://deeeet.com/writing/2014/08/27/cli-reference/&#34;&gt;コマンドラインツールを作るときに参考にしている資料&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a href=&#34;http://gihyo.jp/news/report/01/yapcasia2014/0001?page=4&#34;&gt;YAPC:: Asia 2014 1日目レポート&lt;/a&gt;&lt;/li&gt;
+&lt;/ul&gt;
+</description>
+    </item>
+    
+    <item>
+      <title>Go言語で作ったCLIツールを配布する</title>
+      <link>http://deeeet.com/talking/2014/08/11/golang-study/</link>
+      <pubDate>Mon, 11 Aug 2014 00:00:00 +0000</pubDate>
+      
+      <guid>http://deeeet.com/talking/2014/08/11/golang-study/</guid>
+      <description>
+
+&lt;script async class=&#34;speakerdeck-embed&#34; data-id=&#34;1e6e28a001af013285ba2abb871a81a5&#34; data-ratio=&#34;1.77777777777778&#34; src=&#34;http://speakerdeck.com/assets/embed.js&#34;&gt;&lt;/script&gt;
+
+&lt;p&gt;&lt;a href=&#34;http://connpass.com/event/7814/&#34;&gt;Golang勉強会&lt;/a&gt;&lt;/p&gt;
+
+&lt;p&gt;Go言語で作成したツールをクロスコンパイルして，複数プラットフォームに配布する方法について話してきた．自分がGoをはじめた理由の一つがクロスコンパイルによる配布のしやすさであり，いろいろ実践したりそれ用のツールを作ったりしてきたのでそれをまとめた．&lt;/p&gt;
+
+&lt;h3 id=&#34;参考:59e57060649a5deb678be6483b9232e5&#34;&gt;参考&lt;/h3&gt;
+
+&lt;p&gt;発表は以下の記事をもとにしている．&lt;/p&gt;
+
+&lt;ul&gt;
+&lt;li&gt;&lt;a href=&#34;http://deeeet.com/writing/2014/08/07/github-heroku-dist/&#34;&gt;&amp;ldquo;HerokuとGithubを使った統一的なツール配布&amp;rdquo;&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a href=&#34;http://deeeet.com/writing/2014/07/29/ghr/&#34;&gt;&amp;ldquo;高速に自作パッケージをGithubにリリースするghrというツールをつくった&amp;rdquo;&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a href=&#34;http://deeeet.com/writing/2014/07/23/github-release/&#34;&gt;&amp;ldquo;Go言語のツールをクロスコンパイルしてGithubにリリースする&amp;rdquo;&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a href=&#34;http://deeeet.com/writing/2014/05/20/brew-tap/&#34;&gt;&amp;ldquo;HomeBrewで自作ツールを配布する&amp;rdquo;&lt;/a&gt;&lt;/li&gt;
+&lt;/ul&gt;
+</description>
+    </item>
+    
+    <item>
+      <title>flynnの時代</title>
+      <link>http://deeeet.com/talking/2014/07/07/docker-meetup-3/</link>
+      <pubDate>Mon, 07 Jul 2014 00:00:00 +0000</pubDate>
+      
+      <guid>http://deeeet.com/talking/2014/07/07/docker-meetup-3/</guid>
+      <description>
+
+&lt;script async class=&#34;speakerdeck-embed&#34; data-id=&#34;3e5fba00e59601314f771288f3080752&#34; data-ratio=&#34;1.77777777777778&#34; src=&#34;http://speakerdeck.com/assets/embed.js&#34;&gt;&lt;/script&gt;
+
+&lt;p&gt;&lt;a href=&#34;http://connpass.com/event/6998/&#34;&gt;Docker meetup tokyo #3&lt;/a&gt;&lt;/p&gt;
+
+&lt;p&gt;内容は，Dockerの応用の１つであるOSSでPaaSをつくる&lt;a href=&#34;https://flynn.io&#34;&gt;flynn&lt;/a&gt;というプロジェクトの概要とそのアーキテクチャーの紹介．FlynnのアーキテクチャやDockerの使いかたは非常に面白く，これからDockerを使うときに参考になると思い発表した．&lt;/p&gt;
+
+&lt;h3 id=&#34;参考:2364097a629fda60c10c2510028fb9d6&#34;&gt;参考&lt;/h3&gt;
+
+&lt;ul&gt;
+&lt;li&gt;&lt;a href=&#34;https://flynn.io/&#34;&gt;&amp;ldquo;Flynn - Open source Platform as a Service powered by Docker&amp;rdquo;&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a href=&#34;http://progrium.com/blog/2014/02/06/the-start-of-the-age-of-flynn/&#34;&gt;&amp;ldquo;The Start of the Age of Flynn&amp;rdquo;&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a href=&#34;http://jpetazzo.github.io/2013/11/17/flynn-docker-paas/&#34;&gt;&amp;ldquo;Unveiling Flynn, a new PAAS based on Docker&amp;rdquo;&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a href=&#34;http://5by5.tv/changelog/99&#34;&gt;&amp;ldquo;5by5 | The Changelog #99: Flynn, Tent, open source PaaSes and more with Jeff Lindsay and Jonathan Rudenberg&amp;rdquo;&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a href=&#34;http://5by5.tv/changelog/115&#34;&gt;&amp;ldquo;5by5 | The Changelog #115: Flynn updates with Jonathan Rudenberg and Jeff Lindsay&amp;rdquo;&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a href=&#34;https://flynn.io/blog/container-indepedence&#34;&gt;&amp;ldquo;Container Independence&amp;rdquo;&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a href=&#34;https://docs.google.com/presentation/d/1ni1BFiVMTLN_8q34si-qPfl0F6w2W3oPVKqSMfcs_XA/edit#slide=id.p&#34;&gt;&amp;ldquo;Bazooka: Continuous Deployment at SoundCloud - Google Slides&amp;rdquo;&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a href=&#34;http://gabrtv.github.io/deis-dockercon-2014/#/&#34;&gt;&amp;ldquo;Deis: Evolution of a Docker PAAS&amp;rdquo;&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a href=&#34;http://www.centurylinklabs.com/flynn-vs-deis-the-tale-of-two-docker-micro-paas-technologies/&#34;&gt;&amp;ldquo;Flynn vs. Deis: The Tale of Two Docker Micro-PaaS Technologies | CenturyLink Labs&amp;rdquo;&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a href=&#34;http://banyan.me/slides/20140116/slides.html&#34;&gt;&amp;ldquo;Inside Dokku in 5 minutes&amp;rdquo;&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a href=&#34;http://r7kamura.github.io/2014/06/24/discoverd.html&#34;&gt;&amp;ldquo;Discoverd - r7km/s&amp;rdquo;&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a href=&#34;http://r7kamura.github.io/2014/06/26/flynn-host.html&#34;&gt;&amp;ldquo;Flynn Host - r7km/s&amp;rdquo;&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a href=&#34;http://progrium.com/blog/2014/07/01/beyond-flynn-or-flynn-as-a-worldview/&#34;&gt;&amp;ldquo;Beyond Flynn, or Flynn-as-a-Worldview&amp;rdquo;&lt;/a&gt;&lt;/li&gt;
+&lt;/ul&gt;
+</description>
+    </item>
+    
+  </channel>
+</rss>

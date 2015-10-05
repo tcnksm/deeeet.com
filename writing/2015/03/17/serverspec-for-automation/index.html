@@ -1,0 +1,236 @@
+<!doctype html>
+<html>
+  <head>
+    <meta http-equiv="content-type" content="text/html; charset=utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    
+    <title>デプロイ自動化とServerspec | SOTA</title>
+    
+    <link href="https://fonts.googleapis.com/css?family=Lato%3a900" rel="stylesheet" type="text/css">
+    <link rel="stylesheet" href="/css/main.css">
+    <link rel="shortcut icon" href="/favicon.png" type="image/x-icon" />
+    <link href="http://deeeet.com//index.xml" rel="alternate" type="application/rss+xml" title="" />
+    <meta name="title" content="http://deeeet.com/writing/2015/03/17/serverspec-for-automation/">
+    <link rel="canonical" href="http://deeeet.com/writing/2015/03/17/serverspec-for-automation/">
+    
+    <meta property="og:title" content="デプロイ自動化とServerspec"/>
+    <meta property="og:url" content="http://deeeet.com/writing/2015/03/17/serverspec-for-automation/"/>
+  </head>
+  
+  <body>
+    <section class="site-nav">
+      <header>
+        <nav id="navigation">
+          <ul class="menu">
+            <li><a href="https://github.com/tcnksm/talks">Talks</a></li>
+            <li><a href="https://tcnksm.exposure.co/">Photos</a></li>
+          </ul>
+
+          <a class="name" href="/">SOTA</a>
+        </nav>        
+      </header>
+    </section>
+    
+
+
+<article>
+  <div class="container">
+    <header>
+      <div class="meta">
+        <time pubdate datetime="2015-03-17" title="2015-03-17">March 17, 2015</time>
+      </div>
+      <h1 class="title">デプロイ自動化とServerspec</h1>
+    </header>
+    
+    <section>
+      
+
+<p><a href="http://www.oreilly.co.jp/books/9784873117096/">Serverspec本</a>の献本ありがとうございました．とても面白かったです．詳しい書評はすでに素晴らしい記事がいくつかあるので，僕は現チームでどのようにServerspecを導入したか，どのように使っているかについて書きたいと思います．</p>
+
+<h2 id="serverspec導入の背景:aae952b3daf0cb6e53f6e6ee03d95982">Serverspec導入の背景</h2>
+
+<p>今のチームではサーバーのセッアップおよびデプロイにChefを使っている．本にも書かれているようにこのような構成管理ツールを使っている場合はそのツールを信頼するべきであり，Serverspecのようなテストツールは必要ない．僕らのチームもそのような理由でServerspecの導入には至っていなかった．</p>
+
+<p>しかしアプリケーションが複雑になりChefのレシピも混沌とするようになるとそれは成立しなくなる．見通しの悪いレシピはChefへの信頼度を落とす．信頼度の低下はデプロイ不信に繋がり人手（筋肉）によるテストが始まる．</p>
+
+<p>サーバーの数がそこまで多くなければなんとか運用できるかもしれない．しかしサーバーの数が膨大になるとデプロイ担当者が登場し，人手によるテストに時間がかかり，本来やるべき仕事が失われる．</p>
+
+<p>このような状況を解決するためにServerspecを導入した．具体的には以下を行うことを目的とした．</p>
+
+<ul>
+<li>Chefレシピのリファクタリング</li>
+<li>デプロイ時の人手による確認作業の自動化</li>
+</ul>
+
+<p>1つ目に関しては現在インフラCI環境の構築中でまだ成果は出ていない（し，他に良い資料がたくさんある）．2つ目のデプロイ自動化への組み込みに関しては成果が出ているのでそちらについて工夫したことなどを簡単に書いておく．</p>
+
+<h2 id="デプロイの3ステップ:aae952b3daf0cb6e53f6e6ee03d95982">デプロイの3ステップ</h2>
+
+<p>デプロイは以下の3つのステップに分割できる．</p>
+
+<ol>
+<li>サービスアウト</li>
+<li>セットアップ</li>
+<li>サービスイン</li>
+</ol>
+
+<p>まず，<strong>サービスアウト</strong>ではサーバーをロードバランサから切り離してユーザ影響をなくし，デーモン化したジョブを停止してセットアップの準備を行う．次に，<strong>セットアップ</strong>ではChefなどを用いてミドルウェアのインストールやアプリケーションのアップデート，設定値の更新などを行う．最後に，<strong>サービスイン</strong>では遮断したアクセスの復帰，デーモンジョブの再開を行いサーバーを本来のあるべき状態に戻す．</p>
+
+<p>うまく自動化できてない場合，ステップごとに人手のテストを行うことになる．これをなくすために各ステップで専用のServerspecを組み込むようにした．例えばサービスアウトをテストする場合は，以下のようにする．</p>
+
+<pre><code class="language-bash">$ rake spec:service_out:all 
+</code></pre>
+
+<p>テストが失敗した場合は，そのステップでデプロイを停止するようにした．これによりステップが確実に成功した上で次のステップ進んでいることを保証できるし，失敗した場合は問題を切り分けられるようになった．</p>
+
+<p>ディレクトリの構造は以下のようになる．</p>
+
+<pre><code class="language-bash">├── Rakefile
+└── spec
+    ├── role1
+    ├── role2
+    ├── role3
+    ├── service_in
+    │   ├── role1
+    │   ├── role2
+    │   └── role3
+    └── service_out
+        ├── role1
+        ├── role2
+        └── role3
+</code></pre>
+
+<p>サービスが大きいとサービスインのやり方でさえも異なることがあるので，以下で説明するロールごとにディレクトリを分けるという戦略をサービスイン，サービスアウトでも使えるようなディレクトリ構造を採用した．</p>
+
+<h2 id="失敗を書き出す:aae952b3daf0cb6e53f6e6ee03d95982">失敗を書き出す</h2>
+
+<p>サーバーの数が多いとホストごとにディレクトリを準備するServerspecデフォルトのやり方では限界がある．そういう場合は，ロール毎，モジュール毎ににspecをまとめ，ホストとそのロール情報を別ファイル（JSON形式など）で準備し，それを読み込みRakeタスクを定義するのが良い．</p>
+
+<p>今のチームではそもそもホストとそのロールのリストを準備しそれをもとにChefを実行するという運用があったので，そのリストをそのまま利用することにした．</p>
+
+<p>さらにどのホストでSpecが失敗したかを知るのも大切である．これは以下のように新しくタスククラスを作って失敗したホスト情報をファイルに書き出すようにした．</p>
+
+<pre><code class="language-ruby">class ServerspecTask &lt; RSpec::Core::RakeTask
+  attr_accessor :target
+  attr_accessor :failed_list
+
+  def run_task(verbose)
+    success = system(&quot;#{spec_command}&quot;)
+    save_failed_vm if not success
+  end
+
+  def save_failed_vm
+    file = File.open(failed_list, 'a')
+    file.puts target
+    file.close()
+  end
+end
+</code></pre>
+
+<pre><code class="language-ruby">ServerspecTask.new(host.to_sym) do |t|
+  ENV['TARGET_HOST'] = host
+  t.pattern = '...'
+  t.target = '...'
+  t.failed_list = ENV[&quot;FAILED_VMLIST&quot;]
+end
+</code></pre>
+
+<p>やると良いは，実行時に利用したホスト情報ファイルと同じ形式で失敗したファイルも作ることである．例えば，JSON形式でホスト情報を準備するなら同じJSON形式で失敗したホスト情報も書き出す．こうしておくと後で失敗したホストのみに再びServerspecを実行するということができるようになる．</p>
+
+<p>上で失敗したときにデプロイを止めるようにしていると書いたが，これはこのファイルが生成されているか否かで判断するようにしている．</p>
+
+<h2 id="通知:aae952b3daf0cb6e53f6e6ee03d95982">通知</h2>
+
+<p>サーバーの台数が多いとデプロイに時間がかかる．常にデプロイの様子を見ているわけにもいかないし，その間に書くべきコードがある．ので問題があったとき，各ステップが無事終了したときにそれを通知として受け取れると良い．</p>
+
+<p><img src="/images/hipchat-deploy.png" class="image"></p>
+
+<p>例えばHipChatの場合は以下のようなスクリプトを準備しておくと良い．シェルスクリプトなので何にでも組み込める．</p>
+
+<pre><code class="language-bash">notify() {
+  local USER=$1
+  local MESSAGE=$2
+    
+  JSON=&quot;{
+    \&quot;message_format\&quot;: \&quot;text\&quot;,
+    \&quot;message\&quot;: \&quot;@${USER} ${MESSAGE}\&quot;,
+    \&quot;notify\&quot;: true
+  }&quot;
+    
+  curl -X POST \
+      -H &quot;Content-Type: application/json&quot; \
+      -d &quot;${JSON}&quot; \
+      https://api.hipchat.com/v2/room/...
+}
+</code></pre>
+
+<p>以下のように使う．</p>
+
+<pre><code class="language-bash">$ notify Taichi &quot;Service out is done!&quot;
+</code></pre>
+
+<p>通知もServerspecの結果に基づいて行うようにしている．</p>
+
+<h2 id="不安を取り除く:aae952b3daf0cb6e53f6e6ee03d95982">不安を取り除く</h2>
+
+<p>そこまで多くの環境で自動化をやってきたわけではないので一概には言えないが，人手による運用が入ってるところは過去の不安が凝縮されていることが多い．不安が継承され無駄な手順が積み重なっていることが多い．</p>
+
+<p>自分が無駄だと思う手順をいきなり決して自動化を推し進めてもチームとしては意味がない（やめられるならやめてるはず）．なので，まずは無駄だと思うものも含めて機械にやらせるようにしてみるのが大切だと思う．「これ！ここ今まで人手で確認してたのをこうやって置き換えてます」と言えるようにしておくのが良い．</p>
+
+<p>こういうことをやるのにServerspecはとてもやりやすかった．誰でも読めるし，裏でやっていることも説明もしやすい/理解しやすい．またとにかく導入が簡単であるところも良かった．シンプルなので今回のようなデプロイの一部に組み込むことも簡単だった（想定とは違う使い方かもしれないが&hellip;）．</p>
+
+      <div class="social">
+  
+  
+  <a href="https://twitter.com/share" class="twitter-share-button" data-via="deeeet" data-count="none">Tweet</a>
+  
+  
+</div>
+
+    </section>
+
+    <footer>
+      <address>
+        
+        <img src="/images/bio.jpeg"/>
+        
+        <p>Written by <strong><a rel="author" href="https://twitter.com/deeeet" title="Taichi Nakashima" target="_blank">Taichi Nakashima</a></strong><br>
+          <span class="muted">A Tokyo based PaaS engineer. Please contact me via twitter.</span>
+        </p>
+      </address>
+
+    </footer>
+
+  </div>
+</article>
+
+<script type="text/javascript" src="//ajax.googleapis.com/ajax/libs/jquery/1.7.2/jquery.min.js"></script>
+<script type="text/javascript" src="/js/main.js"></script>
+
+<script>!function(d,s,id){var js,fjs=d.getElementsByTagName(s)[0],p=/^http:/.test(d.location)?'http':'https';if(!d.getElementById(id)){js=d.createElement(s);js.id=id;js.src=p+'://platform.twitter.com/widgets.js';fjs.parentNode.insertBefore(js,fjs);}}(document, 'script', 'twitter-wjs');</script>
+
+
+<script type="text/javascript">var HN=[];HN.factory=function(e){return function(){HN.push([e].concat(Array.prototype.slice.call(arguments,0)))};},HN.on=HN.factory("on"),HN.once=HN.factory("once"),HN.off=HN.factory("off"),HN.emit=HN.factory("emit"),HN.load=function(){var e="hn-button.js";if(document.getElementById(e))return;var t=document.createElement("script");t.id=e,t.src="//hn-button.herokuapp.com/hn-button.js";var n=document.getElementsByTagName("script")[0];n.parentNode.insertBefore(t,n)},HN.load();</script>
+
+
+  <script>
+  (function(i,s,o,g,r,a,m){i['GoogleAnalyticsObject']=r;i[r]=i[r]||function(){
+  (i[r].q=i[r].q||[]).push(arguments)},i[r].l=1*new Date();a=s.createElement(o),
+  m=s.getElementsByTagName(o)[0];a.async=1;a.src=g;m.parentNode.insertBefore(a,m)
+  })(window,document,'script','//www.google-analytics.com/analytics.js','ga');
+
+  ga('create', 'UA-45390253-1', 'auto');
+  ga('send', 'pageview');
+
+</script>
+
+
+
+<script>
+  $(document).ready(function() {
+  
+  $('p:has(img)').css('text-align', 'center');
+  $('iframe').css('style', 'display: block; margin: 0px auto;');
+  });
+</script>
+

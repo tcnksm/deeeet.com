@@ -1,0 +1,288 @@
+<!doctype html>
+<html>
+  <head>
+    <meta http-equiv="content-type" content="text/html; charset=utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    
+    <title>TerraformでCoreOSクラスタを構築する | SOTA</title>
+    
+    <link href="https://fonts.googleapis.com/css?family=Lato%3a900" rel="stylesheet" type="text/css">
+    <link rel="stylesheet" href="/css/main.css">
+    <link rel="shortcut icon" href="/favicon.png" type="image/x-icon" />
+    <link href="http://deeeet.com//index.xml" rel="alternate" type="application/rss+xml" title="" />
+    <meta name="title" content="http://deeeet.com/writing/2015/01/07/terraform-coreos/">
+    <link rel="canonical" href="http://deeeet.com/writing/2015/01/07/terraform-coreos/">
+    
+    <meta property="og:title" content="TerraformでCoreOSクラスタを構築する"/>
+    <meta property="og:url" content="http://deeeet.com/writing/2015/01/07/terraform-coreos/"/>
+  </head>
+  
+  <body>
+    <section class="site-nav">
+      <header>
+        <nav id="navigation">
+          <ul class="menu">
+            <li><a href="https://github.com/tcnksm/talks">Talks</a></li>
+            <li><a href="https://tcnksm.exposure.co/">Photos</a></li>
+          </ul>
+
+          <a class="name" href="/">SOTA</a>
+        </nav>        
+      </header>
+    </section>
+    
+
+
+<div class="container">
+  <div class="article-cover">
+    <div>
+      <img src="/images/terraform-coreos.png" class="image">
+    </div>
+  </div>
+</div>
+
+<article>
+  <div class="container">
+    <header>
+      <div class="meta">
+        <time pubdate datetime="2015-01-07" title="2015-01-07">January 07, 2015</time>
+      </div>
+      <h1 class="title">TerraformでCoreOSクラスタを構築する</h1>
+    </header>
+    
+    <section>
+      
+
+<p><a href="https://coreos.com/">CoreOS</a>は<a href="https://coreos.com/docs/running-coreos/cloud-providers/digitalocean/">DigitalOcean</a>や<a href="https://coreos.com/docs/running-coreos/cloud-providers/ec2/">Amazon EC2</a>，<a href="https://coreos.com/docs/running-coreos/platforms/openstack/">OpenStack</a>などあらゆるクラウドサービスやプラットフォームで動かすことができる．1つのCoreOSクラスタを複数のクラウドサービスや自社のベアメタルサーバーにまたがって構築することもできるし，それが奨励されている．また，クラスタのマシンの数はサービスの成長や負荷状況によって増減させる必要もある．</p>
+
+<p>このようなCoreOSクラスタの構築を簡単に，かつ<a href="http://d.hatena.ne.jp/naoya/20131215/1387090668">Infrastructure as Code</a>的に再現可能な形で行いたい場合，Hashicorpの<a href="https://www.terraform.io/">Terraform</a>を使うのがよさそう（個人的に試しているだけなので数百規模のマシンではなく，数十規模の話．もし膨大なマシン数になったときにどうするのがよいのか知見があれば知りたい）．</p>
+
+<p>以下では，Terraformを使ってDigitalOcean上にCoreOSクラスタを構築する方法について書く．コードは全て以下のレポジトリにある．</p>
+
+<ul>
+<li><a href="https://github.com/tcnksm/deeeet.com/tree/master/terraform">tcnksm/deeeet.com/terraform</a></li>
+</ul>
+
+<h2 id="coreosの設定ファイル:b05588687850ed17cdc8f81295f5640d">CoreOSの設定ファイル</h2>
+
+<p>まず，CoreOSの設定ファイルである<a href="https://coreos.com/docs/cluster-management/setup/cloudinit-cloud-config/">cloud-config</a>を準備する．</p>
+
+<pre><code class="language-yaml">#cloud-config
+
+coreos:
+  etcd:
+    discovery: https://discovery.etcd.io/XXXX
+    addr: $private_ipv4:4001
+    peer-addr: $private_ipv4:7001
+  fleet:
+    public-ip: $private_ipv4
+    metadata: role=lb,provider=digitalocean
+  units:
+    - name: etcd.service
+      command: start
+    - name: fleet.service
+      command: start
+  update:
+    group: alpha
+    reboot-strategy: best-effort
+</code></pre>
+
+<p><code>cloud-config</code>の設定項目についてはweb上に良い記事がたくさんあるのでここでは詳しくは書かない．ただし<code>fleet.metadata</code>に<code>role</code>や<code>provider</code>といった値を書いておくと，<code>fleet</code>でスケジューリングを行うときにより柔軟な設定ができるようになるので，状況に合わせて既述しておくとよい．</p>
+
+<h2 id="terraformの設定ファイル:b05588687850ed17cdc8f81295f5640d">Terraformの設定ファイル</h2>
+
+<p>次にTerraformの設定ファイルである<code>.tf</code>ファイルを準備する．ここでは以下の2つのファイルを準備する．</p>
+
+<ul>
+<li><code>variables.tf</code> - 外部から与える設定値を定義する</li>
+<li><code>main.tf</code> - <a href="http://www.terraform.io/docs/providers/">Provider</a>と<a href="https://www.terraform.io/docs/configuration/resources.html">Resource</a>を定義する</li>
+</ul>
+
+<p>（Terraformは実行時にカレントディレクトリの<code>.tf</code>ファイルを全て読み込むのでファイルの分割は自由にやってよい．すべてを1つの<code>.tf</code>ファイルに書いてしまうことも可能．ただし，Providerやマシンの数が増えると管理がキツくなるので適宜分けるのがよい）</p>
+
+<h3 id="variable-tf:b05588687850ed17cdc8f81295f5640d">variable.tf</h3>
+
+<p>まず，外部から与える設定値を<code>variables.tf</code>に定義する．ここには，例えばDigitalOceanのAPI Tokenのような設定ファイルには直接書きたくない設定値を定義し，コマンド引数<code>-var</code>でそれを受け取れるようにする．</p>
+
+<pre><code class="language-ruby">variable &quot;digitalocean_token&quot; {
+  description = &quot;DigitalOcean API token&quot;
+}
+
+variable &quot;ssh_key_id&quot; {
+  description = &quot;ID of the SSH key to use DigitalOcean&quot;
+}
+</code></pre>
+
+<p><code>ssh_key_id</code>はDigitalOceanに登録してあるSSH KeyのIDで以下で取得できる．</p>
+
+<pre><code class="language-bash">$ curl -X GET \
+     -H &quot;Authorization: Bearer ${DIGITALOCEAN_TOKEN}&quot; \
+     &quot;https://api.digitalocean.com/v2/account/keys&quot; | jq .
+</code></pre>
+
+<h3 id="main-tf:b05588687850ed17cdc8f81295f5640d">main.tf</h3>
+
+<p>次に<code>main.tf</code>に<a href="http://www.terraform.io/docs/providers/">Provider</a>と<a href="https://www.terraform.io/docs/configuration/resources.html">Resource</a>を定義する．今回の場合はDigitalOceanのResourceにはDropletの定義，例えばRegionやイメージのサイズなどを既述する．ここでは例としてCoreOSのStableイメージを2つ立ち上げる．</p>
+
+<pre><code class="language-ruby"># Configure the DigitalOcean Provider
+provider &quot;digitalocean&quot; {
+  token = &quot;${var.digitalocean_token}&quot;
+}
+
+resource &quot;digitalocean_droplet&quot; &quot;lb1&quot; {
+  name = &quot;lb1&quot;
+  image = &quot;coreos-stable&quot;
+  private_networking = true
+  region = &quot;sgp1&quot;
+  size = &quot;512mb&quot;
+  ssh_keys = [&quot;${var.ssh_key_id}&quot;]
+  user_data = &quot;${file(&quot;cloud-config.yml&quot;)}&quot;
+}
+
+resource &quot;digitalocean_droplet&quot; &quot;web1&quot; {
+  name = &quot;web1&quot;
+  image = &quot;coreos-stable&quot;
+  private_networking = true
+  region = &quot;sgp1&quot;
+  size = &quot;512mb&quot;
+  ssh_keys = [&quot;${var.ssh_key_id}&quot;]
+  user_data = &quot;${file(&quot;cloud-config.yml&quot;)}&quot;
+}
+</code></pre>
+
+<p>基本の設定項目はCoreOS以外のイメージを使った場合と同じだが，CoreOSの場合は<code>user_data</code>を使って<code>cloud-config</code>を渡すようにする．Terraformの<code>file</code>関数を使ってファイルの中身を与える．</p>
+
+<h2 id="クラスタの構築:b05588687850ed17cdc8f81295f5640d">クラスタの構築</h2>
+
+<p>実際にクラスタを立ち上げる．<code>.tf</code>ファイルのあるディレクトリで以下を実行する．まず，<code>plan</code>で実行を確認する．</p>
+
+<pre><code class="language-bash">$ terraform plan \
+    -var digitalocean_token=${YOUR_TOKEN} \
+    -var ssh_key_id=${YOUR_SSH_KEY_ID}
+</code></pre>
+
+<p>良さそうなら以下で適用し，クラスタを立ち上げる．</p>
+
+<pre><code class="language-bash">$ terraform apply \
+    -var digitalocean_token=${YOUR_TOKEN} \
+    -var ssh_key_id=${YOUR_SSH_KEY_ID}
+</code></pre>
+
+<p>これでDigitalOcean上にCoreOSクラスタが立ち上がる．</p>
+
+<p>とても簡単．さらに今どのような構成でクラスタが動いているのか，コードから確認することもできるし，<code>terraform show</code>コマンドでみることもできる．</p>
+
+<h3 id="クラスタのマシンの増減させる:b05588687850ed17cdc8f81295f5640d">クラスタのマシンの増減させる</h3>
+
+<p>クラスタのマシンを増減させたいときは，<code>main.tf</code>の<code>resource</code>を増やせばよい．<code>resource</code>を書いただけマシンが立ち上がる．逆に<code>resource</code>を消せば，次の実行時にはクラスタのメンバからは消える．</p>
+
+<p>またDigitalOcean以外に，例えばAWSなどにマシンを立てたければ，ProviderとそのResourceを追加すればよい．自社のサーバーを使いたいときなどにProviderが提供されてなければPluginを作ればよい（参考，<a href="http://tkak.hatenablog.com/entry/2014/11/07/074044">&ldquo;TerraformのProviderを作った - tkak&rsquo;s tech blog&rdquo;</a>）．</p>
+
+<h2 id="落ち穂拾い:b05588687850ed17cdc8f81295f5640d">落ち穂拾い</h2>
+
+<p>本筋とは外れるがいくつか軽い話題を書いておく．</p>
+
+<h3 id="dnsimpleと連携する:b05588687850ed17cdc8f81295f5640d">DNSimpleと連携する</h3>
+
+<p>Terraformを使ってCoreOSクラスタのあるマシンをDNSimpleのレコードに登録するには，以下のような<code>.tf</code>ファイルを準備し，上記の<code>.tf</code>ファイルと一緒に実行すればよい．例えば<code>lb1</code>というResource名で立ち上げたマシンを登録する．</p>
+
+<pre><code class="language-ruby"># Configure the DNSimple Provider
+provider &quot;dnsimple&quot; {
+  token = &quot;${var.dnsimple_token}&quot;
+  email = &quot;${var.dnsimple_email}&quot;
+}
+
+# Add a record to the domain
+resource &quot;dnsimple_record&quot; &quot;coreos-test&quot; {
+  domain = &quot;coreos-test.com&quot;
+  name = &quot;@&quot;
+  value = &quot;${digitalocean_droplet.lb1.ipv4_address}&quot;
+  type = &quot;A&quot;
+  ttl = 3600
+}
+</code></pre>
+
+<h3 id="terraform-tfvarsを使う:b05588687850ed17cdc8f81295f5640d">terraform.tfvarsを使う</h3>
+
+<p>Terraformを実行しているときに鬱陶しいなと思うのが<code>-var</code>引数．Providerが増える度にどんどん増えるし，覚えきれない．シェルスクリプトを書いても良いが，Terraformは<code>terraform.tfvars</code>というファイルを準備すれば，それを読み込んでくれるという仕組みを持つ．</p>
+
+<p>例えば，上記の場合<code>digitalocean_token</code>と<code>ssh_key</code>を毎回与えないといけないが，以下のような<code>terraform.tfvars</code>を準備すると，<code>-var</code>引数なしで実行できるようになる（もちろんこの<code>terraform.tfvars</code>はレポジトリからは外す）．</p>
+
+<pre><code>digitalocean_token=&quot;YOUR_TOKEN&quot;
+ssh_key_id=&quot;YOUR_SSH_KEY_ID&quot;
+</code></pre>
+
+<p>今後は，<a href="https://packer.io/">Packer</a>のように<code>${env.NAME}</code>で環境変数から値を設定できるようなるかもしれない．</p>
+
+<ul>
+<li><a href="https://github.com/hashicorp/terraform/issues/62">Environment variables in .tf files #62</a></li>
+</ul>
+
+<h2 id="まとめ:b05588687850ed17cdc8f81295f5640d">まとめ</h2>
+
+<p>Terraformを使ってDigitalOcean上にCoreOSクラスタを構築する方法について書いた．この方法は<code>.tf</code>ファイルの<code>resource</code>を増やすことでマシンを増減させる．ので，最初に書いたように数百規模ではなく，数十規模のマシン数では十分に使えるし，管理も楽にできる．</p>
+
+<p>さらにマシン数が増えるなら<code>.tf</code>ファイルをプログラムで生成するなどの工夫が必要かなと思う．</p>
+
+<h3 id="参考:b05588687850ed17cdc8f81295f5640d">参考</h3>
+
+<ul>
+<li><a href="https://gist.github.com/andyshinn/92f9175a8cc79185314e">Terraform, CoreOS, and Digital Ocean</a></li>
+<li><a href="http://deeeet.com/writing/2014/11/17/coreos/">CoreOSに入門した | SOTA</a></li>
+</ul>
+
+      <div class="social">
+  
+  
+  <a href="https://twitter.com/share" class="twitter-share-button" data-via="deeeet" data-count="none">Tweet</a>
+  
+  
+</div>
+
+    </section>
+
+    <footer>
+      <address>
+        
+        <img src="/images/bio.jpeg"/>
+        
+        <p>Written by <strong><a rel="author" href="https://twitter.com/deeeet" title="Taichi Nakashima" target="_blank">Taichi Nakashima</a></strong><br>
+          <span class="muted">A Tokyo based PaaS engineer. Please contact me via twitter.</span>
+        </p>
+      </address>
+
+    </footer>
+
+  </div>
+</article>
+
+<script type="text/javascript" src="//ajax.googleapis.com/ajax/libs/jquery/1.7.2/jquery.min.js"></script>
+<script type="text/javascript" src="/js/main.js"></script>
+
+<script>!function(d,s,id){var js,fjs=d.getElementsByTagName(s)[0],p=/^http:/.test(d.location)?'http':'https';if(!d.getElementById(id)){js=d.createElement(s);js.id=id;js.src=p+'://platform.twitter.com/widgets.js';fjs.parentNode.insertBefore(js,fjs);}}(document, 'script', 'twitter-wjs');</script>
+
+
+<script type="text/javascript">var HN=[];HN.factory=function(e){return function(){HN.push([e].concat(Array.prototype.slice.call(arguments,0)))};},HN.on=HN.factory("on"),HN.once=HN.factory("once"),HN.off=HN.factory("off"),HN.emit=HN.factory("emit"),HN.load=function(){var e="hn-button.js";if(document.getElementById(e))return;var t=document.createElement("script");t.id=e,t.src="//hn-button.herokuapp.com/hn-button.js";var n=document.getElementsByTagName("script")[0];n.parentNode.insertBefore(t,n)},HN.load();</script>
+
+
+  <script>
+  (function(i,s,o,g,r,a,m){i['GoogleAnalyticsObject']=r;i[r]=i[r]||function(){
+  (i[r].q=i[r].q||[]).push(arguments)},i[r].l=1*new Date();a=s.createElement(o),
+  m=s.getElementsByTagName(o)[0];a.async=1;a.src=g;m.parentNode.insertBefore(a,m)
+  })(window,document,'script','//www.google-analytics.com/analytics.js','ga');
+
+  ga('create', 'UA-45390253-1', 'auto');
+  ga('send', 'pageview');
+
+</script>
+
+
+
+<script>
+  $(document).ready(function() {
+  
+  $('p:has(img)').css('text-align', 'center');
+  $('iframe').css('style', 'display: block; margin: 0px auto;');
+  });
+</script>
+

@@ -1,0 +1,165 @@
+<!doctype html>
+<html>
+  <head>
+    <meta http-equiv="content-type" content="text/html; charset=utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    
+    <title>DotenvではなくDirenvを使う | SOTA</title>
+    
+    <link href="https://fonts.googleapis.com/css?family=Lato%3a900" rel="stylesheet" type="text/css">
+    <link rel="stylesheet" href="/css/main.css">
+    <link rel="shortcut icon" href="/favicon.png" type="image/x-icon" />
+    <link href="http://deeeet.com//index.xml" rel="alternate" type="application/rss+xml" title="" />
+    <meta name="title" content="http://deeeet.com/writing/2014/05/06/direnv/">
+    <link rel="canonical" href="http://deeeet.com/writing/2014/05/06/direnv/">
+    
+    <meta property="og:title" content="DotenvではなくDirenvを使う"/>
+    <meta property="og:url" content="http://deeeet.com/writing/2014/05/06/direnv/"/>
+  </head>
+  
+  <body>
+    <section class="site-nav">
+      <header>
+        <nav id="navigation">
+          <ul class="menu">
+            <li><a href="https://github.com/tcnksm/talks">Talks</a></li>
+            <li><a href="https://tcnksm.exposure.co/">Photos</a></li>
+          </ul>
+
+          <a class="name" href="/">SOTA</a>
+        </nav>        
+      </header>
+    </section>
+    
+
+
+<article>
+  <div class="container">
+    <header>
+      <div class="meta">
+        <time pubdate datetime="2014-05-06" title="2014-05-06">May 06, 2014</time>
+      </div>
+      <h1 class="title">DotenvではなくDirenvを使う</h1>
+    </header>
+    
+    <section>
+      
+
+<p><a href="https://github.com/bkeepers/dotenv">Dotenv</a>は，<code>.env</code>ファイルから環境変数を読み込むためのツール．他人には共有したくないパスワードやキーなどを<code>.env</code>に環境変数として記述しておき，実行時にそれを読み込むといった使い方をする．例えば自分は，vagrantからDigitalOceanを使う際に，<code>CLIENT_ID</code>や<code>API_KEY</code>を<code>.env</code>に記述して<code>Vagrantfile</code>でそれを読み込むという使い方をしていた．</p>
+
+<p>ただ，Dotenvは汎用性が低い．Dotenvを有効にするには，プログラム内から明示的に<code>Dotenv.load</code>を呼ぶ必要がある，もしくは，<code>dotenv</code>でプログラムを起動する必要がある．例えば，<a href="https://github.com/test-kitchen/test-kitchen">test-kitchen</a>の<a href="https://github.com/test-kitchen/kitchen-digitalocean">digitaloceanドライバー</a>を使う際には，vagrantの場合と同様に<code>CLIENT_ID</code>や<code>API_KEY</code>が必要になる．しかし，test-kitchenでユーザが直接触るのは<code>.kitchen.yml</code>であり，<code>Dotenv.load</code>を記述する余地はない（直接test-kitchenのソースコードに記述することはできるが…）．</p>
+
+<h2 id="tl-dr:b59152e6968fc04bf7238d4f03e11cbf">TL;DR</h2>
+
+<p><a href="https://github.com/zimbatm/direnv">Direnv</a>を使うと，任意のディレクトリ以下で<code>.envrc</code>に記述した環境変数を<strong>明示的な読み込みなしで</strong>有効にすることができる．つまり，Dotenvのような<code>Dotenv.load</code>の記述なしで使える．</p>
+
+<p>また，Direnvはgoで書かれているので，Rubyなしでも使える．</p>
+
+<h2 id="使用例:b59152e6968fc04bf7238d4f03e11cbf">使用例</h2>
+
+<p>以下は，簡単な使用例．特定のディレクトリ内で<code>$SECRET_KEY</code>を利用する場合を考える．</p>
+
+<pre><code class="language-bash">$ pwd
+/User/tcnksm/test
+
+$ echo $SECRET_KEY
+
+$ direnv edit .
+# $Editorが開くので &quot;export SECRET_KEY=thisisalsoanokaysecret&quot;を記述する
+direnv: loading .envrc
+direnv: export +SECRET_KEY
+
+$ echo $SECRET_KEY
+thisisalsoanokaysecret
+
+$ cd ..
+direnv: unloading
+
+$ echo $SECRET_KEY
+
+</code></pre>
+
+<p>特定にディレクトリに移動するだけで，<code>.envrc</code>が読み込まれ<code>$SECRET_KEY</code>が有効になる．</p>
+
+<h2 id="使いどころ:b59152e6968fc04bf7238d4f03e11cbf">使いどころ</h2>
+
+<p>少なくとも以下の2つの場面で利用できそう．</p>
+
+<ul>
+<li>他人に共有したくない設定を<code>.envrc</code>に環境変数として記述する</li>
+<li><code>bundle exec</code>しないように<code>.evnrc</code>に<code>$PATH</code>を追加する（<a href="http://mattn.kaoriya.net/software/lang/ruby/20140314032519.html">参考</a>）</li>
+</ul>
+
+<h2 id="インストール:b59152e6968fc04bf7238d4f03e11cbf">インストール</h2>
+
+<p>OSXの場合は，brewでインストールできる．</p>
+
+<pre><code class="language-bash">$ brew install direnv
+</code></pre>
+
+<p>以下を<code>.zshrc</code>に記述しておく．</p>
+
+<pre><code class="language-bash">eval &quot;$(direnv hook zsh)&quot;
+</code></pre>
+
+<p>その他のインストール方法は<a href="https://github.com/zimbatm/direnv">README</a>を参考に．</p>
+
+<h2 id="まとめ:b59152e6968fc04bf7238d4f03e11cbf">まとめ</h2>
+
+<p>Direnvはkitchen-digitaloceanにDotenvのサポートのPull Requestを送った際の<a href="https://github.com/test-kitchen/kitchen-digitalocean/pull/10">コメント</a>で教えて頂いた．こういうことはどんどんやっていくべきだと思った．</p>
+
+      <div class="social">
+  
+  
+  <a href="https://twitter.com/share" class="twitter-share-button" data-via="deeeet" data-count="none">Tweet</a>
+  
+  
+</div>
+
+    </section>
+
+    <footer>
+      <address>
+        
+        <img src="/images/bio.jpeg"/>
+        
+        <p>Written by <strong><a rel="author" href="https://twitter.com/deeeet" title="Taichi Nakashima" target="_blank">Taichi Nakashima</a></strong><br>
+          <span class="muted">A Tokyo based PaaS engineer. Please contact me via twitter.</span>
+        </p>
+      </address>
+
+    </footer>
+
+  </div>
+</article>
+
+<script type="text/javascript" src="//ajax.googleapis.com/ajax/libs/jquery/1.7.2/jquery.min.js"></script>
+<script type="text/javascript" src="/js/main.js"></script>
+
+<script>!function(d,s,id){var js,fjs=d.getElementsByTagName(s)[0],p=/^http:/.test(d.location)?'http':'https';if(!d.getElementById(id)){js=d.createElement(s);js.id=id;js.src=p+'://platform.twitter.com/widgets.js';fjs.parentNode.insertBefore(js,fjs);}}(document, 'script', 'twitter-wjs');</script>
+
+
+<script type="text/javascript">var HN=[];HN.factory=function(e){return function(){HN.push([e].concat(Array.prototype.slice.call(arguments,0)))};},HN.on=HN.factory("on"),HN.once=HN.factory("once"),HN.off=HN.factory("off"),HN.emit=HN.factory("emit"),HN.load=function(){var e="hn-button.js";if(document.getElementById(e))return;var t=document.createElement("script");t.id=e,t.src="//hn-button.herokuapp.com/hn-button.js";var n=document.getElementsByTagName("script")[0];n.parentNode.insertBefore(t,n)},HN.load();</script>
+
+
+  <script>
+  (function(i,s,o,g,r,a,m){i['GoogleAnalyticsObject']=r;i[r]=i[r]||function(){
+  (i[r].q=i[r].q||[]).push(arguments)},i[r].l=1*new Date();a=s.createElement(o),
+  m=s.getElementsByTagName(o)[0];a.async=1;a.src=g;m.parentNode.insertBefore(a,m)
+  })(window,document,'script','//www.google-analytics.com/analytics.js','ga');
+
+  ga('create', 'UA-45390253-1', 'auto');
+  ga('send', 'pageview');
+
+</script>
+
+
+
+<script>
+  $(document).ready(function() {
+  
+  $('p:has(img)').css('text-align', 'center');
+  $('iframe').css('style', 'display: block; margin: 0px auto;');
+  });
+</script>
+

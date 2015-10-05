@@ -1,0 +1,664 @@
+<?xml version="1.0" encoding="utf-8" standalone="yes" ?>
+<rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom">
+  <channel>
+    <title>Docker Serf on SOTA</title>
+    <link>http://deeeet.com/categories/docker-serf/</link>
+    <description>Recent content in Docker Serf on SOTA</description>
+    <generator>Hugo -- gohugo.io</generator>
+    <language>ja-jp</language>
+    <copyright>Copyright (C) 2013-2015 Taichi Nakashima All Right Reserved.</copyright>
+    <lastBuildDate>Sun, 11 May 2014 00:00:00 +0000</lastBuildDate>
+    <atom:link href="http://deeeet.com/categories/docker-serf/index.xml" rel="self" type="application/rss+xml" />
+    
+    <item>
+      <title>DockerのHost networking機能</title>
+      <link>http://deeeet.com/writing/2014/05/11/docker-host-networking/</link>
+      <pubDate>Sun, 11 May 2014 00:00:00 +0000</pubDate>
+      
+      <guid>http://deeeet.com/writing/2014/05/11/docker-host-networking/</guid>
+      <description>
+
+&lt;p&gt;&lt;a href=&#34;http://blog.docker.io/2014/05/docker-0-11-release-candidate-for-1-0/&#34;&gt;DOCKER 0.11 IS THE RELEASE CANDIDATE FOR 1.0&lt;/a&gt;&lt;/p&gt;
+
+&lt;p&gt;1.0のRCである0.11はいくつかの新機能が追加された．例えば，SELinuxのサポートや，Host networking機能，Link機能でのホスト名，Docker deamonへのpingなど．&lt;/p&gt;
+
+&lt;p&gt;この中でもHost networking機能がなかなか面白いので，実際に手を動かして検証してみた．事前知識として&lt;a href=&#34;http://deeeet.com/writing/2014/05/11/docker-network/&#34;&gt;&amp;ldquo;Dockerのネットワークの基礎&amp;rdquo;&lt;/a&gt;も書きました．ネットワークに関して不安があるひとが先にみると，Host Networing機能の利点／欠点もわかりやすいと思います．&lt;/p&gt;
+
+&lt;h2 id=&#34;tl-dr:3c937ec6456eab7f73bb6e98d71750a1&#34;&gt;TL;DR&lt;/h2&gt;
+
+&lt;p&gt;Host networking機能を使うと，異なるホスト間のコンテナの連携がちょっぴりやりやすくなる．SerfやConsulのようなサービスディスカバリーツールとの相性も良さそう．&lt;/p&gt;
+
+&lt;p&gt;まだ出たばかりの機能で実際に使ってるひとがいないので，あくまで個人の実感．&lt;a href=&#34;https://news.ycombinator.com/item?id=7712769&#34;&gt;HNのコメント&lt;/a&gt;で同様の発言は見かけた．&lt;/p&gt;
+
+&lt;h2 id=&#34;ネットワークモード:3c937ec6456eab7f73bb6e98d71750a1&#34;&gt;ネットワークモード&lt;/h2&gt;
+
+&lt;p&gt;コンテナを起動するとき，&lt;code&gt;--net&lt;/code&gt;オプションで4つのネットワークモードを選択することができる．&lt;/p&gt;
+
+&lt;ul&gt;
+&lt;li&gt;&lt;code&gt;--net=bridge&lt;/code&gt;：仮想ブリッジ&lt;code&gt;docker0&lt;/code&gt;に対して新しくネットワークスタックを作成する（default）&lt;/li&gt;
+&lt;li&gt;&lt;code&gt;--net=container:&amp;lt;コンテナ名|コンテナID&amp;gt;&lt;/code&gt;：他のコンテナのネットワークスタックを再利用する&lt;/li&gt;
+&lt;li&gt;&lt;code&gt;--net=host&lt;/code&gt;：ホストのネットワークスタックをコンテナ内で利用する&lt;/li&gt;
+&lt;li&gt;&lt;code&gt;--net=none&lt;/code&gt;：ネットワークスタックを作成しない&lt;/li&gt;
+&lt;/ul&gt;
+
+&lt;h3 id=&#34;bridge:3c937ec6456eab7f73bb6e98d71750a1&#34;&gt;bridge&lt;/h3&gt;
+
+&lt;p&gt;ブリッジモードはデフォルトの挙動で，ループバックの&lt;code&gt;lo&lt;/code&gt;と仮想インターフェースの&lt;code&gt;eth1&lt;/code&gt;がつくられる．&lt;code&gt;eth1&lt;/code&gt;はホストの&lt;code&gt;veth&lt;/code&gt;（Virtual Ethernet）とパイプされる．このモードは外部のネットワークとは隔離される．&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-bash&#34;&gt;$ docker run --net=bridge ubuntu ifconfig
+eth0      Link encap:Ethernet  HWaddr 96:e7:26:24:69:55
+               inet addr:172.17.0.2  Bcast:0.0.0.0  Mask:255.255.0.0
+
+lo        Link encap:Local Loopback
+            inet addr:127.0.0.1  Mask:255.0.0.0
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;h3 id=&#34;container:3c937ec6456eab7f73bb6e98d71750a1&#34;&gt;container&lt;/h3&gt;
+
+&lt;p&gt;コンテナモードでは既に起動しているコンテナのネットワークスタックが再利用される．以下の場合だと，あらかじめ起動した&lt;code&gt;hello&lt;/code&gt;コンテナで作成したネットワークスタックがそのまま利用される．つまり，&lt;code&gt;hello&lt;/code&gt;コンテナを起動したときにホスト側でつくられた&lt;code&gt;veth&lt;/code&gt;と仮想インターフェース&lt;code&gt;eth0&lt;/code&gt;のパイプがそのまま利用される．&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-bash&#34;&gt;$ docker run -d --name hello ubuntu /bin/sh -c &amp;quot;while true; do echo hello world; sleep 1; done&amp;quot;
+$ docker run --net=container:hello ubuntu ifconfig
+eth0      Link encap:Ethernet  HWaddr b2:f4:26:c4:17:16
+               inet addr:172.17.0.2  Bcast:0.0.0.0  Mask:255.255.0.0
+
+lo        Link encap:Local Loopback
+            inet addr:127.0.0.1  Mask:255.0.0.0          
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;h3 id=&#34;none:3c937ec6456eab7f73bb6e98d71750a1&#34;&gt;none&lt;/h3&gt;
+
+&lt;p&gt;この場合は，新しくネットワークスタックはつくられず，ループバックの&lt;code&gt;lo&lt;/code&gt;だけになる．&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-bash&#34;&gt;$ docker run --net=none ubuntu ifconfig
+lo        Link encap:Local Loopback
+            inet addr:127.0.0.1  Mask:255.0.0.0
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;h3 id=&#34;host:3c937ec6456eab7f73bb6e98d71750a1&#34;&gt;host&lt;/h3&gt;
+
+&lt;p&gt;ホストネットワークモードでは，ホストのネットワークインターフェースがそのまま利用される．&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-bash&#34;&gt;$ ifconfig
+docker0   Link encap:Ethernet  HWaddr 00:00:00:00:00:00
+                  inet addr:172.17.42.1  Bcast:0.0.0.0  Mask:255.255.0.0
+
+eth0      Link encap:Ethernet  HWaddr 08:00:27:88:0c:a6
+               inet addr:10.0.2.15  Bcast:10.0.2.255  Mask:255.255.255.0
+
+eth1      Link encap:Ethernet  HWaddr 08:00:27:1c:28:3b
+               inet addr:192.168.50.4  Bcast:192.168.50.255  Mask:255.255.255.0
+          
+lo        Link encap:Local Loopback
+               inet addr:127.0.0.1  Mask:255.0.0.0
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-bash&#34;&gt;$ docker run --net=host ubuntu ifconfig
+docker0   Link encap:Ethernet  HWaddr 00:00:00:00:00:00
+                  inet addr:172.17.42.1  Bcast:0.0.0.0  Mask:255.255.0.0
+          
+eth0      Link encap:Ethernet  HWaddr 08:00:27:88:0c:a6
+               inet addr:10.0.2.15  Bcast:10.0.2.255  Mask:255.255.255.0
+
+eth1      Link encap:Ethernet  HWaddr 08:00:27:1c:28:3b
+               inet addr:192.168.50.4  Bcast:192.168.50.255  Mask:255.255.255.0
+
+lo        Link encap:Local Loopback
+            inet addr:127.0.0.1  Mask:255.0.0.0
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;h2 id=&#34;host-networkingでできること-apache:3c937ec6456eab7f73bb6e98d71750a1&#34;&gt;Host Networkingでできること（Apache）&lt;/h2&gt;
+
+&lt;p&gt;簡単な例として&lt;a href=&#34;https://gist.github.com/tcnksm/4381bbe7e8258c1f9e8d&#34;&gt;Apacheコンテナ&lt;/a&gt;へのアクセスしてみる．&lt;/p&gt;
+
+&lt;p&gt;環境は以下のVagrantfile内で行った．&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-ruby&#34;&gt;Vagrant.configure(&amp;quot;2&amp;quot;) do |config|
+  config.vm.box = &amp;quot;precise64&amp;quot;
+  config.vm.box_url = &amp;quot;http://files.vagrantup.com/precise64.box&amp;quot;
+  config.vm.network :private_network, ip: &amp;quot;192.168.50.4&amp;quot;
+  config.vm.provision :docker do |d|
+      d.pull_images &amp;quot;ubuntu&amp;quot;  
+  end
+end
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;以下のようなDockerfileを準備してビルドする．&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-bash&#34;&gt;FROM ubuntu:12.04
+
+RUN apt-get update
+RUN apt-get install -y apache2
+
+ENV APACHE_RUN_USER www-data
+ENV APACHE_RUN_GROUP www-data
+ENV APACHE_LOG_DIR /var/log/apache2
+
+RUN echo &#39;Hello, docker&#39; &amp;gt; /var/www/index.html
+
+ENTRYPOINT [&amp;quot;/usr/sbin/apache2&amp;quot;]
+CMD [&amp;quot;-D&amp;quot;, &amp;quot;FOREGROUND&amp;quot;]
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-bash&#34;&gt;$ docker build -t tcnksm/apache .
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;デフォルトのブリッジモードでコンテナを起動する場合は，仮想ブリッジ&lt;code&gt;docker0&lt;/code&gt;内でExposeしたポートをホスト側のポートにマッピングして起動する必要がある．&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-bash&#34;&gt;$ docker run -d -p 80:80 tcnksm/apache
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;ホストネットワークモードで起動する場合は，コンテナ内でExposeしたポートは&lt;strong&gt;そのまま&lt;/strong&gt;ホストのネットワークのポートとして利用される．&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-bash&#34;&gt;$ docker run -d --net=host tcnksm/apache
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;別のホストからアクセスしてみる．&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-bash&#34;&gt;$ curl 192.168.50.4
+Hello, docker
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;h2 id=&#34;host-networkingでできること-serf:3c937ec6456eab7f73bb6e98d71750a1&#34;&gt;Host Networkingでできること（Serf）&lt;/h2&gt;
+
+&lt;p&gt;Host Networkingを使うと複数ホスト間の連携が簡単になりそう．すぐ思いついたのはSerfだったので，複数ホストでSerfコンテナのクラスタを組んでみる．&lt;/p&gt;
+
+&lt;p&gt;まず，複数ホスト（&lt;code&gt;n1&lt;/code&gt;と&lt;code&gt;n2&lt;/code&gt;）を立ち上げる&lt;code&gt;Vagrantfile&lt;/code&gt;を準備する．それぞれ，Docker provisionだけ走らせる．&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-ruby&#34;&gt;Vagrant.configure(&amp;quot;2&amp;quot;) do |config|
+  config.vm.box = &amp;quot;precise64&amp;quot;
+  config.vm.box_url = &amp;quot;http://files.vagrantup.com/precise64.box&amp;quot;
+
+  config.vm.provision :docker do |d|
+      d.pull_images &amp;quot;ubuntu&amp;quot;
+  end
+
+  config.vm.define &amp;quot;n1&amp;quot; do |n1|
+      n1.vm.network &amp;quot;private_network&amp;quot;, ip: &amp;quot;172.20.20.10&amp;quot;
+  end
+
+  config.vm.define &amp;quot;n2&amp;quot; do |n2|
+      n2.vm.network &amp;quot;private_network&amp;quot;, ip: &amp;quot;172.20.20.11&amp;quot;
+  end
+end
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;次に，SerfコンテナをつくるためのDockerfileを準備し，それぞれのホストでビルドしておく．&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-bash&#34;&gt;FROM ubuntu
+
+RUN apt-get -y install unzip wget
+
+RUN cd /tmp/
+RUN wget --no-check-certificat https://dl.bintray.com/mitchellh/serf/0.5.0_linux_amd64.zip -O serf.zip
+
+RUN unzip serf.zip
+RUN chmod +x serf
+RUN mv serf /usr/local/bin/serf
+
+EXPOSE 7946
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-bash&#34;&gt;$ vagrant ssh n1
+$ docker build -t tcnkms/serf .
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-bash&#34;&gt;$ vagrant ssh n2
+$ docker build -t tcnkms/serf .
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;クラスタを形成してみる．まず，&lt;code&gt;n1&lt;/code&gt;で&lt;code&gt;--net=host&lt;/code&gt;を利用してSerfコンテナを起動する．&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-bash&#34;&gt;$ vagrant ssh n1
+$ docker run -t --net=host tcnksm/serf serf agent -node=agent1 -bind 172.20.20.10
+==&amp;gt; Starting Serf agent...
+==&amp;gt; Starting Serf agent RPC...
+==&amp;gt; Serf agent running!
+         Node name: &#39;agent1&#39;
+         Bind addr: &#39;172.20.20.10:7946&#39;
+         RPC addr: &#39;127.0.0.1:7373&#39;
+         Encrypted: false
+         Snapshot: false
+         Profile: lan
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;次に&lt;code&gt;n2&lt;/code&gt;から，&lt;code&gt;n1&lt;/code&gt;に立てたSerfコンテナにjoinする．&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-bash&#34;&gt;$ vagrant ssh n2
+$ docker run -t --net=host tcnksm/serf serf agent -node=agent2 -bind 172.20.20.11 -join 172.20.20.10
+==&amp;gt; Starting Serf agent...
+==&amp;gt; Starting Serf agent RPC...
+==&amp;gt; Serf agent running!
+         Node name: &#39;agent2&#39;
+         Bind addr: &#39;172.20.20.11:7946&#39;
+         RPC addr: &#39;127.0.0.1:7373&#39;
+         Encrypted: false
+         Snapshot: false
+         Profile: lan
+         ==&amp;gt; Joining cluster...(replay: false)
+         Join completed. Synced with 1 initial agents
+         
+==&amp;gt; Log data will now stream in as it occurs:
+
+    2014/05/11 15:34:50 [INFO] agent: Serf agent starting
+    2014/05/11 15:34:50 [INFO] serf: EventMemberJoin: agent2 172.20.20.11
+    2014/05/11 15:34:50 [INFO] agent: joining: [172.20.20.10] replay: false
+    2014/05/11 15:34:50 [INFO] serf: EventMemberJoin: agent1 172.20.20.10
+    2014/05/11 15:34:50 [INFO] agent: joined: 1 Err: &amp;lt;nil&amp;gt;
+    2014/05/11 15:34:51 [INFO] agent: Received event: member-join
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;joinできた．&lt;/p&gt;
+
+&lt;p&gt;ものすごく簡単にできた．SerfのようなサービスディスカバリーツールとHost networking機能を連携すると新たな道が開けそう．&lt;a href=&#34;http://www.consul.io/&#34;&gt;Consul&lt;/a&gt;も使ってみたいなあ．&lt;/p&gt;
+
+&lt;h3 id=&#34;参考:3c937ec6456eab7f73bb6e98d71750a1&#34;&gt;参考&lt;/h3&gt;
+
+&lt;ul&gt;
+&lt;li&gt;&lt;a href=&#34;http://deeeet.com/writing/2014/03/23/serf-basic/&#34;&gt;Serf虎の巻&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a href=&#34;http://deeeet.com/writing/2014/03/31/docker-serf/&#34;&gt;SerfでDockerコンテナのクラスタを形成する&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a href=&#34;http://deeeet.com/writing/2014/04/08/docker-serf-haproxy/&#34;&gt;Docker+Serf+HAproxy (+Supervisor)&lt;/a&gt;&lt;/li&gt;
+&lt;/ul&gt;
+
+&lt;h2 id=&#34;考慮するべきこと:3c937ec6456eab7f73bb6e98d71750a1&#34;&gt;考慮するべきこと&lt;/h2&gt;
+
+&lt;p&gt;Host Networking良さそうだけど考慮することがある．これは，Githubの&lt;a href=&#34;https://github.com/dotcloud/docker/issues/2012&#34;&gt;Issue&lt;/a&gt;でも上がっていたことだけど，コンテナが&amp;rdquo;Run anywhere&amp;rdquo;ではなくなる．例えば，8000ポートをExposeしたコンテナを立てようとして，ホストが既にそのポートを利用していた場合など．&lt;/p&gt;
+
+&lt;p&gt;コンテナがNATで隔離されるのはDockerの利点でもあるので，Dockerをどう使うかを考えた上で利用するべき機能だと思う．&lt;/p&gt;
+
+&lt;h3 id=&#34;スポンサー:3c937ec6456eab7f73bb6e98d71750a1&#34;&gt;スポンサー&lt;/h3&gt;
+
+&lt;p&gt;この記事は，&lt;a href=&#34;https://twitter.com/deeeet/status/464569434867507201&#34;&gt;docker飲み&lt;/a&gt;のおつり（500円）で書かれました．&lt;a href=&#34;https://twitter.com/kenjiskywalker&#34;&gt;@kenjiskywalkerさん&lt;/a&gt;，&lt;a href=&#34;https://twitter.com/punytan&#34;&gt;@punytanさん&lt;/a&gt;，&lt;a href=&#34;https://twitter.com/repeatedly&#34;&gt;@repeatedlyさん&lt;/a&gt;，&lt;a href=&#34;https://twitter.com/sonots&#34;&gt;@sonotsさん&lt;/a&gt;，ありがとうございました．また，参加させてください．&lt;/p&gt;
+</description>
+    </item>
+    
+    <item>
+      <title>Docker&#43;Serf&#43;HAproxy (&#43;Supervisor)</title>
+      <link>http://deeeet.com/writing/2014/04/08/docker-serf-haproxy/</link>
+      <pubDate>Tue, 08 Apr 2014 00:00:00 +0000</pubDate>
+      
+      <guid>http://deeeet.com/writing/2014/04/08/docker-serf-haproxy/</guid>
+      <description>
+
+&lt;ul&gt;
+&lt;li&gt;&lt;a href=&#34;http://deeeet.com/writing/2014/03/31/docker-serf/&#34;&gt;SerfでDockerコンテナのクラスタを形成する&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a href=&#34;http://deeeet.com/writing/2014/04/01/serf-haproxy/&#34;&gt;SerfでHAProxyの更新 on Vagrant&lt;/a&gt;&lt;/li&gt;
+&lt;/ul&gt;
+
+&lt;p&gt;でやったことを融合した．つまり，HAProxy（ロードバランサ）コンテナとWebサーバコンテナを立てて，Serfでそれらのクラスタを形成する．そしてWebサーバコンテナの増減に応じてHAProxyコンテナの設定を書き換えるということをやってみた．&lt;/p&gt;
+
+&lt;p&gt;基本的には，上でやったことをDockerのコンテナに移行するだけだが，Dockerは1コンテナで1プロセスが普通であるため，複数プロセス（サービス）をどう扱うかが問題になる．&lt;/p&gt;
+
+&lt;p&gt;Dockerで複数プロセスを扱うときには，&lt;a href=&#34;http://supervisord.org/&#34;&gt;Supervisor&lt;/a&gt;という選択肢がある．この方法は，&lt;a href=&#34;http://docs.docker.io/en/latest/examples/using_supervisord/&#34;&gt;公式&lt;/a&gt;で紹介されていたり，Foot Fightの&lt;a href=&#34;http://foodfightshow.org/2013/11/docker-in-practice.html&#34;&gt;&amp;ldquo;Docker in Practice&amp;rdquo;&lt;/a&gt;で言及されてたり，CenturyLink Labsが&lt;a href=&#34;http://www.centurylinklabs.com/auto-loadbalancing-with-fig-haproxy-and-serf/&#34;&gt;試みて&lt;/a&gt;いたりする．&lt;/p&gt;
+
+&lt;p&gt;ということで，SupervisordとSerf，HAproxyによるDockerコンテナのディスカバリをやってみた．&lt;/p&gt;
+
+&lt;p&gt;&lt;a href=&#34;https://github.com/tcnksm/docker-serf-haproxy&#34;&gt;tcnksm/docker-serf-haproxy&lt;/a&gt;&lt;/p&gt;
+
+&lt;h2 id=&#34;準備:84e114c660e2288c965bfe012faed1ad&#34;&gt;準備&lt;/h2&gt;
+
+&lt;p&gt;OSX+boot2dockerで行う．あらかじめboot2docker-vmのport forwardingの設定だけしておく．&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-bash&#34;&gt;$ boot2docker init
+$ VBoxManage modifyvm &amp;quot;boot2docker-vm&amp;quot; --natpf1 &amp;quot;tcp-port8080,tcp,,8080,,8080&amp;quot;
+$ boot2docker up
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;h2 id=&#34;haproxy-serfコンテナ:84e114c660e2288c965bfe012faed1ad&#34;&gt;HAProxy+Serfコンテナ&lt;/h2&gt;
+
+&lt;p&gt;Dockerfileは以下．&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-bash&#34;&gt;FROM ubuntu
+
+# Install serf
+RUN apt-get install -y unzip wget
+RUN wget --no-check-certificat https://dl.bintray.com/mitchellh/serf/0.5.0_linux_amd64.zip -O serf.zip
+RUN unzip serf.zip
+RUN chmod +x serf
+RUN mv serf /usr/bin/serf
+
+# Install HAProxy
+RUN apt-get -y install haproxy
+RUN sed -i -e &#39;s/ENABLED=0/ENABLED=1/&#39; /etc/default/haproxy
+
+# Install supervisor
+RUN apt-get install -qy supervisor
+
+# Install basic packages for ruby
+RUN apt-get -y update
+RUN apt-get install -y build-essential git
+RUN apt-get install -y zlib1g-dev libssl-dev libreadline-dev libyaml-dev libxml2-dev libxslt-dev
+RUN apt-get clean
+
+# Install ruby-build
+RUN git clone https://github.com/sstephenson/ruby-build.git .ruby-build
+RUN .ruby-build/install.sh
+RUN rm -fr .ruby-build
+
+# Install ruby-2.1.0
+RUN ruby-build 2.1.0 /usr/local
+
+# Add Handler
+ADD default_haproxy.cfg /etc/haproxy/haproxy.cfg
+ADD supervisord-haproxy.conf /etc/supervisor/conf.d/supervisord-haproxy.conf
+ADD handler.rb /handler.rb
+
+EXPOSE 80
+CMD [&amp;quot;supervisord&amp;quot;, &amp;quot;-n&amp;quot;]
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;やっているのは，&lt;/p&gt;
+
+&lt;ul&gt;
+&lt;li&gt;Serfのインストール&lt;/li&gt;
+&lt;li&gt;HAProxyのインストール&lt;/li&gt;
+&lt;li&gt;Supervisorのインストール&lt;/li&gt;
+&lt;li&gt;Rubyのインストール&lt;/li&gt;
+&lt;li&gt;設定ファイル，イベントハンドラスクリプトの追加&lt;/li&gt;
+&lt;/ul&gt;
+
+&lt;p&gt;Rubyをインストールしているのは，HAProxyの設定を書き換えるためのイベントハンドラをRubyで書いたためで，これはシェルスクリプトでも全然できる（Serfレポジトリの&lt;a href=&#34;https://github.com/hashicorp/serf/tree/master/demo/web-load-balancer&#34;&gt;デモページ&lt;/a&gt;を参照）．余談だが，キャッシュが効くように変更が入りうる設定ファイル等の&lt;code&gt;ADD&lt;/code&gt;はなるべく最後の方に記述するようにしたほうがよい．&lt;/p&gt;
+
+&lt;p&gt;HAProxyのデフォルトの設定ファイルは&lt;a href=&#34;https://github.com/tcnksm/docker-serf-haproxy/blob/master/haproxy/default_haproxy.cfg&#34;&gt;default_haproxy.cfg&lt;/a&gt;で，イベントハンドラでこれを書き換える．&lt;/p&gt;
+
+&lt;p&gt;イベントハンドラは&lt;a href=&#34;https://github.com/tcnksm/docker-serf-haproxy/blob/master/haproxy/handler.rb&#34;&gt;handler.rb&lt;/a&gt;で，roleがwebのメンバーが参加したらそのメンバーのIPをhaproxy.cfgに追記，離脱したら設定を削除する．&lt;/p&gt;
+
+&lt;p&gt;Supervisorの設定ファイルは以下．&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;# supervisord-haproxy.conf
+[supervisord]
+nodaemon=true
+
+[program:haproxy]
+command=service haproxy start
+numprocs=1
+autostart=true
+autorestart=true
+
+[program:serf]
+command=serf agent -tag role=lb -node proxy -event-handler &#39;ruby /handler.rb&#39;
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;あとは，起動コマンドに&lt;code&gt;[&amp;quot;supervisord&amp;quot;,&amp;quot;-n&amp;quot;]&lt;/code&gt;を指定しておけば，コンテナを立ち上げたときに，HAProxyとSerfが両方起動する．&lt;/p&gt;
+
+&lt;p&gt;イメージをビルドしておく．&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-bash&#34;&gt;$ docker build -t tcnksm/haproxy .
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;h2 id=&#34;nginx-serfコンテナ:84e114c660e2288c965bfe012faed1ad&#34;&gt;Nginx+Serfコンテナ&lt;/h2&gt;
+
+&lt;p&gt;Webサーバには，nginxを利用する．Dockerfileは以下．&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-bash&#34;&gt;FROM ubuntu
+
+# Install serf
+RUN apt-get install -y unzip wget
+RUN wget --no-check-certificat https://dl.bintray.com/mitchellh/serf/0.5.0_linux_amd64.zip -O serf.zip
+RUN unzip serf.zip
+RUN chmod +x serf
+RUN mv serf /usr/bin/serf
+
+# Install nginx
+RUN apt-get -y update
+RUN apt-get -y install nginx
+
+# Install supervisor
+RUN apt-get install -qy supervisor
+
+# Supervisord config
+ADD supervisord-nginx.conf /etc/supervisor/conf.d/supervisord-nginx.conf
+
+# Default page
+ADD index.html /usr/share/nginx/www/index.html
+
+# Startup script (We need this to use environmetal variables with --link)
+ADD start-serf.sh /start-serf.sh
+RUN chmod 755 /start-serf.sh
+
+EXPOSE 80
+CMD [&amp;quot;supervisord&amp;quot;, &amp;quot;-n&amp;quot;]
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;やっているのは，&lt;/p&gt;
+
+&lt;ul&gt;
+&lt;li&gt;Serfのインストール&lt;/li&gt;
+&lt;li&gt;Nginxのインストール&lt;/li&gt;
+&lt;li&gt;Supervisorのインストール&lt;/li&gt;
+&lt;li&gt;設定ファイル，デフォルトページ，Serf起動スクリプトの追加&lt;/li&gt;
+&lt;/ul&gt;
+
+&lt;p&gt;Supervisorの設定ファイルは以下．&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-bash&#34;&gt;# supervisord-nginx.conf
+[supervisord]
+nodaemon=true
+
+[program:nginx]
+command=/usr/sbin/nginx -g &amp;quot;daemon off;&amp;quot;
+numprocs=1
+autostart=true
+autorestart=true
+
+[program:serf]
+command=/start-serf.sh
+numprocs=1
+autostart=true
+autorestart=true
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;HAProxyコンテナと同様に，起動コマンドに[&amp;ldquo;supervisord&amp;rdquo;,&amp;ldquo;-n&amp;rdquo;]を指定しておけば，コンテナを立ち上げたときに，NginxとSerfが両方起動する．&lt;/p&gt;
+
+&lt;p&gt;Serfの起動スクリプトは，以下．&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-bash&#34;&gt;#!/bin/bash
+
+exec serf agent \
+    -tag role=web \
+    -join $SERF_PORT_7946_TCP_ADDR:$SERF_PORT_7946_TCP_PORT
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;クラスタに参入するときに必要となる，メンバーのIPはDockerのLink機能を利用して取得する（Link機能については，&lt;a href=&#34;http://deeeet.com/writing/2014/03/20/docker-link-container/&#34;&gt;&amp;ldquo;Dockerコンテナ間のlink，database.ymlの書き方&amp;rdquo;&lt;/a&gt;に書いた）．&lt;/p&gt;
+
+&lt;p&gt;バランシングされていることを確認するために，異なるデフォルトページを持つ2つのイメージを作成しておく．&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-bash&#34;&gt;$ echo &#39;&amp;lt;h1&amp;gt;web1&amp;lt;/h1&amp;gt;&#39; &amp;gt; index.html
+$ docker build -t tcnksm/web1 .
+$ echo &#39;&amp;lt;h1&amp;gt;web2&amp;lt;/h1&amp;gt;&#39; &amp;gt; index.html
+$ docker build -t tcnksm/web2 .
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;h2 id=&#34;動かしてみる:84e114c660e2288c965bfe012faed1ad&#34;&gt;動かしてみる&lt;/h2&gt;
+
+&lt;p&gt;まず，HAProxyコンテナを起動する．&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-bash&#34;&gt;$ docker run -d -t -p 8080:80 -p 7946 --name haproxy tcnksm/haproxy
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;起動の確認には，&lt;code&gt;docker logs $(docker ps -l -q)&lt;/code&gt;する．&lt;/p&gt;
+
+&lt;p&gt;次に，Nginxコンテナを起動する．&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-bash&#34;&gt;$ docker run -d -t --link haproxy:serf tcnksm/web1
+$ docker run -d -t --link haproxy:serf tcnksm/web2
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;バランシングされているのを確認する．&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-bash&#34;&gt;$ curl http://0.0.0.0:8080
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;余談．ホスト（OSX）側からserfのメンバーに参入してクラスタのメンバの確認をする．&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-bash&#34;&gt;$ serf agent -bind 127.0.0.1 -join $(docker port proxy 7946)
+$ serf members
+OSX             127.0.0.1:7946   alive
+71bb31bdb656    172.17.0.3:7946  alive  role=web
+042494b4df57    172.17.0.4:7946  alive  role=web
+haproxy         172.17.0.2:7946  alive  role=lb
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;事前に&lt;code&gt;$(docker port proxy 7967)&lt;/code&gt;のportにホスト側からアクセスできるようにboot2docker-vmのport forwardingをやっておくこと．&lt;code&gt;haproxy&lt;/code&gt;コンテナ以外には接続できないので，ゴシップが送れないため，あくまで一時的なデバッグ用．&lt;/p&gt;
+
+&lt;h2 id=&#34;雑感:84e114c660e2288c965bfe012faed1ad&#34;&gt;雑感&lt;/h2&gt;
+
+&lt;p&gt;やってみると案外簡単だった．ただ，これはDockerのLink機能を使ってるため，同一ホスト内でしか利用できない手法になる．負荷を考えるとしんどそう．異なるホスト間でもSerf+Dockerで連携できるようにしたい（既にCenturyLink Labsの&lt;a href=&#34;http://www.centurylinklabs.com/linking-docker-containers-with-a-serf-ambassador/&#34;&gt;&amp;ldquo;Linking Docker Containers with a Serf Ambassador&amp;rdquo;&lt;/a&gt;がある）．&lt;/p&gt;
+
+&lt;p&gt;ただ，SupervisorつかってDockerで複数プロセスを動かすときとかの参考になればと．&lt;/p&gt;
+
+&lt;h3 id=&#34;参考:84e114c660e2288c965bfe012faed1ad&#34;&gt;参考&lt;/h3&gt;
+
+&lt;ul&gt;
+&lt;li&gt;&lt;a href=&#34;http://foodfightshow.org/2013/11/docker-in-practice.html&#34;&gt;Docker in Practice - Food Fight&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a href=&#34;http://www.centurylinklabs.com/auto-loadbalancing-with-fig-haproxy-and-serf/&#34;&gt;Auto-Loadbalancing Docker with Fig, HAProxy and Serf&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a href=&#34;http://docs.docker.io/en/latest/examples/using_supervisord/&#34;&gt;Using Supervisor with Docker&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a href=&#34;http://blog.glidenote.com/blog/2013/10/30/serf-haproxy/&#34;&gt;Serf+HAProxyで作るAutomatic Load Balancer&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a href=&#34;http://blog.ryotarai.info/blog/2014/04/01/service-discovery-by-syanpse-with-serf/&#34;&gt;Synapse と Serf でサービスディスカバリ&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a href=&#34;https://github.com/hashicorp/serf/tree/master/demo/web-load-balancer&#34;&gt;Serf Demo: Web Servers + Load Balancer&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a href=&#34;http://pocketstudio.jp/log3/2014/03/29/serf_configuration_quick_guide/&#34;&gt;Serf設定オプションまとめ&lt;/a&gt;&lt;/li&gt;
+&lt;/ul&gt;
+</description>
+    </item>
+    
+    <item>
+      <title>SerfでDockerコンテナのクラスタを形成する</title>
+      <link>http://deeeet.com/writing/2014/03/31/docker-serf/</link>
+      <pubDate>Mon, 31 Mar 2014 00:00:00 +0000</pubDate>
+      
+      <guid>http://deeeet.com/writing/2014/03/31/docker-serf/</guid>
+      <description>
+
+&lt;p&gt;&lt;a href=&#34;http://deeeet.com/writing/2014/03/23/serf-basic/&#34;&gt;&amp;ldquo;Serf虎の巻&amp;rdquo;&lt;/a&gt;書いたし，Serf使っていろいろやってみるかということで，Dockerコンテナのクラスタ形成をやってみた．SerfとDockerの組み合わせについては，すでに[shiba_yu36]()さんが試みている（&lt;a href=&#34;http://shibayu36.hatenablog.com/entry/2013/12/08/170547&#34;&gt;&amp;ldquo;serfとDockerでクラスタを組んでみる&amp;rdquo;&lt;/a&gt;）ので，もう少し踏み込んでクラスタへのjoinの仕方を模索してみた．&lt;/p&gt;
+
+&lt;p&gt;&lt;a href=&#34;https://github.com/tcnksm/sample-docker-serf&#34;&gt;tcnksm/sample-docker-serf&lt;/a&gt;&lt;/p&gt;
+
+&lt;p&gt;やってみたのは，Dockerコンテナのみでのクラスタの形成．&lt;/p&gt;
+
+&lt;h2 id=&#34;準備:0d4d0b0a382a1c50347ed01d69438783&#34;&gt;準備&lt;/h2&gt;
+
+&lt;p&gt;Vagrant上で実行する．Vagrantfileは以下．&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-ruby&#34;&gt;$script1 = &amp;lt;&amp;lt;SCRIPT
+echo Installing depedencies...
+sudo apt-get install -y unzip
+
+echo Fetching Serf...
+cd /tmp/
+wget https://dl.bintray.com/mitchellh/serf/0.5.0_linux_amd64.zip -O serf.zip
+
+echo Installing Serf...
+unzip serf.zip
+sudo chmod +x serf
+sudo mv serf /usr/bin/serf
+SCRIPT
+
+Vagrant.configure(&amp;quot;2&amp;quot;) do |config|
+  config.vm.box = &amp;quot;precise64&amp;quot;
+  config.vm.box_url = &amp;quot;http://files.vagrantup.com/precise64.box&amp;quot;
+
+  config.vm.provision &amp;quot;shell&amp;quot;, inline: $script1
+  config.vm.network &amp;quot;private_network&amp;quot;, ip: &amp;quot;172.20.20.10&amp;quot;
+
+  config.vm.provision :docker do |d|
+    d.pull_images &amp;quot;ubuntu&amp;quot;
+  end
+end
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;VagrantからもSerfを使いたいので事前にプロビジョニングでインストールしておく．またDockerプロビジョニングも有効にしておく．&lt;/p&gt;
+
+&lt;p&gt;次に，Dockerfileは以下．Serfをインストールするだけ．&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-bash&#34;&gt;FROM ubuntu
+
+RUN apt-get -y install unzip wget
+
+RUN cd /tmp/
+RUN wget --no-check-certificat https://dl.bintray.com/mitchellh/serf/0.5.0_linux_amd64.zip -O serf.zip
+
+RUN unzip serf.zip
+RUN chmod +x serf
+RUN mv serf /usr/local/bin/serf
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;イメージビルドしておく．&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-bash&#34;&gt;$ docker build -t tcnksm/serf .
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;h2 id=&#34;クラスタの形成:0d4d0b0a382a1c50347ed01d69438783&#34;&gt;クラスタの形成&lt;/h2&gt;
+
+&lt;p&gt;実際にDockerコンテナでクラスタを形成してみる．&lt;/p&gt;
+
+&lt;p&gt;まず，最初のAgentを起動する．&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-bash&#34;&gt;$ docker run -d -t \
+    --name serf1 \
+    -p 7979 \
+    tcnksm/serf \
+    serf agent -bind 0.0.0.0:7979
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;&lt;code&gt;serf1&lt;/code&gt;という名前で，&lt;code&gt;7979&lt;/code&gt;ポートをEXPOSEし，Bindアドレス（Serfのクラスタ同士が通信するアドレス）を&lt;code&gt;0.0.0.0:7979&lt;/code&gt;としてコンテナを起動する．&lt;/p&gt;
+
+&lt;p&gt;クラスタにjoinするには，クラスタメンバーのどれか一つのIPを知らないといけない．それをどうやって取得するかが問題になる．&lt;/p&gt;
+
+&lt;p&gt;[shiba_yu36]()さんは，ホスト側でAgentを起動し，docker0ネットワークのinnet addrを利用してコンテナ側からホスト側のAgentにjoinしていた．以下は，&lt;strong&gt;コンテナ側で立てたAgent&lt;/strong&gt;にjoinする方法．この方法ではホスト側にAgentを立てる必要はない．&lt;/p&gt;
+
+&lt;h3 id=&#34;inspectを利用する:0d4d0b0a382a1c50347ed01d69438783&#34;&gt;inspectを利用する&lt;/h3&gt;
+
+&lt;p&gt;&lt;code&gt;docker inspect&lt;/code&gt;を使うと，コンテナIDを基にコンテナのIPを取得できる．上で立てた&lt;code&gt;serf1&lt;/code&gt;コンテナにjoinしてみる（例えば，&lt;code&gt;serf1&lt;/code&gt;のコンテナIDが&lt;code&gt;06b0325f637&lt;/code&gt;のとき）．&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-bash&#34;&gt;$ docker run -d -t \
+    --name serf2 \
+    tcnksm/serf \
+    serf agent -join $(docker inspect --format &#39;{{ .NetworkSettings.IPAddress }}&#39; 06b0325f6373):7979
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;&lt;code&gt;--format&lt;/code&gt;指定するとIPだけを抜き出せる．&lt;/p&gt;
+
+&lt;h3 id=&#34;linkを利用する:0d4d0b0a382a1c50347ed01d69438783&#34;&gt;linkを利用する&lt;/h3&gt;
+
+&lt;p&gt;&lt;code&gt;link&lt;/code&gt;機能を使うと接続したいコンテナのIPを，新たに起動するコンテナ内で環境変数として取得できる（詳しくは，&lt;a href=&#34;http://deeeet.com/writing/2014/03/20/docker-link-container/&#34;&gt;&amp;ldquo;Dockerコンテナ間のlink，database.ymlの書き方&amp;rdquo;&lt;/a&gt;に書いた）．この環境変数は，&lt;code&gt;docker run&lt;/code&gt;のときにも利用できる．&lt;code&gt;serf1&lt;/code&gt;に立てたagentにjoinするには，以下のようにする．&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-bash&#34;&gt;$ docker run -d -t \
+    --name serf2 \
+    -p 7979 \
+    --link serf1:serf \
+    tcnksm/serf \
+    /bin/bash -c &#39;serf agent -bind 0.0.0.0:7979 -join $SERF_PORT_7979_TCP_ADDR:7979&#39;
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;&lt;code&gt;--link serf1:serf&lt;/code&gt;とすれば，&lt;code&gt;$SERF_PORT_7979_TCP_ADDR&lt;/code&gt;で&lt;code&gt;serf1&lt;/code&gt;コンテナのIPが取得できる．&lt;/p&gt;
+
+&lt;p&gt;この方法では，わざわざコンテナのIDを取得する必要がない．全てのAgentをBindアドレス&lt;code&gt;0.0.0.0:7979&lt;/code&gt;で起動し，コンテナは&lt;code&gt;7979&lt;/code&gt;ポートをEXPOSEしておけば，コンテナの名前だけでクラスタにjoinできる．&lt;/p&gt;
+
+&lt;h3 id=&#34;ホスト側からクラスタにjoinする:0d4d0b0a382a1c50347ed01d69438783&#34;&gt;ホスト側からクラスタにjoinする&lt;/h3&gt;
+
+&lt;p&gt;ホスト側（Vagrant）から，コンテナ内で立てたAgentにjoinすることもできる．Dockerコンテナは1プロセスでしか起動できないため，クラスタのメンバーの確認やクラスタへのカスタムイベント，クエリの伝搬にはコンテナだけでは限界がある．このため，ホストからクラスタにjoinできる必要がある．&lt;/p&gt;
+
+&lt;p&gt;ホスト側からみたコンテナのIPを取得するには，&lt;code&gt;docker port&lt;/code&gt;を使う．コンテナの名前（もしくはID）とEXPOSEしているPORT番号で取得できる．以下のようにして，コンテナに立てたAgentに接続する．&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-bash&#34;&gt;$ serf agent -join $(docker port serf1 7979)
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;これで，ホスト側からクラスタに対していろいろ操作できる．&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-bash&#34;&gt;$ serf members
+precise64     10.0.2.15:7946   alive
+2912f653a2e5  172.17.0.3:7979  alive
+06b0325f6373  172.17.0.4:7979  alive
+108c21eb149a  172.17.0.2:7979  alive
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;h3 id=&#34;参考:0d4d0b0a382a1c50347ed01d69438783&#34;&gt;参考&lt;/h3&gt;
+
+&lt;ul&gt;
+&lt;li&gt;&lt;a href=&#34;http://www.centurylinklabs.com/decentralizing-docker-how-to-use-serf-with-docker/&#34;&gt;Decentralizing Docker: How to Use Serf with Docker | CenturyLink Labs&lt;/a&gt;&lt;/li&gt;
+&lt;/ul&gt;
+</description>
+    </item>
+    
+  </channel>
+</rss>

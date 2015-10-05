@@ -1,0 +1,70 @@
+<?xml version="1.0" encoding="utf-8" standalone="yes" ?>
+<rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom">
+  <channel>
+    <title>Angular.Js on SOTA</title>
+    <link>http://deeeet.com/categories/angular/index.js/</link>
+    <description>Recent content in Angular.Js on SOTA</description>
+    <generator>Hugo -- gohugo.io</generator>
+    <language>ja-jp</language>
+    <copyright>Copyright (C) 2013-2015 Taichi Nakashima All Right Reserved.</copyright>
+    <lastBuildDate>Mon, 23 Dec 2013 00:00:00 +0000</lastBuildDate>
+    <atom:link href="http://deeeet.com/categories/angular.js/index.xml" rel="self" type="application/rss+xml" />
+    
+    <item>
+      <title>HamlでAngular.js</title>
+      <link>http://deeeet.com/writing/2013/12/23/haml-angular-js/</link>
+      <pubDate>Mon, 23 Dec 2013 00:00:00 +0000</pubDate>
+      
+      <guid>http://deeeet.com/writing/2013/12/23/haml-angular-js/</guid>
+      <description>&lt;p&gt;この記事は&lt;a href=&#34;http://qiita.com/advent-calendar/2013/angularjs-startup&#34;&gt;AngularJS Startup Advent Calendar 2013&lt;/a&gt;の23日目の記事です．&lt;/p&gt;
+
+&lt;p&gt;いきなりですが，参加させていただきました．文脈が全然違ったらすいません．とてもシンプルな記事です．&lt;/p&gt;
+
+&lt;p&gt;最近，Angular.jsを触っている．ただ，もう今更HTMLを0から打つのはやってられないと思う．&lt;a href=&#34;http://haml.info/&#34;&gt;Haml&lt;/a&gt;で手軽に書く．&lt;/p&gt;
+
+&lt;p&gt;インストール&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-bash&#34;&gt;$ gem install haml
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;index.haml&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-haml&#34;&gt;!!! 5
+%html{&amp;quot;ng-app&amp;quot; =&amp;gt; true}
+  %head
+    %title Sample
+    %meta{charset: &#39;utf-8&#39;}
+    %script{src: &amp;quot;http://ajax.googleapis.com/ajax/libs/angularjs/1.0.3/angular.js&amp;quot;}
+
+  %body
+    %input{type: &amp;quot;text&amp;quot;, &amp;quot;ng-model&amp;quot; =&amp;gt; &amp;quot;name&amp;quot;}
+    %p Hello, {{ name }}
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;htmlに整形&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-bash&#34;&gt;$ haml index.haml index.html
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;index.html&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-html&#34;&gt;&amp;lt;!DOCTYPE html&amp;gt;
+&amp;lt;html ng-app&amp;gt;
+  &amp;lt;head&amp;gt;
+    &amp;lt;title&amp;gt;Sample&amp;lt;/title&amp;gt;
+    &amp;lt;meta charset=&#39;utf-8&#39;&amp;gt;
+    &amp;lt;script src=&#39;http://ajax.googleapis.com/ajax/libs/angularjs/1.0.3/angular.js&#39;&amp;gt;&amp;lt;/script&amp;gt;
+  &amp;lt;/head&amp;gt;
+  &amp;lt;body&amp;gt;
+    &amp;lt;input ng-model=&#39;name&#39; type=&#39;text&#39;&amp;gt;
+    &amp;lt;p&amp;gt;Hello, {{ name }}&amp;lt;/p&amp;gt;
+  &amp;lt;/body&amp;gt;
+&amp;lt;/html&amp;gt;
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;以上．&lt;/p&gt;
+</description>
+    </item>
+    
+  </channel>
+</rss>

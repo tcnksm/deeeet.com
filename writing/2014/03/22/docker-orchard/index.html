@@ -1,0 +1,254 @@
+<!doctype html>
+<html>
+  <head>
+    <meta http-equiv="content-type" content="text/html; charset=utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    
+    <title>OrchardにDockerアプリケーションをデプロイ | SOTA</title>
+    
+    <link href="https://fonts.googleapis.com/css?family=Lato%3a900" rel="stylesheet" type="text/css">
+    <link rel="stylesheet" href="/css/main.css">
+    <link rel="shortcut icon" href="/favicon.png" type="image/x-icon" />
+    <link href="http://deeeet.com//index.xml" rel="alternate" type="application/rss+xml" title="" />
+    <meta name="title" content="http://deeeet.com/writing/2014/03/22/docker-orchard/">
+    <link rel="canonical" href="http://deeeet.com/writing/2014/03/22/docker-orchard/">
+    
+    <meta property="og:title" content="OrchardにDockerアプリケーションをデプロイ"/>
+    <meta property="og:url" content="http://deeeet.com/writing/2014/03/22/docker-orchard/"/>
+  </head>
+  
+  <body>
+    <section class="site-nav">
+      <header>
+        <nav id="navigation">
+          <ul class="menu">
+            <li><a href="https://github.com/tcnksm/talks">Talks</a></li>
+            <li><a href="https://tcnksm.exposure.co/">Photos</a></li>
+          </ul>
+
+          <a class="name" href="/">SOTA</a>
+        </nav>        
+      </header>
+    </section>
+    
+
+
+<article>
+  <div class="container">
+    <header>
+      <div class="meta">
+        <time pubdate datetime="2014-03-22" title="2014-03-22">March 22, 2014</time>
+      </div>
+      <h1 class="title">OrchardにDockerアプリケーションをデプロイ</h1>
+    </header>
+    
+    <section>
+      
+
+<p><a href="https://orchardup.com/">Orchard</a>は，Docker as a ServiceなDocker専用のホスティングサービス．[DigitalOcean]()のように時間単位の課金で利用できる．DigitalOceanより若干高いが，512MB RAM/20GB SSDであれば，1時間1円/月1000円程度で利用できる．</p>
+
+<p>同様のサービスには，<a href="https://stackdock.com/">StackDock</a>がある．またDockerをサポートしているプラットフォームとしては，<a href="https://cloud.google.com/products/compute-engine/">Google Compute Engine</a>やDigitalOceanなどがある．これと比較してOrchardがよいと感じた理由は以下．</p>
+
+<ul>
+<li>シンプル．専用のコマンドラインラッパーを使って，いつも通りのDockerコマンドをローカルから発行するだけでbuild/runが実行できる（StackDockはWebコンソールにDockerfileを書く）．</li>
+<li><a href="http://orchardup.github.io/fig/">Fig</a>のサポート/開発を行っており，将来的に複数のDockerのコンテナ間のリンクなどがやりやすくなりそう．</li>
+</ul>
+
+<p>ということで，実際にサンプルアプリケーションをデプロイしてみた．サンプルコードは全て以下にある．</p>
+
+<ul>
+<li><a href="https://github.com/tcnksm/sample-docker-orchard">tcnksm/sample-docker-orchard</a></li>
+</ul>
+
+<h2 id="準備:68944ad6434088c1d84760c2dcf2ea75">準備</h2>
+
+<p>OSX上で行う．まず，Dockerのインストール．</p>
+
+<pre><code class="language-bash">$ brew update
+$ brew tap homebrew/binary
+$ brew install docker
+</code></pre>
+
+<p>次に，Dockerのデーモンを動かすために，VirtualBoxとboot2dockerのインストール．</p>
+
+<pre><code class="language-bash">$ brew tap phinze/homebrew-cask
+$ brew cask install virtualbox
+$ brew install boot2docker
+</code></pre>
+
+<p>boot2dockerを立ち上げて，Docker hostの環境変数を設定する．</p>
+
+<pre><code class="language-bash">$ boot2docker init
+$ boot2docker up
+$ export DOCKER_HOST=tcp://localhost:4243
+</code></pre>
+
+<p>ローカルで，アプリケーションの実行確認をする場合は，<code>up</code>する前に，boot2docker-vmのPort forwardingの設定をしておく．</p>
+
+<pre><code class="language-bash">$ VBoxManage modifyvm &quot;boot2docker-vm&quot; --natpf1 &quot;tcp-port3000,tcp,,3000,,3000&quot;
+</code></pre>
+
+<p>最後に，Orchardでアカウントを作成し，Orchardのコマンドラインツールをインストールする．</p>
+
+<pre><code class="language-bash">$ curl -L https://github.com/orchardup/go-orchard/releases/download/2.0.5/darwin &gt; /usr/local/bin/orchard
+$ chmod +x /usr/local/bin/orchard
+</code></pre>
+
+<h2 id="準備-railsアプリケーション:68944ad6434088c1d84760c2dcf2ea75">準備（Railsアプリケーション）</h2>
+
+<p>今回は，サンプルアプリケーションとして，<a href="https://github.com/mkwiatkowski/todo-rails4-angularjs">mkwiatkowski/todo-rails4-angularjs</a>を利用する（これは，Rails4でAngularJSを使ってみたというサンプルプロジェクト）．</p>
+
+<pre><code class="language-bash">$ git clone https://github.com/mkwiatkowski/todo-rails4-angularjs
+</code></pre>
+
+<p>このアプリケーションは，DBにPostgresqlを使っている．Postgresqlコンテナを立ててそれと連携するため，以下のように<code>config/database.yml</code>を記述する．</p>
+
+<pre><code>development:
+  adapter: postgresql
+  template: template0
+  encoding: unicode
+  database: todo_rails4_angularjs_development
+  pool: 5
+  username: docker
+  password: docker
+  host: &lt;%= ENV.fetch('DB_PORT_5432_TCP_ADDR') %&gt;
+  port: &lt;%= ENV.fetch('DB_PORT_5432_TCP_PORT') %&gt;
+</code></pre>
+
+<p>Dockerのコンテナ間のリンクについては，<a href="http://deeeet.com/writing/2014/03/20/docker-link-container/">&ldquo;Dockerコンテナ間のlink，database.ymlの書き方&rdquo;</a>に書いた．</p>
+
+<p>最後に，<a href="https://github.com/tcnksm/rbdock">rbdock</a>を使ってRailsアプリケーション用のDockerfileを作成する（rbdockについては，<a href="http://deeeet.com/writing/2014/03/06/rbdock/">&ldquo;rbdockというRuby/Rails/Sinatra用のDockerfileを生成するgemをつくった&rdquo;</a>に書いた）．</p>
+
+<pre><code class="language-bash">$ gem install rbdock
+$ rbdock 2.0.0-p247 --app todo-rails4-angularjs
+</code></pre>
+
+<p><a href="https://github.com/tcnksm/sample-docker-orchard/blob/master/Dockerfile">このようなDockerfile</a>が生成される．</p>
+
+<p>後は，イメージをビルドしておく．</p>
+
+<pre><code class="language-bash">$ docker build -t tcnksm/rails .
+</code></pre>
+
+<h2 id="ローカルでの開発:68944ad6434088c1d84760c2dcf2ea75">ローカルでの開発</h2>
+
+<p>デプロイする前にローカルで動作確認をする．</p>
+
+<p>まず，Postgresqlコンテナには，orchardが提供している[orchard/postgresql]()を使う．これをpgという名前で立ち上げる．</p>
+
+<pre><code class="language-bash">$ docker run -d -p 5432:5432 -e POSTGRESQL_USER=docker -e POSTGRESQL_PASS=docker -name pg orchardup/postgresql
+</code></pre>
+
+<p>次に，上の準備で作成したRailsコンテナを立ち上げる．</p>
+
+<pre><code class="language-bash">$ docker run -i -p 3000:3000 -link pg:db -name web -t tcnksm/rails 'rake db:create &amp;&amp; rake db:migrate &amp;&amp; rails s'
+</code></pre>
+
+<p><a href="http://localhost:3000/">http://localhost:3000/</a>にアクセスすれば，実行が確認できる．</p>
+
+<p>ローカルでの開発では，ONBUILDやVolumeを使ってイメージにアプリケーションをマウントして開発すれば，リアルタイムに更新が確認できて便利．また，Vagrant share的なこともできる．その辺りは以下に書いた．</p>
+
+<ul>
+<li><a href="http://deeeet.com/writing/2014/03/21/docker-onbuild/">DockerfileのONBUILD</a></li>
+<li><a href="http://deeeet.com/writing/2014/03/12/docker-share/">Docker share</a></li>
+</ul>
+
+<h2 id="orchardへのデプロイ:68944ad6434088c1d84760c2dcf2ea75">Orchardへのデプロイ</h2>
+
+<p>開発が完了したら，実際にOrchardにアプリケーションをデプロイしてみる．まず，作成したアカウントでログインする．</p>
+
+<pre><code class="language-bash">$ orchard hosts create
+Orchard username: 
+Password:
+</code></pre>
+
+<p>すると専用のホストが作成される．課金はここから始まる．</p>
+
+<p>次に，Postgresqlコンテナを起動する．</p>
+
+<pre><code class="language-bash">$ orchard docker run -d -p 5432:5432 -e POSTGRESQL_USER=docker -e POSTGRESQL_PASS=docker -name pg orchardup/postgresql
+</code></pre>
+
+<p>そして，Railsイメージをビルドして起動する（イメージをdocker.ioに上げてある場合はbuildは必要ない）．</p>
+
+<pre><code class="language-bash">$ orchard docker build -t tcnksm/rails .
+$ orchard docker run -i -p 3000:3000 -link pg:db -name web -t tcnksm/rails 'rake db:create &amp;&amp; rake db:migrate &amp;&amp; rails s'
+</code></pre>
+
+<p>起動ホストは以下で確認できる．</p>
+
+<pre><code>$ orchard hosts
+NAME                SIZE                IP
+default             512M                162.243.93.47
+</code></pre>
+
+<p><a href="http://162.243.93.47:3000/">http://162.243.93.47:3000/</a>にアクセスする．</p>
+
+<p>ホストを削除したい場合は，以下のようにする．課金はこれで終了する．</p>
+
+<pre><code class="language-bash">$ orchard hosts rm
+</code></pre>
+
+<p>以上．</p>
+
+<h2 id="雑感:68944ad6434088c1d84760c2dcf2ea75">雑感</h2>
+
+<p>上で示したように，ローカルでの環境と全く同じコマンドを<code>orchard</code>コマンドを介して発行するだけで利用できる．素晴らしい．とてもシンプル．</p>
+
+<p>Figも試したい．また今作っている自分のアプリケーションも実際にデプロイして運用していきたい．</p>
+
+      <div class="social">
+  
+  
+  <a href="https://twitter.com/share" class="twitter-share-button" data-via="deeeet" data-count="none">Tweet</a>
+  
+  
+</div>
+
+    </section>
+
+    <footer>
+      <address>
+        
+        <img src="/images/bio.jpeg"/>
+        
+        <p>Written by <strong><a rel="author" href="https://twitter.com/deeeet" title="Taichi Nakashima" target="_blank">Taichi Nakashima</a></strong><br>
+          <span class="muted">A Tokyo based PaaS engineer. Please contact me via twitter.</span>
+        </p>
+      </address>
+
+    </footer>
+
+  </div>
+</article>
+
+<script type="text/javascript" src="//ajax.googleapis.com/ajax/libs/jquery/1.7.2/jquery.min.js"></script>
+<script type="text/javascript" src="/js/main.js"></script>
+
+<script>!function(d,s,id){var js,fjs=d.getElementsByTagName(s)[0],p=/^http:/.test(d.location)?'http':'https';if(!d.getElementById(id)){js=d.createElement(s);js.id=id;js.src=p+'://platform.twitter.com/widgets.js';fjs.parentNode.insertBefore(js,fjs);}}(document, 'script', 'twitter-wjs');</script>
+
+
+<script type="text/javascript">var HN=[];HN.factory=function(e){return function(){HN.push([e].concat(Array.prototype.slice.call(arguments,0)))};},HN.on=HN.factory("on"),HN.once=HN.factory("once"),HN.off=HN.factory("off"),HN.emit=HN.factory("emit"),HN.load=function(){var e="hn-button.js";if(document.getElementById(e))return;var t=document.createElement("script");t.id=e,t.src="//hn-button.herokuapp.com/hn-button.js";var n=document.getElementsByTagName("script")[0];n.parentNode.insertBefore(t,n)},HN.load();</script>
+
+
+  <script>
+  (function(i,s,o,g,r,a,m){i['GoogleAnalyticsObject']=r;i[r]=i[r]||function(){
+  (i[r].q=i[r].q||[]).push(arguments)},i[r].l=1*new Date();a=s.createElement(o),
+  m=s.getElementsByTagName(o)[0];a.async=1;a.src=g;m.parentNode.insertBefore(a,m)
+  })(window,document,'script','//www.google-analytics.com/analytics.js','ga');
+
+  ga('create', 'UA-45390253-1', 'auto');
+  ga('send', 'pageview');
+
+</script>
+
+
+
+<script>
+  $(document).ready(function() {
+  
+  $('p:has(img)').css('text-align', 'center');
+  $('iframe').css('style', 'display: block; margin: 0px auto;');
+  });
+</script>
+

@@ -1,0 +1,148 @@
+<!doctype html>
+<html>
+  <head>
+    <meta http-equiv="content-type" content="text/html; charset=utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    
+    <title>HamlでAngular.js | SOTA</title>
+    
+    <link href="https://fonts.googleapis.com/css?family=Lato%3a900" rel="stylesheet" type="text/css">
+    <link rel="stylesheet" href="/css/main.css">
+    <link rel="shortcut icon" href="/favicon.png" type="image/x-icon" />
+    <link href="http://deeeet.com//index.xml" rel="alternate" type="application/rss+xml" title="" />
+    <meta name="title" content="http://deeeet.com/writing/2013/12/23/haml-angular-js/">
+    <link rel="canonical" href="http://deeeet.com/writing/2013/12/23/haml-angular-js/">
+    
+    <meta property="og:title" content="HamlでAngular.js"/>
+    <meta property="og:url" content="http://deeeet.com/writing/2013/12/23/haml-angular-js/"/>
+  </head>
+  
+  <body>
+    <section class="site-nav">
+      <header>
+        <nav id="navigation">
+          <ul class="menu">
+            <li><a href="https://github.com/tcnksm/talks">Talks</a></li>
+            <li><a href="https://tcnksm.exposure.co/">Photos</a></li>
+          </ul>
+
+          <a class="name" href="/">SOTA</a>
+        </nav>        
+      </header>
+    </section>
+    
+
+
+<article>
+  <div class="container">
+    <header>
+      <div class="meta">
+        <time pubdate datetime="2013-12-23" title="2013-12-23">December 23, 2013</time>
+      </div>
+      <h1 class="title">HamlでAngular.js</h1>
+    </header>
+    
+    <section>
+      <p>この記事は<a href="http://qiita.com/advent-calendar/2013/angularjs-startup">AngularJS Startup Advent Calendar 2013</a>の23日目の記事です．</p>
+
+<p>いきなりですが，参加させていただきました．文脈が全然違ったらすいません．とてもシンプルな記事です．</p>
+
+<p>最近，Angular.jsを触っている．ただ，もう今更HTMLを0から打つのはやってられないと思う．<a href="http://haml.info/">Haml</a>で手軽に書く．</p>
+
+<p>インストール</p>
+
+<pre><code class="language-bash">$ gem install haml
+</code></pre>
+
+<p>index.haml</p>
+
+<pre><code class="language-haml">!!! 5
+%html{&quot;ng-app&quot; =&gt; true}
+  %head
+    %title Sample
+    %meta{charset: 'utf-8'}
+    %script{src: &quot;http://ajax.googleapis.com/ajax/libs/angularjs/1.0.3/angular.js&quot;}
+
+  %body
+    %input{type: &quot;text&quot;, &quot;ng-model&quot; =&gt; &quot;name&quot;}
+    %p Hello, {{ name }}
+</code></pre>
+
+<p>htmlに整形</p>
+
+<pre><code class="language-bash">$ haml index.haml index.html
+</code></pre>
+
+<p>index.html</p>
+
+<pre><code class="language-html">&lt;!DOCTYPE html&gt;
+&lt;html ng-app&gt;
+  &lt;head&gt;
+    &lt;title&gt;Sample&lt;/title&gt;
+    &lt;meta charset='utf-8'&gt;
+    &lt;script src='http://ajax.googleapis.com/ajax/libs/angularjs/1.0.3/angular.js'&gt;&lt;/script&gt;
+  &lt;/head&gt;
+  &lt;body&gt;
+    &lt;input ng-model='name' type='text'&gt;
+    &lt;p&gt;Hello, {{ name }}&lt;/p&gt;
+  &lt;/body&gt;
+&lt;/html&gt;
+</code></pre>
+
+<p>以上．</p>
+
+      <div class="social">
+  
+  
+  <a href="https://twitter.com/share" class="twitter-share-button" data-via="deeeet" data-count="none">Tweet</a>
+  
+  
+</div>
+
+    </section>
+
+    <footer>
+      <address>
+        
+        <img src="/images/bio.jpeg"/>
+        
+        <p>Written by <strong><a rel="author" href="https://twitter.com/deeeet" title="Taichi Nakashima" target="_blank">Taichi Nakashima</a></strong><br>
+          <span class="muted">A Tokyo based PaaS engineer. Please contact me via twitter.</span>
+        </p>
+      </address>
+
+    </footer>
+
+  </div>
+</article>
+
+<script type="text/javascript" src="//ajax.googleapis.com/ajax/libs/jquery/1.7.2/jquery.min.js"></script>
+<script type="text/javascript" src="/js/main.js"></script>
+
+<script>!function(d,s,id){var js,fjs=d.getElementsByTagName(s)[0],p=/^http:/.test(d.location)?'http':'https';if(!d.getElementById(id)){js=d.createElement(s);js.id=id;js.src=p+'://platform.twitter.com/widgets.js';fjs.parentNode.insertBefore(js,fjs);}}(document, 'script', 'twitter-wjs');</script>
+
+
+<script type="text/javascript">var HN=[];HN.factory=function(e){return function(){HN.push([e].concat(Array.prototype.slice.call(arguments,0)))};},HN.on=HN.factory("on"),HN.once=HN.factory("once"),HN.off=HN.factory("off"),HN.emit=HN.factory("emit"),HN.load=function(){var e="hn-button.js";if(document.getElementById(e))return;var t=document.createElement("script");t.id=e,t.src="//hn-button.herokuapp.com/hn-button.js";var n=document.getElementsByTagName("script")[0];n.parentNode.insertBefore(t,n)},HN.load();</script>
+
+
+  <script>
+  (function(i,s,o,g,r,a,m){i['GoogleAnalyticsObject']=r;i[r]=i[r]||function(){
+  (i[r].q=i[r].q||[]).push(arguments)},i[r].l=1*new Date();a=s.createElement(o),
+  m=s.getElementsByTagName(o)[0];a.async=1;a.src=g;m.parentNode.insertBefore(a,m)
+  })(window,document,'script','//www.google-analytics.com/analytics.js','ga');
+
+  ga('create', 'UA-45390253-1', 'auto');
+  ga('send', 'pageview');
+
+</script>
+
+
+
+<script>
+  $(document).ready(function() {
+  
+  $('p:has(img)').css('text-align', 'center');
+  $('iframe').css('style', 'display: block; margin: 0px auto;');
+  });
+</script>
+

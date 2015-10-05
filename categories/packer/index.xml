@@ -1,0 +1,46 @@
+<?xml version="1.0" encoding="utf-8" standalone="yes" ?>
+<rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom">
+  <channel>
+    <title>Packer on SOTA</title>
+    <link>http://deeeet.com/categories/packer/</link>
+    <description>Recent content in Packer on SOTA</description>
+    <generator>Hugo -- gohugo.io</generator>
+    <language>ja-jp</language>
+    <copyright>Copyright (C) 2013-2015 Taichi Nakashima All Right Reserved.</copyright>
+    <lastBuildDate>Sun, 02 Mar 2014 00:00:00 +0000</lastBuildDate>
+    <atom:link href="http://deeeet.com/categories/packer/index.xml" rel="self" type="application/rss+xml" />
+    
+    <item>
+      <title>Packer雑感</title>
+      <link>http://deeeet.com/writing/2014/03/02/packer/</link>
+      <pubDate>Sun, 02 Mar 2014 00:00:00 +0000</pubDate>
+      
+      <guid>http://deeeet.com/writing/2014/03/02/packer/</guid>
+      <description>&lt;p&gt;&lt;a href=&#34;http://deeeet.com/writing/2014/03/02/build-docker-image-by-packer/&#34;&gt;Packerを使ってChef/Puppet/AnsibleでDockerのイメージをつくる&lt;/a&gt;&lt;/p&gt;
+
+&lt;p&gt;で初めて&lt;a href=&#34;http://www.packer.io/&#34;&gt;Packer&lt;/a&gt;を使った．そのときの思ったことをざっと書き留めておく．&lt;/p&gt;
+
+&lt;p&gt;Packerは，Vagrantの作者であるMitchell Hashimoto氏によって開発が進められているVirtualBoxやVMWare，Amazon EC2などの仮想マシンのイメージの作成を行うツール．VagrantのVirtualBox用のBoxを作るveeweeに置き換わるツールとして知られている．&lt;/p&gt;
+
+&lt;p&gt;&lt;a href=&#34;http://mitchellh.com/packer&#34;&gt;リリース時から&lt;/a&gt;PackerはVagrantのBoxを作る専用ツールとしてのイメージが強かった．実際，box作るときはベースboxを基にvagrantのプロビジョニング機能を使って&lt;code&gt;vagrant package&lt;/code&gt;で済むし，ヘビーにVagrantを使うユーザのためのツールだと思っていた．また，ネット上にあるPacker関連の記事はこの用途を対象にしたものが多い．&lt;/p&gt;
+
+&lt;p&gt;だから，今回も基礎としてVagrantのboxの作成からやり始めた．が，正直途中で心が折れた．というのも，VirtualboxのVagrantのboxを作るときはisoイメージをベースに始めるため，KickStartとかPreseedの知識を要求される．その辺りはなじみがなくて辛かった．Redhat系のKickstartはまだ読めたが，Debian系のPreseedはしんどかった．Packerとは関係のないところで，理解が追いつかなかったために，Packerそのものの理解にたどり着くのが大変だった．&lt;/p&gt;
+
+&lt;p&gt;ただ，&lt;a href=&#34;http://deeeet.com/writing/2014/03/02/build-docker-image-by-packer/&#34;&gt;Dockerのイメージ作成&lt;/a&gt;や&lt;a href=&#34;http://www.ryuzee.com/contents/blog/6760&#34;&gt;Amazon EC2のAMIの作成&lt;/a&gt;をやり始めると，VirtualBoxのbox作成と比べてシンプルであり，なじみもあるため理解が進んだ．そして，&lt;strong&gt;Packerはものすごくシンプルかつ強力なツール&lt;/strong&gt;だということがわかった．Packerを自分なりの言葉でまとめてみると，&lt;/p&gt;
+
+&lt;ol&gt;
+&lt;li&gt;builderで仮想マシンのテンプレート（ベース）の設定をする．&lt;/li&gt;
+&lt;li&gt;ShellscriptやChef，Puppet，Ansibleで共通のプロビジョニングをする．&lt;/li&gt;
+&lt;li&gt;post-processorで決められた形式（boxかdocker imageか）で仮想マシンを書き出す．&lt;/li&gt;
+&lt;/ol&gt;
+
+&lt;p&gt;の一連の流れを自動化するツール．このとき1)と3)は基本的にはテンプレで，大体やることは決まっていると思う．自由度があるのは2)で，どのプロビジョニングツールを使って，どのようなセットアップをするかをユーザが自由に決めることができる．ちょっとしか触ってないが，2)ができることがPackerの強力な部分ではないかを思っている．&lt;/p&gt;
+
+&lt;p&gt;まとめると，Packerの入門をするときは，Vagrantの用のboxを作るツールという概念を捨てて，DockerイメージやAMIから始めると良いと思う．そうすれば，Packer特有の概念である，builderやpost-processorsが理解しやすい．&lt;/p&gt;
+
+&lt;p&gt;最後に参考文献．Packerの日本語の記事だと&lt;a href=&#34;https://twitter.com/ryuzee&#34;&gt;ryuzeeさん&lt;/a&gt;が既に駆け抜けている．&lt;a href=&#34;http://deeeet.com/writing/2014/02/25/vagrant-up-and-running/&#34;&gt;&amp;ldquo;実践Vagrant&amp;rdquo;&lt;/a&gt;にもPackerの付録があり，理解の助けになった．&lt;/p&gt;
+</description>
+    </item>
+    
+  </channel>
+</rss>

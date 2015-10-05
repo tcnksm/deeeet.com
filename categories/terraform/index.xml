@@ -1,0 +1,133 @@
+<?xml version="1.0" encoding="utf-8" standalone="yes" ?>
+<rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom">
+  <channel>
+    <title>Terraform on SOTA</title>
+    <link>http://deeeet.com/categories/terraform/</link>
+    <description>Recent content in Terraform on SOTA</description>
+    <generator>Hugo -- gohugo.io</generator>
+    <language>ja-jp</language>
+    <copyright>Copyright (C) 2013-2015 Taichi Nakashima All Right Reserved.</copyright>
+    <lastBuildDate>Mon, 04 Aug 2014 00:00:00 +0000</lastBuildDate>
+    <atom:link href="http://deeeet.com/categories/terraform/index.xml" rel="self" type="application/rss+xml" />
+    
+    <item>
+      <title>TerraformでHerokuアプリのセットアップ</title>
+      <link>http://deeeet.com/writing/2014/08/04/terraform-heroku/</link>
+      <pubDate>Mon, 04 Aug 2014 00:00:00 +0000</pubDate>
+      
+      <guid>http://deeeet.com/writing/2014/08/04/terraform-heroku/</guid>
+      <description>
+
+&lt;p&gt;ちょうど新しくHerokuでアプリケーションを作り始めたので，&lt;a href=&#34;http://www.terraform.io/&#34;&gt;Terraform&lt;/a&gt;を使ってセットアップをしてみた．&lt;/p&gt;
+
+&lt;h2 id=&#34;terraformとは:3e4eedb46fe996cc32991959ecc5a30a&#34;&gt;Terraformとは&lt;/h2&gt;
+
+&lt;p&gt;&lt;a href=&#34;http://www.terraform.io/&#34;&gt;Terraform&lt;/a&gt;は&lt;a href=&#34;http://www.hashicorp.com/&#34;&gt;Hashicorp&lt;/a&gt;の新作．インフラの構成をコード（テンプレートファイル）に落とし込んで，構築/変更することができる．インフラの構成は，複数のプロバイダやツール，例えば，AWSやConsul，DigitalOcean，Herokuなどにまたがって記述することができる．&lt;/p&gt;
+
+&lt;p&gt;Terraformが良いのは，各設定値を変数としてサービス間で共有できるところ．例えば，Herokuでアプリケーションを立ち上げた際に自動で割り振られるホスト名を，DNSimpleの設定項目に渡してCNAMEを設定するといったことが1つのファイルに書けてしまう（&lt;a href=&#34;http://www.terraform.io/intro/examples/cross-provider.html&#34;&gt;Cross Provider - Terraform&lt;/a&gt;）&lt;/p&gt;
+
+&lt;p&gt;他に良い点は，&lt;/p&gt;
+
+&lt;ul&gt;
+&lt;li&gt;依存関係をグラフで管理しており，依存がない部分を並列で実行するため速い&lt;/li&gt;
+&lt;li&gt;実行する前にDry-run的に実行計画を出力できる&lt;/li&gt;
+&lt;li&gt;ワークフロー（コマンド）がとてもシンプルである&lt;/li&gt;
+&lt;/ul&gt;
+
+&lt;h2 id=&#34;簡単な例:3e4eedb46fe996cc32991959ecc5a30a&#34;&gt;簡単な例&lt;/h2&gt;
+
+&lt;p&gt;&lt;a href=&#34;https://github.com/tcnksm/re-dist-ghr&#34;&gt;tcnksm/re-dist-ghr・Github&lt;/a&gt;&lt;/p&gt;
+
+&lt;p&gt;実際に，Terraformを使ってHerokuに新規アプリケーションをセットアップし，作成中のGo言語のWebアプリをデプロイしてみた．&lt;/p&gt;
+
+&lt;p&gt;まず，設定ファイルである&lt;code&gt;heroku.tf&lt;/code&gt;は以下．&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-ruby&#34;&gt;variable &amp;quot;heroku_email&amp;quot; {}
+variable &amp;quot;heroku_api_key&amp;quot; {}
+
+provider &amp;quot;heroku&amp;quot; {
+  email = &amp;quot;${var.heroku_email}&amp;quot;
+  api_key = &amp;quot;${var.heroku_api_key}&amp;quot;
+}
+
+resource &amp;quot;heroku_app&amp;quot; &amp;quot;default&amp;quot; {
+  name = &amp;quot;ghr&amp;quot;
+  stack = &amp;quot;cedar&amp;quot;
+  config_vars {
+    BUILDPACK_URL=&amp;quot;https://github.com/kr/heroku-buildpack-go.git&amp;quot;
+  }
+}
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;やっているのは以下．&lt;/p&gt;
+
+&lt;ul&gt;
+&lt;li&gt;&lt;code&gt;provider&lt;/code&gt;で&lt;code&gt;heroku&lt;/code&gt;を指定し，APIを利用するための設定を記述する&lt;/li&gt;
+&lt;li&gt;&lt;code&gt;resource&lt;/code&gt;で&lt;code&gt;heroku_app&lt;/code&gt;を指定し&lt;code&gt;default&lt;/code&gt;アプリケーションを作成し，アプリケーションの名前，利用するStack，環境変数（今回は利用するbuildpack）を記述する&lt;/li&gt;
+&lt;/ul&gt;
+
+&lt;p&gt;作成前に以下で実行計画（どんな変数が設定されるかなど）を確認することができる．&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-bash&#34;&gt;$ terraform plan \
+    -var heroku_email=$HEROKU_EMAIL \
+    -var heroku_api_key=$HEROKU_API_KEY
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;例えば，今回だと以下のような出力が得られる．&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-bash&#34;&gt;+ heroku_app.default
+    config_vars:                 &amp;quot;&amp;quot; =&amp;gt; &amp;quot;&amp;lt;computed&amp;gt;&amp;quot;
+    config_vars.#:               &amp;quot;&amp;quot; =&amp;gt; &amp;quot;1&amp;quot;
+    config_vars.0.BUILDPACK_URL: &amp;quot;&amp;quot; =&amp;gt; &amp;quot;https://github.com/kr/heroku-buildpack-go.git&amp;quot;
+    git_url:                     &amp;quot;&amp;quot; =&amp;gt; &amp;quot;&amp;lt;computed&amp;gt;&amp;quot;
+    heroku_hostname:             &amp;quot;&amp;quot; =&amp;gt; &amp;quot;&amp;lt;computed&amp;gt;&amp;quot;
+    name:                        &amp;quot;&amp;quot; =&amp;gt; &amp;quot;ghr&amp;quot;
+    region:                      &amp;quot;&amp;quot; =&amp;gt; &amp;quot;&amp;lt;computed&amp;gt;&amp;quot;
+    stack:                       &amp;quot;&amp;quot; =&amp;gt; &amp;quot;&amp;lt;computed&amp;gt;&amp;quot;
+    web_url:                     &amp;quot;&amp;quot; =&amp;gt; &amp;quot;&amp;lt;computed&amp;gt;&amp;quot;
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;Herokuを使ったことがあれば，馴染みのある変数が並んでいる．最初の立ち上げなので，各変数には値はなく&lt;code&gt;&amp;quot;&amp;quot;&lt;/code&gt;からの変更が表示されているのみ．&lt;code&gt;&amp;lt;computed&amp;gt;&lt;/code&gt;は自動で設定される値になる（これらの値も&lt;code&gt;heroku_app.default.XXX&lt;/code&gt;という形式で他のサービスの設定に渡すことができる）．試してないが，既に存在しているアプリケーションも，上の変数を指定すれば，Terraformの管理下に置けるはず．&lt;/p&gt;
+
+&lt;p&gt;あとは，以下を実行すれば，アプリケーションがセットアップされる．30秒以内で完了する．&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-bash&#34;&gt;$ terraform apply \
+    -var heroku_email=$HEROKU_EMAIL \
+    -var heroku_api_key=$HEROKU_API_KEY
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;セットアップが完了したら&lt;code&gt;git_url&lt;/code&gt;へいつも通りアプリケーションをデプロイすればよい．&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-bash&#34;&gt;$ git remote add heroku &amp;lt;git_url&amp;gt;
+$ git push heroku master
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;設定を変更したいときは&lt;code&gt;heroku.tf&lt;/code&gt;を更新し，&lt;code&gt;terraform plan&lt;/code&gt;で変更を確認して，&lt;code&gt;terrafrom apply&lt;/code&gt;で適用すればよい．以後，これをひたすら繰り返していく．とても簡単．&lt;/p&gt;
+
+&lt;h2 id=&#34;雑感:3e4eedb46fe996cc32991959ecc5a30a&#34;&gt;雑感&lt;/h2&gt;
+
+&lt;p&gt;Herokuでアプリケーションをセットアップするだけという非常な単純なことしかやってない（Terraformの利点である複数サービスの連携もしてない）けど，ワークフローがとても良い感じになった．まとめると，&lt;/p&gt;
+
+&lt;ul&gt;
+&lt;li&gt;基本的なセットアップ（Toolbeltで頑張っていたこと）はTerraformで&lt;/li&gt;
+&lt;li&gt;アプリケーションのデプロイはgitで&lt;/li&gt;
+&lt;/ul&gt;
+
+&lt;p&gt;と分けることができるようになる．toolbeltでやりたいことは簡単にできるけど，毎回コマンドとかを手順としてメモったりしていて，それをコード（設定ファイル）として残せるようになった．&lt;/p&gt;
+
+&lt;p&gt;さらに，これから例えばこのアプリケーションに独自のDNSを設定したくなったり，HerokuのAdd-onを追加したくなっても，コード（設定ファイル）にそれを記述するだけでそれを実現できる．つまり，サービスの複雑なスケールさえもコードで記述，管理できるようになる．&lt;/p&gt;
+
+&lt;p&gt;Terraformの究極的な目標はまだ見えていないが，自分のような数台程度のサーバーで，小規模（中規模）なサービスを作ってる開発者にとっても全然素敵なツールではと感じた．&lt;/p&gt;
+
+&lt;h2 id=&#34;参考:3e4eedb46fe996cc32991959ecc5a30a&#34;&gt;参考&lt;/h2&gt;
+
+&lt;ul&gt;
+&lt;li&gt;&lt;a href=&#34;http://www.hashicorp.com/blog/terraform.html&#34;&gt;Terraform - HashiCorp&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a href=&#34;http://qiita.com/zembutsu/items/93e546df765f8b2c4f32&#34;&gt;Terraform簡易チュートリアル on AWS - Qiita&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a href=&#34;http://rebuild.fm/52/&#34;&gt;Rebuild: 52: TLDR Driven Development (Naoya Ito)&lt;/a&gt;&lt;/li&gt;
+&lt;/ul&gt;
+</description>
+    </item>
+    
+  </channel>
+</rss>

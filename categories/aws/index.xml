@@ -1,0 +1,116 @@
+<?xml version="1.0" encoding="utf-8" standalone="yes" ?>
+<rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom">
+  <channel>
+    <title>Aws on SOTA</title>
+    <link>http://deeeet.com/categories/aws/</link>
+    <description>Recent content in Aws on SOTA</description>
+    <generator>Hugo -- gohugo.io</generator>
+    <language>ja-jp</language>
+    <copyright>Copyright (C) 2013-2015 Taichi Nakashima All Right Reserved.</copyright>
+    <lastBuildDate>Sun, 20 Apr 2014 00:00:00 +0000</lastBuildDate>
+    <atom:link href="http://deeeet.com/categories/aws/index.xml" rel="self" type="application/rss+xml" />
+    
+    <item>
+      <title>OSXからAmazon Glacierに写真を自動バックアップ</title>
+      <link>http://deeeet.com/writing/2014/04/20/lightroom-s3/</link>
+      <pubDate>Sun, 20 Apr 2014 00:00:00 +0000</pubDate>
+      
+      <guid>http://deeeet.com/writing/2014/04/20/lightroom-s3/</guid>
+      <description>
+
+&lt;p&gt;今まで惰性でiPhoto使って写真管理をしてきたが，そろそろ本格的な編集/加工をしたいなと思い，Lightroomに移行した（いずれ&lt;a href=&#34;http://vsco.co/film&#34;&gt;VSCO Film&lt;/a&gt;を使いたい）．その際，バックアップも外付けHDDからAmazon Glacierに移行した．&lt;/p&gt;
+
+&lt;p&gt;Amazon Glacierは，Amazonの提供するクラウドストレージで，1GBあたり1円/月で使える．S3と比べて値段は1/10だが，データをダウンロードするには解凍する時間が必要になる．データを頻繁に取り出さないバックアップなどの用途に向いている．また，AWS Command Line Interfaceでファイル同期ができるので，スクリプトを少し書いて自動バックアップの設定も簡単にできる．&lt;/p&gt;
+
+&lt;p&gt;&lt;code&gt;launchctl&lt;/code&gt;を使ってLightroomにぶっ込んだ写真を自動でGlacierにバックアップをする仕組みをつくった．&lt;/p&gt;
+
+&lt;p&gt;まず，Bucketを作成する．&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-bash&#34;&gt;$ export AWS_CONFIG_FILE=...
+$ export BUCKET=...
+$ aws s3 mb s3://${BUCKET}
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;次に，作成したBucketにファイルのLifecycleルールを設定する．対象はBucket内の全てのファイルで，ファイルが同期され次第すぐにGlacierに移行するようにする．これを実現するため以下のjsonファイルを準備する．&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-ruby&#34;&gt;# lifecycle.json
+{
+    &amp;quot;Rules&amp;quot;: [
+        {
+            &amp;quot;ID&amp;quot;: &amp;quot;Rule for backup&amp;quot;,
+            &amp;quot;Status&amp;quot;: &amp;quot;Enabled&amp;quot;,
+            &amp;quot;Prefix&amp;quot;: null,
+            &amp;quot;Transition&amp;quot;: {
+                &amp;quot;Days&amp;quot;: 0,
+                &amp;quot;StorageClass&amp;quot;: &amp;quot;GLACIER&amp;quot;
+             }
+         }
+    ]
+}
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;作成したルールをBucketに適用する．&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-bash&#34;&gt;$ aws s3api put-bucket-lifecycle --bucket ${BUCKET} --lifecycle file://lifecycle.json
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;ファイルの同期は以下のシェルスクリプトで行う．例えば&lt;code&gt;~/Photo&lt;/code&gt;以下を同期する．&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-bash&#34;&gt;# backup.sh
+
+SRC=/Users/tcnksm/Photo
+BUCKET=...
+
+echo &amp;quot;[$(date +%Y-%m-%d-%H-%M)] Start backup to S3&amp;quot;
+export AWS_CONFIG_FILE=...
+/usr/local/bin/aws s3 sync ${SRC} s3://${BUCKET} --delete --exclude &#39;*.DS_Store&#39;
+echo &amp;quot;[$(date +%Y-%m-%d-%H-%M)] End backup to S3&amp;quot;
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;上で作成したシェルスクリプトを&lt;code&gt;launchd&lt;/code&gt;で定期実行させる．plist（&lt;code&gt;~/Library/LaunchAgents/com.tcnksm.photo.backup.plist&lt;/code&gt;）は以下のようにする．一週間に一度実行する．&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-xml&#34;&gt;&amp;lt;?xml version=&amp;quot;1.0&amp;quot; encoding=&amp;quot;UTF-8&amp;quot;?&amp;gt;
+&amp;lt;!DOCTYPE plist PUBLIC &amp;quot;-//Apple Computer//DTD PLIST 1.0//EN&amp;quot; &amp;quot;http://www.apple.com/DTDs/PropertyList-1.0.dtd&amp;quot;&amp;gt;
+&amp;lt;plist version=&amp;quot;1.0&amp;quot;&amp;gt;
+    &amp;lt;dict&amp;gt;      
+      &amp;lt;key&amp;gt;Label&amp;lt;/key&amp;gt;
+      &amp;lt;string&amp;gt;com.tcnksm.photo.backup&amp;lt;/string&amp;gt;
+      &amp;lt;key&amp;gt;ProgramArguments&amp;lt;/key&amp;gt;
+      &amp;lt;array&amp;gt;
+        &amp;lt;string&amp;gt;/Users/tcnksm/scripts/backup.sh&amp;lt;/string&amp;gt;
+      &amp;lt;/array&amp;gt;
+      &amp;lt;key&amp;gt;StartInterval&amp;lt;/key&amp;gt;
+      &amp;lt;integer&amp;gt;604800&amp;lt;/integer&amp;gt;
+      &amp;lt;key&amp;gt;StandardOutPath&amp;lt;/key&amp;gt;
+      &amp;lt;string&amp;gt;/Users/tcnksm/var/log/s3-backup.log&amp;lt;/string&amp;gt;
+      &amp;lt;key&amp;gt;StandardErrorPath&amp;lt;/key&amp;gt;
+      &amp;lt;string&amp;gt;/Users/tcnksm/var/log/s3-backup.log&amp;lt;/string&amp;gt;
+      &amp;lt;key&amp;gt;Debug&amp;lt;/key&amp;gt;
+      &amp;lt;true/&amp;gt;
+    &amp;lt;/dict&amp;gt;
+&amp;lt;/plist&amp;gt;
+
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;あとは，plistを読み込むだけ．&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-bash&#34;&gt;$ launchctl load ~/Library/LaunchAgents/com.tcnksm.photo.backup.plist
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;（ちなみに，&lt;code&gt;launchctl&lt;/code&gt;コマンドの実行はiTerm.appだと&lt;code&gt;launch_msg(): Socket is not connected&lt;/code&gt;でこけるので，Terminal.appから実行する．Homebrewの&lt;a href=&#34;https://github.com/Homebrew/homebrew/wiki/Common-Issues#launchctl-refuses-to-load-launchd-plist-files&#34;&gt;Common Issues&lt;/a&gt;を参考）&lt;/p&gt;
+
+&lt;p&gt;今回過去の写真も含めて50GB程度アップロードしたけど，それでも月50円程度．素晴らしい．音楽，本などもぶっ込んでおこうと思う．&lt;/p&gt;
+
+&lt;h3 id=&#34;参考:d61000986347017bfb1311f3ec26ced5&#34;&gt;参考&lt;/h3&gt;
+
+&lt;ul&gt;
+&lt;li&gt;&lt;a href=&#34;http://weblog.bulknews.net/post/71259024563/private-photo-sharing-the-hard-way-2013&#34;&gt;Private Photo Sharing the Hard Way (2013) - Tatsuhiko Miyagawa&amp;rsquo;s blog&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a href=&#34;https://developer.apple.com/library/mac/documentation/MacOSX/Conceptual/BPSystemStartup/Chapters/CreatingLaunchdJobs.html&#34;&gt;Daemons and Services Programming Guide: Creating Launch Daemons and Agents&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a href=&#34;http://blog.livedoor.jp/noanoa07/archives/1904513.html&#34;&gt;noanoa 日々の日記 : Amazon S3（+ Glacier連携）は写真やビデオのデータを保管するには最適かも&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a href=&#34;http://dev.classmethod.jp/cloud/aws/aws-cli-1-0-s3-commands/&#34;&gt;AWS CLI 1.0と新しいS3コマンド(sync)を試してみた ｜ Developers.IO&lt;/a&gt;&lt;/li&gt;
+&lt;/ul&gt;
+</description>
+    </item>
+    
+  </channel>
+</rss>

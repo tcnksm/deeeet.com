@@ -1,0 +1,252 @@
+<!doctype html>
+<html>
+  <head>
+    <meta http-equiv="content-type" content="text/html; charset=utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    
+    <title>複数プラットフォームにGoアプリケーションを配布する | SOTA</title>
+    
+    <link href="https://fonts.googleapis.com/css?family=Lato%3a900" rel="stylesheet" type="text/css">
+    <link rel="stylesheet" href="/css/main.css">
+    <link rel="shortcut icon" href="/favicon.png" type="image/x-icon" />
+    <link href="http://deeeet.com//index.xml" rel="alternate" type="application/rss+xml" title="" />
+    <meta name="title" content="http://deeeet.com/writing/2014/05/19/gox/">
+    <link rel="canonical" href="http://deeeet.com/writing/2014/05/19/gox/">
+    
+    <meta property="og:title" content="複数プラットフォームにGoアプリケーションを配布する"/>
+    <meta property="og:url" content="http://deeeet.com/writing/2014/05/19/gox/"/>
+  </head>
+  
+  <body>
+    <section class="site-nav">
+      <header>
+        <nav id="navigation">
+          <ul class="menu">
+            <li><a href="https://github.com/tcnksm/talks">Talks</a></li>
+            <li><a href="https://tcnksm.exposure.co/">Photos</a></li>
+          </ul>
+
+          <a class="name" href="/">SOTA</a>
+        </nav>        
+      </header>
+    </section>
+    
+
+
+<article>
+  <div class="container">
+    <header>
+      <div class="meta">
+        <time pubdate datetime="2014-05-19" title="2014-05-19">May 19, 2014</time>
+      </div>
+      <h1 class="title">複数プラットフォームにGoアプリケーションを配布する</h1>
+    </header>
+    
+    <section>
+      
+
+<p><a href="https://github.com/tcnksm/jj_">tcnksm/jj</a></p>
+
+<p>最近試しにGo言語でCLIアプリケーションを作成した．<a href="https://github.com/joelthelion/autojump">joelthelion/autojump</a>をシンプルにしただけのツールで，ディレクトリを保存して，どこからでもその保存したディレクトリへの移動を可能にする．</p>
+
+<p>Goの環境さえあれば，このようなGo言語のアプリケーションの配布はとても簡単で，インストールは以下のようにするだけでよい．</p>
+
+<pre><code class="language-bash">$ go get github.com/tcnksm/jj_
+</code></pre>
+
+<p>これだけではなく，<a href="http://unknownplace.org/archives/golang-cross-compiling.html">Goはクロスコンパイルが簡単</a>で，様々なプラットフォーム向けにバイナリを生成することができる．つまり，Goがインストールされていない環境に対しても簡単にツールを配布することができる．</p>
+
+<p><a href="http://www.packer.io">Packer</a>などの最近のHashicorp制のツールは，Go言語で書かれており，OSX，Linux，Windows，FreeBSDなど様々なプラットフォーム向けにそれらを配布している．レポジトリを見てると，その辺をいい感じに自動化している．それらを参考にして，今回作成したツールを複数プラットフォーム向けに配布してみた．</p>
+
+<h2 id="tl-dr:682b7366441346737f24f4ca27fd2d8d">TL;DR</h2>
+
+<p>以下のようにOXSとLinux，そしてWindowsのそれぞれ386とamd64に対してツールを配布する（まだ不安定なので使わないでください）．</p>
+
+<p><a href="https://bintray.com/tcnksm/jj/jj/0.1.0/view/files">Download</a></p>
+
+<p>やったことは，</p>
+
+<ul>
+<li><a href="https://github.com/mitchellh/gox">gox</a>でクロスコンパイル</li>
+<li><a href="https://bintray.com/">bintray</a>からバイナリの配布</li>
+<li>スクリプトによる自動化</li>
+</ul>
+
+<p>ソースは全て，<a href="https://github.com/tcnksm/jj_">tcnksm/jj</a>のscripts以下にある．</p>
+
+<h2 id="なぜgoを使い始めたか:682b7366441346737f24f4ca27fd2d8d">なぜGoを使い始めたか</h2>
+
+<p>まず，簡単になぜGoを使い始めたか．理由は下のエントリと同じ．</p>
+
+<ul>
+<li><a href="http://codegangsta.io/blog/2013/07/21/creating-cli-applications-in-go/">On Distributing Command line Applications: Why I switched from Ruby to Go - Code Gangsta</a></li>
+<li><a href="http://mitchellh.com/abandoning-rubygems">Abandoning RubyGems | Mitchell Hashimoto</a></li>
+</ul>
+
+<p>今まで簡単な便利コマンドラインツールは，Rubyを使ってさらっとつくってきた．他のひとも使えそうなものはRubyGemsで配布するようにつくった．しかし，いざチームの人に使ってもらう段階になると，そもそも自分の周りがジャバなので，<code>gem</code>って何？となり，Rubyのインストールから初めてもらうということが起こった．</p>
+
+<p>自分なら<code>ruby-build</code>や<code>ruby-install</code>でさらっと入れるが，Ruby使ったことないひとにとってはインストールさえも障壁が高い．その壁を超えてまで使ってくれるひとは実は少ない．</p>
+
+<p>それはもったいない．たいしたツールしか作れないのであれば，せめて導入の障壁だけでも下げたい．使い手の環境にあったバイナリをつくって，はいどうぞ！としたい．Go言語の良さは，<code>goroutine</code>とかいろいろあるだろうが，自分の中では，このクロスコンパイルのやりやすさが一番大きい．</p>
+
+<h2 id="クロスコンパイル:682b7366441346737f24f4ca27fd2d8d">クロスコンパイル</h2>
+
+<p>GO言語のクロスコンパイルはとても簡単で，以下のようにするだけでOSXでlinuxのamd64向けのバイナリをつくることができる．</p>
+
+<pre><code class="language-bash">$ GOOS=linux GOARCH=amd64 go build hello.go
+</code></pre>
+
+<p>複数プラットフォーム向けにクロスコンパイルする場合は，<a href="https://github.com/mitchellh/gox">mitchellh/gox</a>を使うともっと簡単にできる．Goxを使う利点は以下が挙げられる．</p>
+
+<ul>
+<li>シンプル</li>
+<li>複数プラットフォームの並列ビルド</li>
+<li>複数パッケージの並列ビルド</li>
+</ul>
+
+<h3 id="準備:682b7366441346737f24f4ca27fd2d8d">準備</h3>
+
+<p>まず，goxをインストールする．</p>
+
+<pre><code>$ go get github.com/mitchellh/gox
+</code></pre>
+
+<p>次にクロスコンパイル用のツールをインストールする．</p>
+
+<pre><code>$ gox -build-toolchain
+</code></pre>
+
+<h3 id="使い方:682b7366441346737f24f4ca27fd2d8d">使い方</h3>
+
+<p>使い方は，<code>go build</code>と同じで，コンパイルしたいパッケージのディレクトリで以下を実行するだけ．</p>
+
+<pre><code class="language-bash">$ gox
+--&gt;      darwin/386: github.com/mitchellh/gox
+--&gt;    darwin/amd64: github.com/mitchellh/gox
+--&gt;       linux/386: github.com/mitchellh/gox
+...
+</code></pre>
+
+<p>何も指定しなければ，OSX，Linux，Windows，FreeBSD，そしてOpenBSDのそれぞれ386とamd64のバイナリが作成される．</p>
+
+<p>今回は，OXSとLinux，Windowsの386とamd64に対してクロスコンパイルを実行する．これらを<code>-os</code>，<code>-arch</code>で指定するだけ．</p>
+
+<p>自動化するために以下のようなスクリプトを書いておく．</p>
+
+<pre><code class="language-bash">#!/bin/bash
+
+XC_ARCH=${XC_ARCH:-386 amd64}
+XC_OS=${XC_OS:-linux darwin windows}
+
+rm -rf pkg/
+gox \
+    -os=&quot;${XC_OS}&quot; \
+    -arch=&quot;${XC_ARCH}&quot; \
+    -output &quot;pkg/{{.OS}}_{{.Arch}}/{{.Dir}}&quot;
+</code></pre>
+
+<p>出力先は，<code>-output</code>で指定できる．フォーマットは，go templateに従う．</p>
+
+<h2 id="バイナリ配布:682b7366441346737f24f4ca27fd2d8d">バイナリ配布</h2>
+
+<p>バイナリの置き場には，最近よくみる<a href="https://bintray.com/">bintray</a>を使う．レポジトリ単位での複数パッケージ，バージョニングによる配置が可能．バイナリだけでなく，debやrpmパッケージ，mavenなどに対応している．もちろん無料．</p>
+
+<p>{%img <a href="https://bintray.com/docs/help/repository_diagram.png">https://bintray.com/docs/help/repository_diagram.png</a> %}</p>
+
+<p>bintrayが良いと感じたのは，REST APIで操作できるところ．自動化がしやすい．例えばアップロードはcURLを使って以下のようにできる．</p>
+
+<pre><code class="language-bash">$ curl -T &lt;FILE.EXT&gt; -utcnksm:&lt;API_KEY&gt; https://api.bintray.com/content/tcnksm/jj/jj/&lt;VERSION_NAME&gt;/&lt;FILE_TARGET_PATH&gt;
+</code></pre>
+
+<h3 id="準備-1:682b7366441346737f24f4ca27fd2d8d">準備</h3>
+
+<p>binaryにバイナリをアップロードするには以下の設定が必要．</p>
+
+<ul>
+<li>レポジトリの作成</li>
+<li>API Keyの取得</li>
+</ul>
+
+<p>Githubとの連携も可能なので，READMEやCHANGELOGを紐づけておくと親切．</p>
+
+<h3 id="アップロード:682b7366441346737f24f4ca27fd2d8d">アップロード</h3>
+
+<p>これも自動化する．事前に複数のバイナリやその他のファイルをzipで固めて<code>pkg/dist</code>以下に配置しておく．</p>
+
+<pre><code class="language-bash">VERSION=0.1.0
+for ARCHIVE in ./pkg/dist/*; do
+    ARCHIVE_NAME=$(basename ${ARCHIVE})
+
+    echo Uploading: ${ARCHIVE_NAME}
+    curl \
+        -T ${ARCHIVE} \
+        -utcnksm:${BINTRAY_API_KEY} \
+        &quot;https://api.bintray.com/content/tcnksm/jj/jj/${VERSION}/${ARCHIVE_NAME}&quot;
+done
+</code></pre>
+
+<p>これだけで，適切なバージョニングをしつつバイナリをホストしてくれる．バージョンに関しては，Packerとかだと<code>version.go</code>を準備してそれから読み取るなどしている．</p>
+
+<p>クロスコンパイル用の<code>compile.sh</code>，zipで固める<code>dist.sh</code>，アップロードするための<code>upload.sh</code>を準備して，それらを一気に実行するようにしておけば便利．</p>
+
+<h3 id="参考:682b7366441346737f24f4ca27fd2d8d">参考</h3>
+
+<ul>
+<li><a href="https://bintray.com/docs/api.html">Bintray REST API</a></li>
+</ul>
+
+      <div class="social">
+  
+  
+  <a href="https://twitter.com/share" class="twitter-share-button" data-via="deeeet" data-count="none">Tweet</a>
+  
+  
+</div>
+
+    </section>
+
+    <footer>
+      <address>
+        
+        <img src="/images/bio.jpeg"/>
+        
+        <p>Written by <strong><a rel="author" href="https://twitter.com/deeeet" title="Taichi Nakashima" target="_blank">Taichi Nakashima</a></strong><br>
+          <span class="muted">A Tokyo based PaaS engineer. Please contact me via twitter.</span>
+        </p>
+      </address>
+
+    </footer>
+
+  </div>
+</article>
+
+<script type="text/javascript" src="//ajax.googleapis.com/ajax/libs/jquery/1.7.2/jquery.min.js"></script>
+<script type="text/javascript" src="/js/main.js"></script>
+
+<script>!function(d,s,id){var js,fjs=d.getElementsByTagName(s)[0],p=/^http:/.test(d.location)?'http':'https';if(!d.getElementById(id)){js=d.createElement(s);js.id=id;js.src=p+'://platform.twitter.com/widgets.js';fjs.parentNode.insertBefore(js,fjs);}}(document, 'script', 'twitter-wjs');</script>
+
+
+<script type="text/javascript">var HN=[];HN.factory=function(e){return function(){HN.push([e].concat(Array.prototype.slice.call(arguments,0)))};},HN.on=HN.factory("on"),HN.once=HN.factory("once"),HN.off=HN.factory("off"),HN.emit=HN.factory("emit"),HN.load=function(){var e="hn-button.js";if(document.getElementById(e))return;var t=document.createElement("script");t.id=e,t.src="//hn-button.herokuapp.com/hn-button.js";var n=document.getElementsByTagName("script")[0];n.parentNode.insertBefore(t,n)},HN.load();</script>
+
+
+  <script>
+  (function(i,s,o,g,r,a,m){i['GoogleAnalyticsObject']=r;i[r]=i[r]||function(){
+  (i[r].q=i[r].q||[]).push(arguments)},i[r].l=1*new Date();a=s.createElement(o),
+  m=s.getElementsByTagName(o)[0];a.async=1;a.src=g;m.parentNode.insertBefore(a,m)
+  })(window,document,'script','//www.google-analytics.com/analytics.js','ga');
+
+  ga('create', 'UA-45390253-1', 'auto');
+  ga('send', 'pageview');
+
+</script>
+
+
+
+<script>
+  $(document).ready(function() {
+  
+  $('p:has(img)').css('text-align', 'center');
+  $('iframe').css('style', 'display: block; margin: 0px auto;');
+  });
+</script>
+

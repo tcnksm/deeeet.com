@@ -1,0 +1,247 @@
+<!doctype html>
+<html>
+  <head>
+    <meta http-equiv="content-type" content="text/html; charset=utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    
+    <title>すぐにDockerを試したい人のための基礎コマンド | SOTA</title>
+    
+    <link href="https://fonts.googleapis.com/css?family=Lato%3a900" rel="stylesheet" type="text/css">
+    <link rel="stylesheet" href="/css/main.css">
+    <link rel="shortcut icon" href="/favicon.png" type="image/x-icon" />
+    <link href="http://deeeet.com//index.xml" rel="alternate" type="application/rss+xml" title="" />
+    <meta name="title" content="http://deeeet.com/writing/2013/12/08/docker-cheat/">
+    <link rel="canonical" href="http://deeeet.com/writing/2013/12/08/docker-cheat/">
+    
+    <meta property="og:title" content="すぐにDockerを試したい人のための基礎コマンド"/>
+    <meta property="og:url" content="http://deeeet.com/writing/2013/12/08/docker-cheat/"/>
+  </head>
+  
+  <body>
+    <section class="site-nav">
+      <header>
+        <nav id="navigation">
+          <ul class="menu">
+            <li><a href="https://github.com/tcnksm/talks">Talks</a></li>
+            <li><a href="https://tcnksm.exposure.co/">Photos</a></li>
+          </ul>
+
+          <a class="name" href="/">SOTA</a>
+        </nav>        
+      </header>
+    </section>
+    
+
+
+<article>
+  <div class="container">
+    <header>
+      <div class="meta">
+        <time pubdate datetime="2013-12-08" title="2013-12-08">December 08, 2013</time>
+      </div>
+      <h1 class="title">すぐにDockerを試したい人のための基礎コマンド</h1>
+    </header>
+    
+    <section>
+      
+
+<p><a href="https://gist.github.com/tcnksm/7700047">Docker 虎の巻</a></p>
+
+<p>Dockerの基礎のまとめが良かったので翻訳してみた．原典は，<a href="https://gist.github.com/wsargent/7049221">Docker Cheat Sheet</a>．このまとめは説明は十分にあるが，例がほとんどない．実例を使って，コンテナとイメージに関する基礎コマンドをまとめてみる．</p>
+
+<h2 id="os-x-で試したい:39cdf09914fb756edd6c68e29d3204d9">OS X で試したい</h2>
+
+<p>Vagrantを使う．バージョン1.4からはDockerのprovisioningに対応してるのでそれを使う．
+<a href="http://www.vagrantup.com/downloads.html">Download Vagrant - Vagrant</a>より.dmgをダウンロードしてきてインストール.</p>
+
+<pre><code class="language-bash">vagrant init precise64 http://files.vagrantup.com/precise64.box
+</code></pre>
+
+<p>Vagrantfileを以下のようにすれば，すぐにDockerを使える．</p>
+
+<pre><code class="language-ruby">Vagrant.configure(&quot;2&quot;) do |config|
+    config.vm.box = &quot;precise64&quot;
+    config.vm.provision :docker do |d|
+        d.pull_images &quot;ubuntu&quot;
+    end
+end
+</code></pre>
+
+<p>ログイン</p>
+
+<pre><code class="language-bash">vagrant ssh
+</code></pre>
+
+<h2 id="準備:39cdf09914fb756edd6c68e29d3204d9">準備</h2>
+
+<p>コンテナのIDをいちいち保持しておくのは面倒，忘れるので，以下のaliasを設定しておくと直近に起動したコンテナのIDを呼び出すことができるようになる（<a href="http://sssslide.com/speakerdeck.com/bmorearty/15-docker-tips-in-5-minutes">15 Docker tips in 5 minutes</a>）．</p>
+
+<pre><code class="language-bash">alias dl='docker ps -l -q'
+</code></pre>
+
+<h2 id="コンテナ:39cdf09914fb756edd6c68e29d3204d9">コンテナ</h2>
+
+<p>コンテナを作成する．<code>-d</code>オプションでバックグラウンドで実行する．</p>
+
+<pre><code class="language-bash">docker run -d ubuntu /bin/sh -c &quot;while true; do echo hello world; sleep 1; done&quot;
+</code></pre>
+
+<p>コンテナを停止する．</p>
+
+<pre><code class="language-bash">docker stop `dl`
+</code></pre>
+
+<p>コンテナを起動する．</p>
+
+<pre><code class="language-bash">docker start `dl`
+</code></pre>
+
+<p>コンテナを再起動する．</p>
+
+<pre><code class="language-bash">docker restart `dl`
+</code></pre>
+
+<p>起動中のコンテナに接続する．</p>
+
+<pre><code class="language-bash">docker attach `dl`
+</code></pre>
+
+<p>コンテナ内のファイルをホストにコピーする．</p>
+
+<pre><code class="language-bash">docker cp `dl`:/etc/passwd .
+</code></pre>
+
+<p>ホストのディレクトリをコンテナにマウントする．</p>
+
+<pre><code class="language-bash">docker run -v /home/vagrant/test:/root/test ubuntu echo yo
+</code></pre>
+
+<p>コンテナを削除する．</p>
+
+<pre><code class="language-bash">dockr rm `dl`
+</code></pre>
+
+<h2 id="コンテナの情報:39cdf09914fb756edd6c68e29d3204d9">コンテナの情報</h2>
+
+<p>起動中のコンテナを表示する．停止中のコンテナも表示するには，<code>-a</code>オプション．</p>
+
+<pre><code class="language-bash">docker ps
+</code></pre>
+
+<p>コンテナの情報（IPなど）を表示する.</p>
+
+<pre><code class="language-bash">docker inspect `dl`
+</code></pre>
+
+<p>コンテナのログを表示する．</p>
+
+<pre><code class="language-bash">docker logs `dl`
+</code></pre>
+
+<p>コンテナのプロセスを表示する．</p>
+
+<pre><code class="language-bash">docker top `dl`
+</code></pre>
+
+<h2 id="イメージ:39cdf09914fb756edd6c68e29d3204d9">イメージ</h2>
+
+<p>コンテナからイメージを作成する．タグ名は&lt;username&gt;/&lt;imagename&gt;が<a href="http://docs.docker.io/en/latest/use/workingwithrepository/#committing-a-container-to-a-named-image">奨励されている</a></p>
+
+<pre><code class="language-bash">docker run -d ubuntu /bin/sh -c &quot;apt-get install -y hello&quot;
+docker commit -m &quot;My first container&quot; `dl` tcnksm/hello
+</code></pre>
+
+<p>Dockerfileからイメージを作成する．</p>
+
+<pre><code class="language-bash">echo -e &quot;FROM base\nRUN apt-get install hello\nCMD hello&quot; &gt; Dockerfile
+docker build tcnksm/hello .
+</code></pre>
+
+<p>イメージ内にログインする．<code>-rm</code>オプションをつけるとコンテナの停止後にそのコンテナは破棄される．</p>
+
+<pre><code class="language-bash">docker run -rm -t -i tcnksm/hello /bin/bash
+</code></pre>
+
+<p>イメージをリモートレポジトリにアップロードする．あらかじめ<a href="https://index.docker.io/">Docker index</a>にアカウントを作成しておく必要がある．今回の例は<a href="https://index.docker.io/u/tcnksm/hello">こちら</a>.</p>
+
+<pre><code class="language-bash">docker login
+docker push tcnksm/hello
+</code></pre>
+
+<p>イメージを削除する．</p>
+
+<pre><code class="language-bash">docker rmi tcnkms/hello
+</code></pre>
+
+<h2 id="イメージの情報:39cdf09914fb756edd6c68e29d3204d9">イメージの情報</h2>
+
+<p>イメージ一覧を表示する.</p>
+
+<pre><code class="language-bash">docker images
+</code></pre>
+
+<p>イメージの詳細情報(IPなど)を表示する．</p>
+
+<pre><code class="language-bash">docker inspect tcnksm/hello
+</code></pre>
+
+<p>イメージのコマンド履歴を表示する．</p>
+
+<pre><code class="language-bash">docker history tcnksm/hello
+</code></pre>
+
+      <div class="social">
+  
+  
+  <a href="https://twitter.com/share" class="twitter-share-button" data-via="deeeet" data-count="none">Tweet</a>
+  
+  
+</div>
+
+    </section>
+
+    <footer>
+      <address>
+        
+        <img src="/images/bio.jpeg"/>
+        
+        <p>Written by <strong><a rel="author" href="https://twitter.com/deeeet" title="Taichi Nakashima" target="_blank">Taichi Nakashima</a></strong><br>
+          <span class="muted">A Tokyo based PaaS engineer. Please contact me via twitter.</span>
+        </p>
+      </address>
+
+    </footer>
+
+  </div>
+</article>
+
+<script type="text/javascript" src="//ajax.googleapis.com/ajax/libs/jquery/1.7.2/jquery.min.js"></script>
+<script type="text/javascript" src="/js/main.js"></script>
+
+<script>!function(d,s,id){var js,fjs=d.getElementsByTagName(s)[0],p=/^http:/.test(d.location)?'http':'https';if(!d.getElementById(id)){js=d.createElement(s);js.id=id;js.src=p+'://platform.twitter.com/widgets.js';fjs.parentNode.insertBefore(js,fjs);}}(document, 'script', 'twitter-wjs');</script>
+
+
+<script type="text/javascript">var HN=[];HN.factory=function(e){return function(){HN.push([e].concat(Array.prototype.slice.call(arguments,0)))};},HN.on=HN.factory("on"),HN.once=HN.factory("once"),HN.off=HN.factory("off"),HN.emit=HN.factory("emit"),HN.load=function(){var e="hn-button.js";if(document.getElementById(e))return;var t=document.createElement("script");t.id=e,t.src="//hn-button.herokuapp.com/hn-button.js";var n=document.getElementsByTagName("script")[0];n.parentNode.insertBefore(t,n)},HN.load();</script>
+
+
+  <script>
+  (function(i,s,o,g,r,a,m){i['GoogleAnalyticsObject']=r;i[r]=i[r]||function(){
+  (i[r].q=i[r].q||[]).push(arguments)},i[r].l=1*new Date();a=s.createElement(o),
+  m=s.getElementsByTagName(o)[0];a.async=1;a.src=g;m.parentNode.insertBefore(a,m)
+  })(window,document,'script','//www.google-analytics.com/analytics.js','ga');
+
+  ga('create', 'UA-45390253-1', 'auto');
+  ga('send', 'pageview');
+
+</script>
+
+
+
+<script>
+  $(document).ready(function() {
+  
+  $('p:has(img)').css('text-align', 'center');
+  $('iframe').css('style', 'display: block; margin: 0px auto;');
+  });
+</script>
+

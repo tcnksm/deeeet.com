@@ -1,0 +1,160 @@
+<!doctype html>
+<html>
+  <head>
+    <meta http-equiv="content-type" content="text/html; charset=utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    
+    <title>BrewfileでHomebrewパッケージを管理する | SOTA</title>
+    
+    <link href="https://fonts.googleapis.com/css?family=Lato%3a900" rel="stylesheet" type="text/css">
+    <link rel="stylesheet" href="/css/main.css">
+    <link rel="shortcut icon" href="/favicon.png" type="image/x-icon" />
+    <link href="http://deeeet.com//index.xml" rel="alternate" type="application/rss+xml" title="" />
+    <meta name="title" content="http://deeeet.com/writing/2013/12/23/brewfile/">
+    <link rel="canonical" href="http://deeeet.com/writing/2013/12/23/brewfile/">
+    
+    <meta property="og:title" content="BrewfileでHomebrewパッケージを管理する"/>
+    <meta property="og:url" content="http://deeeet.com/writing/2013/12/23/brewfile/"/>
+  </head>
+  
+  <body>
+    <section class="site-nav">
+      <header>
+        <nav id="navigation">
+          <ul class="menu">
+            <li><a href="https://github.com/tcnksm/talks">Talks</a></li>
+            <li><a href="https://tcnksm.exposure.co/">Photos</a></li>
+          </ul>
+
+          <a class="name" href="/">SOTA</a>
+        </nav>        
+      </header>
+    </section>
+    
+
+
+<article>
+  <div class="container">
+    <header>
+      <div class="meta">
+        <time pubdate datetime="2013-12-23" title="2013-12-23">December 23, 2013</time>
+      </div>
+      <h1 class="title">BrewfileでHomebrewパッケージを管理する</h1>
+    </header>
+    
+    <section>
+      <p>この記事は<a href="http://qiita.com/advent-calendar/2013/one-minute">1分で実現できる有用な技術 Advent Calendar 2013</a>の24日目の記事です．</p>
+
+<p>Brewfileを使えば，Bundlerでrubygemsを管理するようにHomebrewのパッケージを管理できる．Brewfileのあるディレクトリで</p>
+
+<pre><code class="language-bash">$ brew bundle
+</code></pre>
+
+<p>とすれば，Brewfileに書かれたパッケージがすべてインストールされる．これはHomebrew公式のコマンドであり，特別なインストール等は必要なく，最新版にアップデートすればすぐに使うことができる．</p>
+
+<p>これを使えば，dotfilesに加えて自分のbrewパッケージを管理しておくこともできるし（<a href="https://github.com/tcnksm/dotfiles/blob/master/Brewfile">tcnksm/dotfiles/Brewfile</a>），imagemagickのようにプロジェクトで必要になるパッケージをBrewfileとして共有しておくこともできる．自分は，Boxenをやめてこちらに切り替えた．</p>
+
+<p>Brewfileの基本の文法は，以下のように<code>install ...</code>とインストールしたいパッケージを記述するだけ．<code>brew update</code>や<code>brew clean</code>といったコマンドも記述できる．</p>
+
+<pre><code># Homebrewを最新版にアップデート
+update
+
+# Formulaを更新
+upgrade
+
+# パッケージのインストール
+install zsh
+install git
+install install coreutils
+
+# 不要なファイルを削除
+clean
+</code></pre>
+
+<p>とするだけ．Brewfileに書かれたHomebrewパッケージがインストールされる．</p>
+
+<p>公式以外のレポジトリを追加してインストールすることも可能．以下のように記述する．</p>
+
+<pre><code>tap homebrew/binary
+install packer
+</code></pre>
+
+<p>(追記) 以前は，同じレポジトリに対してbrew tapを実行すると，Errorとなり実行が停止してしまったため，原始的記述が必要だったが，<a href="https://twitter.com/sonot">@sonots</a>さんのpullreqでWarningに変更となった(<a href="https://github.com/Homebrew/homebrew/pull/25617">https://github.com/Homebrew/homebrew/pull/25617</a>)．ありがとうございます．</p>
+
+<p>また，レポジトリに存在しないAppをダウンロードする際は，自分でFormulaを書いたレポジトリを準備して，それをtapすればよい．詳しくは，<a href="http://blog.livedoor.jp/sonots/archives/35251881.html">こちら</a>．</p>
+
+<p>Google ChromeやVagrantといったdmgでの配布Appも，<a href="https://github.com/phinze/homebrew-cask">homebrew-cask</a>を使えば，Brewでインストールできるようになるが，それもBrewfileに記述することができる．</p>
+
+<pre><code># homebrew-caskのインストール
+tap phinze/homebrew-cask
+install brew-cask
+
+# インストール
+cask install google-chrome
+cask install kobito
+cask install virtualbox
+cask install vagrant
+</code></pre>
+
+<p>参考</p>
+
+<ul>
+<li><a href="https://coderwall.com/p/afmnbq">Homebrew&rsquo;s new feature: Brewfiles</a></li>
+<li><a href="http://robandlauren.com/2013/11/27/homebrew-brewfile/">The Homebrew Brewfile - Rob and Lauren</a></li>
+</ul>
+
+      <div class="social">
+  
+  
+  <a href="https://twitter.com/share" class="twitter-share-button" data-via="deeeet" data-count="none">Tweet</a>
+  
+  
+</div>
+
+    </section>
+
+    <footer>
+      <address>
+        
+        <img src="/images/bio.jpeg"/>
+        
+        <p>Written by <strong><a rel="author" href="https://twitter.com/deeeet" title="Taichi Nakashima" target="_blank">Taichi Nakashima</a></strong><br>
+          <span class="muted">A Tokyo based PaaS engineer. Please contact me via twitter.</span>
+        </p>
+      </address>
+
+    </footer>
+
+  </div>
+</article>
+
+<script type="text/javascript" src="//ajax.googleapis.com/ajax/libs/jquery/1.7.2/jquery.min.js"></script>
+<script type="text/javascript" src="/js/main.js"></script>
+
+<script>!function(d,s,id){var js,fjs=d.getElementsByTagName(s)[0],p=/^http:/.test(d.location)?'http':'https';if(!d.getElementById(id)){js=d.createElement(s);js.id=id;js.src=p+'://platform.twitter.com/widgets.js';fjs.parentNode.insertBefore(js,fjs);}}(document, 'script', 'twitter-wjs');</script>
+
+
+<script type="text/javascript">var HN=[];HN.factory=function(e){return function(){HN.push([e].concat(Array.prototype.slice.call(arguments,0)))};},HN.on=HN.factory("on"),HN.once=HN.factory("once"),HN.off=HN.factory("off"),HN.emit=HN.factory("emit"),HN.load=function(){var e="hn-button.js";if(document.getElementById(e))return;var t=document.createElement("script");t.id=e,t.src="//hn-button.herokuapp.com/hn-button.js";var n=document.getElementsByTagName("script")[0];n.parentNode.insertBefore(t,n)},HN.load();</script>
+
+
+  <script>
+  (function(i,s,o,g,r,a,m){i['GoogleAnalyticsObject']=r;i[r]=i[r]||function(){
+  (i[r].q=i[r].q||[]).push(arguments)},i[r].l=1*new Date();a=s.createElement(o),
+  m=s.getElementsByTagName(o)[0];a.async=1;a.src=g;m.parentNode.insertBefore(a,m)
+  })(window,document,'script','//www.google-analytics.com/analytics.js','ga');
+
+  ga('create', 'UA-45390253-1', 'auto');
+  ga('send', 'pageview');
+
+</script>
+
+
+
+<script>
+  $(document).ready(function() {
+  
+  $('p:has(img)').css('text-align', 'center');
+  $('iframe').css('style', 'display: block; margin: 0px auto;');
+  });
+</script>
+

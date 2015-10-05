@@ -1,0 +1,38 @@
+<?xml version="1.0" encoding="utf-8" standalone="yes" ?>
+<rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom">
+  <channel>
+    <title>Art on SOTA</title>
+    <link>http://deeeet.com/categories/art/</link>
+    <description>Recent content in Art on SOTA</description>
+    <generator>Hugo -- gohugo.io</generator>
+    <language>ja-jp</language>
+    <copyright>Copyright (C) 2013-2015 Taichi Nakashima All Right Reserved.</copyright>
+    <lastBuildDate>Mon, 04 Nov 2013 00:00:00 +0000</lastBuildDate>
+    <atom:link href="http://deeeet.com/categories/art/index.xml" rel="self" type="application/rss+xml" />
+    
+    <item>
+      <title>印象派を超えて―点描の画家たち @国立新美術館</title>
+      <link>http://deeeet.com/writing/2013/11/04/divisionism/</link>
+      <pubDate>Mon, 04 Nov 2013 00:00:00 +0000</pubDate>
+      
+      <guid>http://deeeet.com/writing/2013/11/04/divisionism/</guid>
+      <description>&lt;p&gt;&lt;a href=&#34;http://www.nact.jp/exhibition_special/2013/km2013/index.html&#34;&gt;印象派を超えて―点描の画家たち&lt;/a&gt;&lt;/p&gt;
+
+&lt;p&gt;行ってきた．印象派と抽象主義の間にあった分割主義の点描．モネらの印象派からモンドリアンらの抽象へと，いかに転換したかを見ることができてとても興味深い展覧会だった．面白かったので少しまとめる．&lt;/p&gt;
+
+&lt;p&gt;まず，モネらの印象派の絵は筆触分割という手法によって描かれている．筆触分割というのは，パレットの上で絵の具を混ぜるのではなく（そうすると色に濁りがでる），原色をそのままキャンパスに色を載せ，隣接部分に本来混ぜようとした色を載せていく手法．この手法により，視覚混合が起こる．視覚混合というのは，例えば，隣接した赤と黄色が，離れて見るとオレンジに見える効果．これにより印象派の絵は，離れてみたときにあたかも光を発しているかのように見える．で，印象派はこれらを感覚的に発展させた．&lt;/p&gt;
+
+&lt;p&gt;次に，スーラがこの印象派の手法に科学的なアプローチを加える．つまり，パレットに載せる色に色彩理論や光学的な理論を盛り込んだ．そして，それらを細かな点として描いたのが分割主義．具体的には，&lt;a href=&#34;http://rock77.fc2web.com/main/color/color1-2.html&#34;&gt;色相環&lt;/a&gt;における補色を並べて配置し，視覚混合により，色に輝きを持たせている．補色とは，色相環の反対に存在する二色．例えば赤色と緑色．デザインにおいては，お互いの色を目立たせる為に使われる．&lt;/p&gt;
+
+&lt;p&gt;&lt;img src=&#34;http://deeeet.com/images/gogh_seed.jpg&#34; class=&#34;image&#34;&gt;&lt;/p&gt;
+
+&lt;p&gt;例えば，上の絵は分割主義の影響を受けたゴッホの&amp;rdquo;種をまくひと&amp;rdquo;．夕日の中には赤と緑の補色がもろに存在し，これにより夕日がより一層輝いているように見える．さらに，地面にも紫と黄色の補色が見られる．&lt;/p&gt;
+
+&lt;p&gt;そして，このゴッホやスーラの色彩の追求に影響を受けたのがモンドリアン．モンドリアンは「色と線がそれ自体でもっと自由に語ることができるように」と&amp;rdquo;コンポジション&amp;rdquo;といった抽象に向かっていた．絵そのものよりも表現の追求に影響を受けたのかなと．&lt;/p&gt;
+
+&lt;p&gt;印象と抽象はそれぞれ知っていて好きなのだけど，その関係は知らなかった．自分の知識を補うことができてとても楽しかった．印象のように分割主義も実物を一定の距離から見ることで，作者が意図する効果が得られる．是非，実際に行って生の絵をみるのが良いかと．おすすめ．&lt;/p&gt;
+</description>
+    </item>
+    
+  </channel>
+</rss>

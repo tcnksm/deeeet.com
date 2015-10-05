@@ -1,0 +1,266 @@
+<!doctype html>
+<html>
+  <head>
+    <meta http-equiv="content-type" content="text/html; charset=utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    
+    <title>HerokuとGithubを使った統一的なツール配布 | SOTA</title>
+    
+    <link href="https://fonts.googleapis.com/css?family=Lato%3a900" rel="stylesheet" type="text/css">
+    <link rel="stylesheet" href="/css/main.css">
+    <link rel="shortcut icon" href="/favicon.png" type="image/x-icon" />
+    <link href="http://deeeet.com//index.xml" rel="alternate" type="application/rss+xml" title="" />
+    <meta name="title" content="http://deeeet.com/writing/2014/08/07/github-heroku-dist/">
+    <link rel="canonical" href="http://deeeet.com/writing/2014/08/07/github-heroku-dist/">
+    
+    <meta property="og:title" content="HerokuとGithubを使った統一的なツール配布"/>
+    <meta property="og:url" content="http://deeeet.com/writing/2014/08/07/github-heroku-dist/"/>
+  </head>
+  
+  <body>
+    <section class="site-nav">
+      <header>
+        <nav id="navigation">
+          <ul class="menu">
+            <li><a href="https://github.com/tcnksm/talks">Talks</a></li>
+            <li><a href="https://tcnksm.exposure.co/">Photos</a></li>
+          </ul>
+
+          <a class="name" href="/">SOTA</a>
+        </nav>        
+      </header>
+    </section>
+    
+
+
+<article>
+  <div class="container">
+    <header>
+      <div class="meta">
+        <time pubdate datetime="2014-08-07" title="2014-08-07">August 07, 2014</time>
+      </div>
+      <h1 class="title">HerokuとGithubを使った統一的なツール配布</h1>
+    </header>
+    
+    <section>
+      
+
+<p>Go言語ではクロスコンパイルがとても簡単で，複数プラットフォーム向けのバイナリをつくってそれを配布するというのがさらっとできる．</p>
+
+<p>単純にやるなら，</p>
+
+<ol>
+<li>クロスコンパイルした各バイナリをzip等に固める</li>
+<li>Github Releaseや<a href="https://bintray.com/">bintray</a>，<a href="https://drone.io/">Dorone.io</a>などにホストする</li>
+</ol>
+
+<p>そして，ユーザには自分のプラットフォームに合ったものをダウンロード／展開してPATHの通ったところに置いてもらう．</p>
+
+<p>開発者からすると，すごい簡単．ホストするまで完全に自動化できる．でも，ユーザからすると若干めんどくさい．</p>
+
+<p>もっとツールを使い初めてもらうまでの敷居を下げたい．</p>
+
+<h2 id="tl-dr:10104ee938ba1f589d7cd4c7da7eebf0">TL;DR</h2>
+
+<p>全プラットフォーム共通で以下のようにツールをインストールできるようにする．若干長いが1コマンド！</p>
+
+<pre><code class="language-bash">$ L=/usr/local/bin/ghr &amp;&amp; curl -sL -A &quot;`uname -sp`&quot;  http://ghr.herokuapp.com/ghr.zip | zcat &gt;$L &amp;&amp; chmod +x $L
+</code></pre>
+
+<p>このような配布をHerokuとGithubを使ってできるようにする．</p>
+
+<h2 id="実例:10104ee938ba1f589d7cd4c7da7eebf0">実例</h2>
+
+<p>このようなツール配布を行っている例はいくつかある．</p>
+
+<ul>
+<li><a href="https://github.com/heroku/hk">heroku/hk</a></li>
+<li><a href="https://github.com/flynn/flynn/tree/master/cli">flynn/cli</a></li>
+</ul>
+
+<p>例えば，Herokuのhkは，以下のようにインストールできる．</p>
+
+<pre><code class="language-bash">$ L=/usr/local/bin/hk &amp;&amp; curl -sL -A &quot;`uname -sp`&quot; https://hk.heroku.com/hk.gz | zcat &gt;$L &amp;&amp; chmod +x $L
+</code></pre>
+
+<h2 id="動作の概要:10104ee938ba1f589d7cd4c7da7eebf0">動作の概要</h2>
+
+<p>Githubにリリースを作成し，各プラットフォーム向けのパッケージがホストされているとする．</p>
+
+<p>動作の流れは以下のようになる．</p>
+
+<ol>
+<li>ユーザがHerokuアプリに対してリクエストを投げる</li>
+<li>アプリはリクエストに基づきプラットフォームを判定し，それに合ったGithub Release上のパッケージへのリダイレクトを返す</li>
+<li>ユーザはプラットフォームに合ったパッケージをGithub Releaseから得る</li>
+</ol>
+
+<h2 id="具体的な動作:10104ee938ba1f589d7cd4c7da7eebf0">具体的な動作</h2>
+
+<p>Githubリリースの作り方，ワンライナーの動作，Herokuアプリについて簡単に説明する．</p>
+
+<h3 id="github-release:10104ee938ba1f589d7cd4c7da7eebf0">Github Release</h3>
+
+<p>まず，Github Releaseページに作成したパッケージをホストしておく．パッケージ名は以下のルールに従うようにする．</p>
+
+<pre><code class="language-bash">${NAME}_${VERSION}_${OS}_${ARCH}.zip
+</code></pre>
+
+<p><code>NAME</code>はツール名，<code>OS</code>はプラットフォーム名，<code>ARCH</code>はプロセッサを指定する．すると，Github Release上のダウンロードURLは以下のようになる．</p>
+
+<pre><code class="language-bash">https://github.com/tcnksm/${NAME}/releases/download/${VERSION}/${NAME}_${VERSION}_${OS}_${ARCH}.zip
+</code></pre>
+
+<p>これは自動化できる（<a href="http://deeeet.com/writing/2014/07/29/ghr/">&ldquo;高速に自作パッケージをGithubにリリースするghrというツールをつくった&rdquo;</a>）．</p>
+
+<h3 id="ワンライナー:10104ee938ba1f589d7cd4c7da7eebf0">ワンライナー</h3>
+
+<p>ワンライナーでやっているのは，</p>
+
+<ol>
+<li>環境変数<code>L</code>にインストールしたいPATHを指定する</li>
+<li><code>curl</code>では，<code>-L</code>オプションでリクエストで<code>30X</code>の場合にリダイレクトするようにし，<code>-A</code>でユーザエージェントを指定する</li>
+<li><code>zcat</code>でzipを展開して<code>L</code>に吐き出す</li>
+</ol>
+
+<p>ユーザエージェントは<code>uname</code>で指定する．<code>-s</code>オプションでシステム名（e.g., Darwin，Linux）を，<code>-p</code>オプションでプロセッサ（e.g., i386）を出力するようにする．</p>
+
+<h3 id="herokuアプリ:10104ee938ba1f589d7cd4c7da7eebf0">Herokuアプリ</h3>
+
+<p><code>curl</code>のアクセス先は，専用に立てたHerokuアプリになる．Heorkuアプリでは，ユーザエージェントを元にプラットフォームを判別し，Github Releaseページ上のパッケージにリダイレクトさせる．</p>
+
+<p>アプリはGo言語で書いた．以下はその抜粋．</p>
+
+<pre><code class="language-go">
+func main() {
+    http.HandleFunc(&quot;/&quot;+os.Getenv(&quot;NAME&quot;)+&quot;.zip&quot;, binary)
+}
+
+func binary(w http.ResponseWriter, r *http.Request) {
+    platform := guessPlatform(r.UserAgent())
+    http.Redirect(w, r, binaryURL(platform), http.StatusTemporaryRedirect)
+}
+
+func binaryURL(platform string) string {
+    return os.Getenv(&quot;BASE_URL&quot;) + &quot;/download/&quot; + os.Getenv(&quot;VERSION&quot;) + &quot;/&quot; + os.Getenv(&quot;NAME&quot;) + &quot;_&quot; + os.Getenv(&quot;VERSION&quot;) + &quot;_&quot; + platform + &quot;.zip&quot;
+}
+
+func guessOS(userAgent string) string {
+    if isDarwin(userAgent) {
+        return &quot;darwin&quot;
+    }
+
+    if isWindows(userAgent) {
+        return &quot;windows&quot;
+    }
+
+    return &quot;linux&quot;
+}
+
+func guessArch(userAgent string) string {
+    if isAmd64(userAgent) || isDarwin(userAgent) {
+        return &quot;amd64&quot;
+     }
+     
+     return &quot;386&quot;
+}
+
+func guessPlatform(userAgent string) string {
+    userAgent = strings.ToLower(userAgent)
+    return guessOS(userAgent) + &quot;_&quot; + guessArch(userAgent)
+}
+
+func isDarwin(userAgent string) bool {
+    return strings.Contains(userAgent, &quot;mac os x&quot;) || strings.Contains(userAgent, &quot;darwin&quot;)
+}
+
+func isWindows(userAgent string) bool {
+    return strings.Contains(userAgent, &quot;windows&quot;)
+}
+
+func isAmd64(userAgent string) bool {
+    return strings.Contains(userAgent, &quot;x86_64&quot;) || strings.Contains(userAgent, &quot;amd64&quot;)
+}
+
+</code></pre>
+
+<p><a href="https://github.com/tcnksm/re-dist-ghr">tcnksm/re-dist-ghr</a></p>
+
+<p>Github ReleaseページへのリダイレクトURLは，バージョン名(<code>$VERSION</code>)やツール名（<code>$NAME</code>）を環境変数で指定しておき，それから組み立てるようにしている．</p>
+
+<h2 id="運用:10104ee938ba1f589d7cd4c7da7eebf0">運用</h2>
+
+<p>新しいバージョンをリリースしたら，Herokuアプリの<code>$VERSION</code>環境変数を更新するだけなのでとても楽．</p>
+
+<p>さらに言えば，Herokuアプリのセットアップは<a href="http://www.terraform.io/">Terraform</a>を使っているので（<a href="http://deeeet.com/writing/2014/08/04/terraform-heroku/">&ldquo;TerraformでHerokuアプリのセットアップ&rdquo;</a>），設定ファイル書き換えて<code>terraform apply</code>するだけ．自動化できそう．</p>
+
+<p>Github Release上のパッケージ名が上記のルールに従っていれば，誰でも環境変数を変えるだけで使える．興味があればForkで何でもいいので使ってください．</p>
+
+<h2 id="他のやりかた:10104ee938ba1f589d7cd4c7da7eebf0">他のやりかた</h2>
+
+<p>もちろんOSXに向けてHomebrewレシピ，Debina系に向けてdebパッケージ，Red Hat系に向けてRPMパッケージがそれぞれ準備されているのが理想的．でも，個人開発だとそれを作る，メンテしていくコストが高い．</p>
+
+<p>ただHomebrewのレシピは，クソ簡単なので準備してあげるとよい（<a href="http://deeeet.com/writing/2014/05/20/brew-tap/">&ldquo;HomeBrewで自作ツールを配布する&rdquo;</a>）．</p>
+
+<h2 id="参考:10104ee938ba1f589d7cd4c7da7eebf0">参考</h2>
+
+<ul>
+<li><a href="http://sourceforge.jp/magazine/14/01/17/090000">独自のDebパッケージやaptリポジトリを作ってみよう</a></li>
+<li><a href="http://sourceforge.jp/magazine/14/01/10/090000">独自のRPMパッケージやyumリポジトリを作ってみよう</a></li>
+</ul>
+
+      <div class="social">
+  
+  
+  <a href="https://twitter.com/share" class="twitter-share-button" data-via="deeeet" data-count="none">Tweet</a>
+  
+  
+</div>
+
+    </section>
+
+    <footer>
+      <address>
+        
+        <img src="/images/bio.jpeg"/>
+        
+        <p>Written by <strong><a rel="author" href="https://twitter.com/deeeet" title="Taichi Nakashima" target="_blank">Taichi Nakashima</a></strong><br>
+          <span class="muted">A Tokyo based PaaS engineer. Please contact me via twitter.</span>
+        </p>
+      </address>
+
+    </footer>
+
+  </div>
+</article>
+
+<script type="text/javascript" src="//ajax.googleapis.com/ajax/libs/jquery/1.7.2/jquery.min.js"></script>
+<script type="text/javascript" src="/js/main.js"></script>
+
+<script>!function(d,s,id){var js,fjs=d.getElementsByTagName(s)[0],p=/^http:/.test(d.location)?'http':'https';if(!d.getElementById(id)){js=d.createElement(s);js.id=id;js.src=p+'://platform.twitter.com/widgets.js';fjs.parentNode.insertBefore(js,fjs);}}(document, 'script', 'twitter-wjs');</script>
+
+
+<script type="text/javascript">var HN=[];HN.factory=function(e){return function(){HN.push([e].concat(Array.prototype.slice.call(arguments,0)))};},HN.on=HN.factory("on"),HN.once=HN.factory("once"),HN.off=HN.factory("off"),HN.emit=HN.factory("emit"),HN.load=function(){var e="hn-button.js";if(document.getElementById(e))return;var t=document.createElement("script");t.id=e,t.src="//hn-button.herokuapp.com/hn-button.js";var n=document.getElementsByTagName("script")[0];n.parentNode.insertBefore(t,n)},HN.load();</script>
+
+
+  <script>
+  (function(i,s,o,g,r,a,m){i['GoogleAnalyticsObject']=r;i[r]=i[r]||function(){
+  (i[r].q=i[r].q||[]).push(arguments)},i[r].l=1*new Date();a=s.createElement(o),
+  m=s.getElementsByTagName(o)[0];a.async=1;a.src=g;m.parentNode.insertBefore(a,m)
+  })(window,document,'script','//www.google-analytics.com/analytics.js','ga');
+
+  ga('create', 'UA-45390253-1', 'auto');
+  ga('send', 'pageview');
+
+</script>
+
+
+
+<script>
+  $(document).ready(function() {
+  
+  $('p:has(img)').css('text-align', 'center');
+  $('iframe').css('style', 'display: block; margin: 0px auto;');
+  });
+</script>
+

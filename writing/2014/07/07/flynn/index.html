@@ -1,0 +1,505 @@
+<!doctype html>
+<html>
+  <head>
+    <meta http-equiv="content-type" content="text/html; charset=utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    
+    <title>DockerによるマルチホストのPaaS flynnの概要とそのアーキテクチャー | SOTA</title>
+    
+    <link href="https://fonts.googleapis.com/css?family=Lato%3a900" rel="stylesheet" type="text/css">
+    <link rel="stylesheet" href="/css/main.css">
+    <link rel="shortcut icon" href="/favicon.png" type="image/x-icon" />
+    <link href="http://deeeet.com//index.xml" rel="alternate" type="application/rss+xml" title="" />
+    <meta name="title" content="http://deeeet.com/writing/2014/07/07/flynn/">
+    <link rel="canonical" href="http://deeeet.com/writing/2014/07/07/flynn/">
+    
+    <meta property="og:title" content="DockerによるマルチホストのPaaS flynnの概要とそのアーキテクチャー"/>
+    <meta property="og:url" content="http://deeeet.com/writing/2014/07/07/flynn/"/>
+  </head>
+  
+  <body>
+    <section class="site-nav">
+      <header>
+        <nav id="navigation">
+          <ul class="menu">
+            <li><a href="https://github.com/tcnksm/talks">Talks</a></li>
+            <li><a href="https://tcnksm.exposure.co/">Photos</a></li>
+          </ul>
+
+          <a class="name" href="/">SOTA</a>
+        </nav>        
+      </header>
+    </section>
+    
+
+
+<article>
+  <div class="container">
+    <header>
+      <div class="meta">
+        <time pubdate datetime="2014-07-07" title="2014-07-07">July 07, 2014</time>
+      </div>
+      <h1 class="title">DockerによるマルチホストのPaaS flynnの概要とそのアーキテクチャー</h1>
+    </header>
+    
+    <section>
+      
+
+<script async class="speakerdeck-embed" data-id="3e5fba00e59601314f771288f3080752" data-ratio="1.77777777777778" src="http://speakerdeck.com/assets/embed.js"></script>
+
+<p><a href="https://speakerdeck.com/tcnksm/flynnfalseshi-dai-number-dockerjp">&ldquo;flynnの時代&rdquo;</a></p>
+
+<p><a href="http://connpass.com/event/6998/">&ldquo;Docker meetup tokyo #3&rdquo;</a>で発表してきた．内容は，Dockerの応用の１つであるOSSでPaaSをつくる<a href="https://flynn.io">flynn</a>というプロジェクトの概要とそのアーキテクチャーの紹介．このflynnというプロジェクトの中には，Dockerの面白い使い方がたくさん詰まってるため，今後Dockerを使う人が，その応用の際の参考になればという思いで紹介させてもらった．</p>
+
+<p>今回の発表のために資料を集めまくり，理解できない部分は出来る限りコードも読んだ．発表スライドの補完にもなると思うので，そのメモ書き（一応体裁は整えた）を公開しておく．</p>
+
+<h2 id="デモ:5de78529c255714e0db6de21637ac9d1">デモ</h2>
+
+<p>以下は，簡単なデモ．</p>
+
+<p><img src="/images/flynn.gif" class="image"></p>
+
+<p>やっていることは以下．</p>
+
+<ul>
+<li>nodeのアプリケーションをデプロイ</li>
+<li>ルーティングの追加</li>
+<li>スケール</li>
+</ul>
+
+<p>コマンドを含めた詳しい解説は以下で解説する．</p>
+
+<h2 id="前提知識-herokuの動作:5de78529c255714e0db6de21637ac9d1">前提知識 (Herokuの動作)</h2>
+
+<p>まず，前提知識としてPaaS (ここではHeroku) がどのように動作しているのかをそのワークフローとともにまとめておく．</p>
+
+<pre><code class="language-bash">$ heroku create
+</code></pre>
+
+<ul>
+<li>Stackと呼ばれるベースとなるOSを準備する
+
+<ul>
+<li>e.g., Cedar stack</li>
+</ul></li>
+</ul>
+
+<pre><code class="language-bash">$ git push heroku master
+</code></pre>
+
+<ol>
+<li>アプリケーションがデプロイされる</li>
+<li>slug compilerでアプリケーションをビルドしてslugを作成する
+
+<ul>
+<li><a href="https://devcenter.heroku.com/articles/slug-compiler">slug compiler</a>
+
+<ul>
+<li>各言語のBuildpackの集合</li>
+<li>依存関係のインストール
+
+<ul>
+<li>e.g., RubyならGemfileをもとにrubygemsをインストール</li>
+</ul></li>
+</ul></li>
+<li><a href="https://devcenter.heroku.com/articles/platform-api-deploying-slugs">slug</a>
+
+<ul>
+<li>ソースと依存ライブラリ，言語のランタイムを含んだ圧縮されたファイルシステム(SquashFS)</li>
+</ul></li>
+</ul></li>
+<li>アプリケーションの実行環境（Dyno）を準備する
+
+<ul>
+<li><a href="https://devcenter.heroku.com/articles/dynos">Dyno</a>
+
+<ul>
+<li><strong>LXC</strong>をベースにしたContainer環境</li>
+</ul></li>
+</ul></li>
+<li>Dynoにslugをロードする</li>
+<li>Procfileをもとにアプリケーションを起動する
+
+<ul>
+<li><a href="https://devcenter.heroku.com/articles/procfile">Procfile</a>
+
+<ul>
+<li>プロセスの起動コマンドを記述
+
+<ul>
+<li>e.g., <code>web: bundle exec rails server -p $PORT</code></li>
+</ul></li>
+</ul></li>
+</ul></li>
+</ol>
+
+<p><img src="https://s3-eu-west-1.amazonaws.com/jon-assettest/dynos.jpg" alt="" />
+</p>
+
+<pre><code class="language-bash">$ heroku ps:scale web=2
+</code></pre>
+
+<ul>
+<li>プロセスモデル（上図を参考）に基づき<code>web</code>プロセスを増やす</li>
+<li>実行Dynoの数を増やす</li>
+</ul>
+
+<pre><code class="language-bash">$ heroku run bash
+</code></pre>
+
+<ul>
+<li>Dynoにログインする（一度限りのプロセスを実行する）</li>
+<li>新しくDynoが準備され，最新のSlugが読み込まれる</li>
+<li>変更は他の起動中のDynoに影響を与えない</li>
+</ul>
+
+<p>Herokuの重要な要素はDynoとslugであることがわかる．これをDockerに置き換えるとslugはDockerイメージに，DynoはDockerコンテナと考えることができる．</p>
+
+<h2 id="flynnとは何か:5de78529c255714e0db6de21637ac9d1">flynnとは何か？</h2>
+
+<p><a href="https://flynn.io">flynn</a>はDockerによるPlatform-as-a-Service．開発には，dokkuの作者である<a href="https://github.com/progrium">@progrium</a>氏も関わっている．OSSかつクラウドファンディングを受けて開発が進められている．実装はGo言語．</p>
+
+<h3 id="flynnが与えてくれるもの:5de78529c255714e0db6de21637ac9d1">flynnが与えてくれるもの</h3>
+
+<p>flynnのトップページには，「The product that ops provides to developers」が掲げられている．flynnは開発者に対して以下のようなものを可能にしてくれる．</p>
+
+<ul>
+<li>簡単かつ一貫した方法でデプロイできる
+
+<ul>
+<li>e.g., git pushで，Dockerコンテナで</li>
+</ul></li>
+<li>どんな言語/フレームワークでも動かせる</li>
+<li>簡単にスケールできる
+
+<ul>
+<li>新たにノードを追加するだけで</li>
+</ul></li>
+</ul>
+
+<h3 id="他のdockerによるossのpaas:5de78529c255714e0db6de21637ac9d1">他のDockerによるOSSのPaaS</h3>
+
+<p>DockerによるOSSなPaaSプロジェクトは他にもある．例えば，<a href="https://github.com/progrium/dokku">dokku</a>や<a href="http://deis.io/">Deis</a>が挙げられる．</p>
+
+<p>[dokku]()は，100行のbashで書かれたシンプルなPaaS．dokkuの内部実装は<a href="http://banyan.me/slides/20140116/slides.html">&ldquo;Inside Dokku in 5 minutes&rdquo;</a>が詳しい．flynnと比較すると，dokkuはシングルホストが前提となっているが，flynnはマルチホストに対応している点が異なる．分散システムの上にのったdokkuがflynnであると考えることもできる．</p>
+
+<p><a href="http://deis.io">Deis</a>は，CoreOSを用いたマルチホストのDocker PaaS．Deisについては，DockerCoon14の発表<a href="http://gabrtv.github.io/deis-dockercon-2014/#/">&ldquo;Deis: Evolution of a Docker PAAS&rdquo;</a>が詳しい．flynnとDeisでできることはほとんど変わらない．敢えて比較するなら，DeisはCoreOSが前提であるが，flynnはOSを限定しない（現状はUbuntuが使われているが）．</p>
+
+<h2 id="flynnのアーキテクチャーの概要:5de78529c255714e0db6de21637ac9d1">flynnのアーキテクチャーの概要</h2>
+
+<p>flynnのアーキテクチャーは，シンプルで理解しやすいようにデザインされている．ほとんどのコンポーネントがDockerコンテナとして動作する．すべてがコンテナで動作するため，flynnにデプロイされるサービスやアプリケーションは，flynnを構成するコンポーネントと同様であると見なすこともできる．また，コンポーネントはモジュラー的に実装されているため，再利用，変更，切り替えが容易になっている（すべてがDockerコンテナで動作する様子は，<a href="https://github.com/flynn/flynn-demo">flynn/flynn-demo</a>の<a href="https://github.com/flynn/flynn-demo/blob/master/Vagrantfile">Vagrantfile</a>を見るとわかる）．</p>
+
+<p>flynnのアーキテクチャーは大きく分けて2つのレイヤーに分けることができる．</p>
+
+<ul>
+<li><strong>layer0 (The Grid)</strong>
+
+<ul>
+<li>低位なリソースフレームワーク層</li>
+<li>この上に載る全てのアプリケーションやサービスの基礎</li>
+<li>コンテナ管理, サービスディスカバリー, タスクスケジューラー, 分散型KVS（etcd）</li>
+</ul></li>
+<li><strong>layer1</strong>
+
+<ul>
+<li>高位なコンポーネント層</li>
+<li>PaaSの基本的な機能
+
+<ul>
+<li>e.g., Git-receive，Heroku Buildpack，DB，HTTP Routing</li>
+</ul></li>
+</ul></li>
+</ul>
+
+<h2 id="layer0-the-grid:5de78529c255714e0db6de21637ac9d1">layer0 (The Grid)</h2>
+
+<p>layer0は<a href="http://mesos.apache.org/">Apache Mesos</a>やGoogleの<a href="http://eurosys2013.tudos.org/wp-content/uploads/2013/paper/Schwarzkopf.pdf">Omega</a>の影響を受けた，リソースフレームワーク層．以下の2つコンポーネントから成る．</p>
+
+<ul>
+<li><a href="https://github.com/flynn/discoverd">flynn/discoverd</a>
+
+<ul>
+<li>サービスディスカバリー</li>
+</ul></li>
+<li><a href="https://github.com/flynn/flynn-host">flynn/flynn-host</a>
+
+<ul>
+<li>コンテナ管理，タスクスケジューラー</li>
+</ul></li>
+</ul>
+
+<p>この2つのコンポーネントは全てのホストで起動する．</p>
+
+<h3 id="flynn-discoverd:5de78529c255714e0db6de21637ac9d1">flynn/discoverd</h3>
+
+<p>discoverdはサービスディスカバリーを行う．具体的には，ホストのクラスタを構築し，メンバーの参加/離脱イベントを他のホストのメンバーに通知する等を行う．</p>
+
+<p>discoverdには専用のクライアントである，<a href="https://github.com/flynn/go-discoverd">flynn/go-discoverd</a>がある．このクライアントを通して，クラスタへのホストの登録/削除や，各ホストのアドレスやメタ情報，新しいホストの参加/離脱のイベントの購読を行う．</p>
+
+<p>現在バックエンドには，CoreOSのetcdを利用している．これは，ZooKeeperなどに入れ替え可能にしていくとのこと．</p>
+
+<h3 id="flynn-flynn-host:5de78529c255714e0db6de21637ac9d1">flynn/flynn-host</h3>
+
+<p>flynn-hostは，HTTP API経由でホストのDockerコンテナの管理を行う．flynn-hostには，リーダーとそれ以外という役割がある．リーダーは，クラスタ全体のホストの一覧とそれらが実行しているジョブの管理や新しいジョブの登録/依頼を行う．それ以外は，リーダから依頼されたジョブをDockerコンテナで実行/停止，実行中のジョブ，指定されたジョブの情報の返答を行う．</p>
+
+<p>flynn-hostは，内部にGoogle Omegaの影響を受けたタスクスケジューラフレームワークである，<a href="https://github.com/flynn/flynn-host/tree/master/sampi">flynn/flynn-host/sampi</a>を持っている．</p>
+
+<h2 id="layer1:5de78529c255714e0db6de21637ac9d1">layer1</h2>
+
+<p>layer1には基本的なPaaSの機能がくる．また，実際にユーザにデプロイされるアプリケーションもlayer1に存在する（ユーザランドとしてのlayer2が存在しないのは，実際にデプロイされるアプリケーションとlayer1のコンポーネントに技術的な差がないため）．layer1のコンポーネントは以下．</p>
+
+<ul>
+<li><a href="https://github.com/flynn/flynn-controller">flynn-controller</a>
+
+<ul>
+<li>Flynn上で動いているアプリケーションをHTTP APIで管理する</li>
+<li>HerokuのPlatfrom APIにインスパイアを受けている</li>
+</ul></li>
+<li><a href="https://github.com/flynn/flynn-cli">flynn-cli</a>
+
+<ul>
+<li>flynn-controller (HTTP API) のコマンドラインクライアント<br /></li>
+</ul></li>
+<li><a href="https://github.com/flynn/flynn-bootstrap">flynn-bootstrap</a>
+
+<ul>
+<li>設定ファイルに基づきLayer1を起動する</li>
+</ul></li>
+<li><a href="https://github.com/flynn/gitreceived">flynn/gitreceived</a>
+
+<ul>
+<li>git pushをうけることに特化したSSHサーバ</li>
+<li>git pushを契機にauthcheckerスクリプトとreceiverスクリプトを動かす</li>
+</ul></li>
+<li><a href="https://github.com/flynn/flynn-receive">flynn/flynn-receive</a>
+
+<ul>
+<li>gitreceivedをラップして認証とアプリケーションのビルド/実行を行う</li>
+</ul></li>
+<li><a href="https://github.com/flynn/slugbuilder">flynn/slugbuilder</a>
+
+<ul>
+<li>Dockerとbuildpackを使ってHeroku的なslugを作成する</li>
+</ul></li>
+<li><a href="https://github.com/flynn/slugrunner">flynn/slugrunner</a>
+
+<ul>
+<li>slugbuilderで作成されたslugを実行する</li>
+</ul></li>
+<li><a href="https://github.com/flynn/strowger">strowger</a>
+
+<ul>
+<li>HTTP/TCP のルータ（リバースプロキシ）</li>
+</ul></li>
+<li><a href="https://github.com/flynn/shelf">shelf</a>
+
+<ul>
+<li>シンプルなHTTPのファイルサービス</li>
+<li>HTTPを通してファイルの読み出し／書き込み，削除のインターフェースを提供する</li>
+<li>シンプルなS3</li>
+</ul></li>
+<li><a href="https://github.com/flynn/flynn-postgres">flynn-postgres</a>
+
+<ul>
+<li>flynn専用のPostgreSQL</li>
+<li>今後他のDBにも対応する予定</li>
+</ul></li>
+<li><a href="https://github.com/flynn/taffy">Taffy</a>
+
+<ul>
+<li>レポジトリをpullしてflynnにデプロイする</li>
+</ul></li>
+</ul>
+
+<h3 id="flynn-gitreceived:5de78529c255714e0db6de21637ac9d1">flynn/gitreceived</h3>
+
+<p>gitreceivedはgit pushを受けるこをに特化したSSHサーバ．アプリケーションがgit pushによりデプロイされると，gitreceivedは以下を行う．</p>
+
+<ol>
+<li>認証キーとユーザ名を引数に<code>authchecker</code>スクリプトの実行</li>
+<li>pushされたアプリケーションのソース(.tar)を引数に<code>receiver</code>スクリプトの実行</li>
+</ol>
+
+<p>flynnはこれをflynn-receiveでラップして使っている．flynn-receiveでは，<code>receiver</code>スクリプトで以下をflynn-controllerに要請している．</p>
+
+<ol>
+<li>slugbuilderでアプリケーションのビルド (slugの作成)</li>
+<li>slugをslugrunnerで実行</li>
+</ol>
+
+<h3 id="flynn-slugbuilder:5de78529c255714e0db6de21637ac9d1">flynn/slugbuilder</h3>
+
+<p>slugbuilderはDockerとHerokuのbuildpackを使ってHeroku的なslugを作成する．具体的には以下を実行している．</p>
+
+<pre><code class="language-bash">$ id=$(git archive master | docker run -i -a stdin flynn/slugbuilder) 
+$ docker wait $id
+$ docker cp $id:/tmp/slug.tgz . # コンテナ内のslug.tgzを取り出す
+</code></pre>
+
+<p>flynn/slugbuilderというDockerコンテナにアプリケーションのソースを標準入力から突っ込み，コンテナ内部でHerokuのbuildpackを使ったビルドを実行する．ビルドが終わったら，<code>docker cp</code>で生成物を取り出す．</p>
+
+<h3 id="flynn-slugrunner:5de78529c255714e0db6de21637ac9d1">flynn/slugrunner</h3>
+
+<p>slugrunnerはslugbuilderで作成された（Heroku的な）slugを実行する．具体的には以下を実行している．</p>
+
+<pre><code class="language-bash">$ cat myslug.tgz |
+    docker run -i -a stdin -a stdout flynn/slugrunner start web
+</code></pre>
+
+<p>flynn/slugrunnerというDockerコンテナにslugを標準入力から突っ込み，<code>Procfile</code>に基づくwebプロセスを実行する．</p>
+
+<h3 id="flynn-strowger:5de78529c255714e0db6de21637ac9d1">flynn/strowger</h3>
+
+<p>strowgerはTCP/HTTP ルータで，複数のslugrunnerに対するランダムロードバランシングのためのリバースプロキシとして動作する．サービスディスカバリーがバックで動いており，背後で何が起動したかを常に監視する．</p>
+
+<p>HAProxyやnginxと比較した利点は，サービスディスカバリーをネイティブで持っていることで，動的な設定変更が可能である点（HAProxyやnginxは設定変更で新しくプロセスを作成する必要がある）．</p>
+
+<h2 id="flynnの操作:5de78529c255714e0db6de21637ac9d1">flynnの操作</h2>
+
+<p>flynnは専用のコマンドクライアントである<a href="https://github.com/flynn/flynn-cli">flynn/flynn-cli</a>を使って操作する．</p>
+
+<p>まず，サーバを登録する．以下を実行すると設定が<code>~/.flynnrc</code>に書き込まれる．</p>
+
+<pre><code class="language-bash">$ flynn server-add \
+    -g lxr.flynnhub.com \ #githost
+    -p XXXXXXXXXXXXXXXX \ # SHA256 of the server's TLS cert
+    &quot;flynn-demo&quot; \ # server-name
+    https://lxr.flynnhub.com \ # server url
+    xxxxxxxxxxxxxxxxxxxxxxxx # key
+</code></pre>
+
+<p>次に，SSH-KEYを登録する．</p>
+
+<pre><code class="language-bash">$ flynn key-add
+</code></pre>
+
+<p>アプリケーションの作成は以下．git remoteを追加しつつ，flynn-controllerにそれを伝えている．</p>
+
+<pre><code class="language-bash">$ flynn create node-demo
+</code></pre>
+
+<p>アプリケーションのデプロイはHerokuと同様にgitを使う．これによりgitreceivedでアプリケーションのソースコードが受け取られ，slugbuilderでビルド，slugrunnerで実行，が行われる．</p>
+
+<pre><code class="language-bash">$ git push flynn master
+</code></pre>
+
+<p>ルーティングを確認するには以下．</p>
+
+<pre><code class="language-bash">$ flynn routes
+ROUTE                            SERVICE        ID
+http:node-demo.lxr.flynnhub.com  node-demo-web  http/65ae6884514622f0e7dcd85f71724814
+</code></pre>
+
+<p>新しいルーティングを追加するには以下．</p>
+
+<pre><code class="language-bash">$ flynn route-add-http docker-meetup.lxr.flynnhub.com
+$ flynn routes
+ROUTE                                SERVICE        ID
+http:docker-meetup.lxr.flynnhub.com  node-demo-web  http/8aecdfad5adb70ddff6a2ac32b79da4d
+http:node-demo.lxr.flynnhub.com      node-demo-web  http/65ae6884514622f0e7dcd85f71724814
+</code></pre>
+
+<p>不要になったルートはそのIDを使って削除する．</p>
+
+<pre><code class="language-bash">$ flynn route-remove http/baf06246e4ec7f3486a89a2e313205ba
+</code></pre>
+
+<p>プロセスを確認する (<code>docker ps</code>)．</p>
+
+<pre><code class="language-bash">$ flynn ps
+</code></pre>
+
+<p>ログはプロセスのIDで確認する (<code>docker log</code>)．</p>
+
+<pre><code class="language-bash">$ flynn log e4cffae4ce2b-8cb1212f582f498eaed467fede768d6f
+</code></pre>
+
+<p>スケールは以下で行う．これは単純にDockerコンテナの数を増やしているだけ．</p>
+
+<pre><code class="language-bash">$ flynn scale web=8
+</code></pre>
+
+<p>slug (コンテナ) に対してを直接コマンドの実行を要請することもできる．例えばbashを起動してコンテナの内部に入ることもできる．</p>
+
+<pre><code class="language-bash">$ flynn run bash
+</code></pre>
+
+<h2 id="最後に:5de78529c255714e0db6de21637ac9d1">最後に</h2>
+
+<p>今回Docker meetupで発表の機会をもうけて頂いた<a href="https://twitter.com/stanaka">@stanaka</a>さん，<a href="https://twitter.com/kazunori_279">@kazunori_279</a>さんありがとうございました．他のスタッフのかたもありがとうございました．</p>
+
+<p>帰りにゲストの<a href="https://twitter.com/philwhln">@philwhln</a>を駅まで送って行き，Solomon Hykes氏によるlibswarm，Mitchell Hashimoto氏によるConsulのインタビューなどの話を聴けたのは良い思い出．</p>
+
+<h2 id="参考文献:5de78529c255714e0db6de21637ac9d1">参考文献</h2>
+
+<ul>
+<li><a href="https://flynn.io/">&ldquo;Flynn - Open source Platform as a Service powered by Docker&rdquo;</a></li>
+<li><a href="http://progrium.com/blog/2014/02/06/the-start-of-the-age-of-flynn/">&ldquo;The Start of the Age of Flynn&rdquo;</a></li>
+<li><a href="http://jpetazzo.github.io/2013/11/17/flynn-docker-paas/">&ldquo;Unveiling Flynn, a new PAAS based on Docker&rdquo;</a></li>
+<li><a href="http://5by5.tv/changelog/99">&ldquo;5by5 | The Changelog #99: Flynn, Tent, open source PaaSes and more with Jeff Lindsay and Jonathan Rudenberg&rdquo;</a></li>
+<li><a href="http://5by5.tv/changelog/115">&ldquo;5by5 | The Changelog #115: Flynn updates with Jonathan Rudenberg and Jeff Lindsay&rdquo;</a></li>
+<li><a href="https://flynn.io/blog/container-indepedence">&ldquo;Container Independence&rdquo;</a></li>
+<li><a href="https://docs.google.com/presentation/d/1ni1BFiVMTLN_8q34si-qPfl0F6w2W3oPVKqSMfcs_XA/edit#slide=id.p">&ldquo;Bazooka: Continuous Deployment at SoundCloud - Google Slides&rdquo;</a></li>
+<li><a href="http://gabrtv.github.io/deis-dockercon-2014/#/">&ldquo;Deis: Evolution of a Docker PAAS&rdquo;</a></li>
+<li><a href="http://www.centurylinklabs.com/flynn-vs-deis-the-tale-of-two-docker-micro-paas-technologies/">&ldquo;Flynn vs. Deis: The Tale of Two Docker Micro-PaaS Technologies | CenturyLink Labs&rdquo;</a></li>
+<li><a href="http://banyan.me/slides/20140116/slides.html">&ldquo;Inside Dokku in 5 minutes&rdquo;</a></li>
+<li><a href="http://r7kamura.github.io/2014/06/24/discoverd.html">&ldquo;Discoverd - r7km/s&rdquo;</a></li>
+<li><a href="http://r7kamura.github.io/2014/06/26/flynn-host.html">&ldquo;Flynn Host - r7km/s&rdquo;</a></li>
+<li><a href="http://progrium.com/blog/2014/07/01/beyond-flynn-or-flynn-as-a-worldview/">&ldquo;Beyond Flynn, or Flynn-as-a-Worldview&rdquo;</a></li>
+</ul>
+
+      <div class="social">
+  
+  
+  <a href="https://twitter.com/share" class="twitter-share-button" data-via="deeeet" data-count="none">Tweet</a>
+  
+  
+</div>
+
+    </section>
+
+    <footer>
+      <address>
+        
+        <img src="/images/bio.jpeg"/>
+        
+        <p>Written by <strong><a rel="author" href="https://twitter.com/deeeet" title="Taichi Nakashima" target="_blank">Taichi Nakashima</a></strong><br>
+          <span class="muted">A Tokyo based PaaS engineer. Please contact me via twitter.</span>
+        </p>
+      </address>
+
+    </footer>
+
+  </div>
+</article>
+
+<script type="text/javascript" src="//ajax.googleapis.com/ajax/libs/jquery/1.7.2/jquery.min.js"></script>
+<script type="text/javascript" src="/js/main.js"></script>
+
+<script>!function(d,s,id){var js,fjs=d.getElementsByTagName(s)[0],p=/^http:/.test(d.location)?'http':'https';if(!d.getElementById(id)){js=d.createElement(s);js.id=id;js.src=p+'://platform.twitter.com/widgets.js';fjs.parentNode.insertBefore(js,fjs);}}(document, 'script', 'twitter-wjs');</script>
+
+
+<script type="text/javascript">var HN=[];HN.factory=function(e){return function(){HN.push([e].concat(Array.prototype.slice.call(arguments,0)))};},HN.on=HN.factory("on"),HN.once=HN.factory("once"),HN.off=HN.factory("off"),HN.emit=HN.factory("emit"),HN.load=function(){var e="hn-button.js";if(document.getElementById(e))return;var t=document.createElement("script");t.id=e,t.src="//hn-button.herokuapp.com/hn-button.js";var n=document.getElementsByTagName("script")[0];n.parentNode.insertBefore(t,n)},HN.load();</script>
+
+
+  <script>
+  (function(i,s,o,g,r,a,m){i['GoogleAnalyticsObject']=r;i[r]=i[r]||function(){
+  (i[r].q=i[r].q||[]).push(arguments)},i[r].l=1*new Date();a=s.createElement(o),
+  m=s.getElementsByTagName(o)[0];a.async=1;a.src=g;m.parentNode.insertBefore(a,m)
+  })(window,document,'script','//www.google-analytics.com/analytics.js','ga');
+
+  ga('create', 'UA-45390253-1', 'auto');
+  ga('send', 'pageview');
+
+</script>
+
+
+
+<script>
+  $(document).ready(function() {
+  
+  $('p:has(img)').css('text-align', 'center');
+  $('iframe').css('style', 'display: block; margin: 0px auto;');
+  });
+</script>
+

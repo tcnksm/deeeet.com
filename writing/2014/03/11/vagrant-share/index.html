@@ -1,0 +1,232 @@
+<!doctype html>
+<html>
+  <head>
+    <meta http-equiv="content-type" content="text/html; charset=utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    
+    <title>Vagrant shareとngrokを使ってみた | SOTA</title>
+    
+    <link href="https://fonts.googleapis.com/css?family=Lato%3a900" rel="stylesheet" type="text/css">
+    <link rel="stylesheet" href="/css/main.css">
+    <link rel="shortcut icon" href="/favicon.png" type="image/x-icon" />
+    <link href="http://deeeet.com//index.xml" rel="alternate" type="application/rss+xml" title="" />
+    <meta name="title" content="http://deeeet.com/writing/2014/03/11/vagrant-share/">
+    <link rel="canonical" href="http://deeeet.com/writing/2014/03/11/vagrant-share/">
+    
+    <meta property="og:title" content="Vagrant shareとngrokを使ってみた"/>
+    <meta property="og:url" content="http://deeeet.com/writing/2014/03/11/vagrant-share/"/>
+  </head>
+  
+  <body>
+    <section class="site-nav">
+      <header>
+        <nav id="navigation">
+          <ul class="menu">
+            <li><a href="https://github.com/tcnksm/talks">Talks</a></li>
+            <li><a href="https://tcnksm.exposure.co/">Photos</a></li>
+          </ul>
+
+          <a class="name" href="/">SOTA</a>
+        </nav>        
+      </header>
+    </section>
+    
+
+
+<article>
+  <div class="container">
+    <header>
+      <div class="meta">
+        <time pubdate datetime="2014-03-11" title="2014-03-11">March 11, 2014</time>
+      </div>
+      <h1 class="title">Vagrant shareとngrokを使ってみた</h1>
+    </header>
+    
+    <section>
+      
+
+<p><a href="http://www.vagrantup.com/blog/vagrant-1-5-and-vagrant-cloud.html">Vagrant 1.5 and Vagrant Cloud</a></p>
+
+<p>Vagrant shareを使ってみた．今までは<code>private_network</code>によるローカルマシンから仮想マシンへのアクセスや，<code>public_network</code>によるLAN内のマシンから仮想マシンへのアクセスが可能だった．今回のアップデートで，外部ネットワークのマシンから，ローカルに立てた仮想マシンへのアクセスが可能になった．</p>
+
+<p>主なアクセスは以下の2つ．</p>
+
+<ul>
+<li>仮想マシン内に立てたHTTPサーバーへのアクセス</li>
+<li>SSHによる仮想マシンへのログイン</li>
+</ul>
+
+<p>試してみた．</p>
+
+<h2 id="準備:1d85e956a6cdd5f11e7748aad846c500">準備</h2>
+
+<p><a href="https://vagrantcloud.com">Vagrant Cloud</a>でアカウントを作成し，ログインする．</p>
+
+<pre><code class="language-bash">$ vagrant login
+</code></pre>
+
+<p>また，例として以下のようなVagrantfileを準備し，仮想マシンを起動しておく．</p>
+
+<pre><code class="language-ruby">Vagrant.configure(&quot;2&quot;) do |config|
+    config.vm.box = &quot;precise64&quot;
+    config.vm.box_url = &quot;http://files.vagrantup.com/precise64.box&quot;
+    config.vm.network :forwarded_port, guest: 80, host: 8080
+    config.vm.provision :shell, :inline =&gt; &lt;&lt;-PREPARE
+apt-get -y update
+apt-get install -y apache2
+PREPARE
+    end
+</code></pre>
+
+<pre><code class="language-bash">$ vagarnt up
+</code></pre>
+
+<p>（やっているのは，8080-&gt;80のport forwardとapacheのインストールのみ）</p>
+
+<h2 id="http-access:1d85e956a6cdd5f11e7748aad846c500">HTTP Access</h2>
+
+<p>まず，PulicなHTTP URLを介して仮想マシン内のHTTPサーバにアクセスする方法．この場合は，共有相手のマシンにVagrantがインストールされている必要はない．</p>
+
+<p>以下を実行する．</p>
+
+<pre><code class="language-bash">$ vagrant share
+...
+==&gt; default: Your Vagrant Share is running! Name: terrible-moose-1613
+==&gt; default: URL: http://terrible-moose-1613.vagrantshare.com
+</code></pre>
+
+<p>すると，<a href="http://terrible-moose-1613.vagrantshare.com">http://terrible-moose-1613.vagrantshare.com</a>のような一時的なURLが発行される（現在はアクセス不可）．</p>
+
+<p>あとは，そのURIを共有するだけ． 共有相手はブラウザから仮想マシン内のHTTPサーバにアクセスできる．</p>
+
+<p>以下のように，<a href="vagrantshare.com">vagrantshare.com</a>からローカルマシンまでTCPセッションを確立して，それをそのまま仮想マシンにport forwardすることで実現している．</p>
+
+<pre><code>http://terrible-moose-1613.vagrantshare.com -&gt; 127.0.0.1:8080 (Host) -&gt; 127.0.0.1:80 (Guest) 
+</code></pre>
+
+<h2 id="ssh-access:1d85e956a6cdd5f11e7748aad846c500">SSH Access</h2>
+
+<p>ローカルで<code>vagrant ssh</code>で仮想マシンにログインするように，外部ネットワークのマシンからローカルに立てた仮想マシンにsshでログインすることもできる．この場合は，共有相手のマシンにVagrant 1.5以上がインストールされている必要がある．</p>
+
+<p>以下を実行する．今回は，sshログインのためのパスワードの入力が要求される．</p>
+
+<pre><code>$ vagrant share --ssh
+==&gt; default: Your Vagrant Share is running! Name: bulky-mitchell-9363
+==&gt; default: URL: http://bulky-mitchell-9363.vagrantshare.com
+</code></pre>
+
+<p>すると，同様に<code>bulky-mitchell-9363</code>のようなshare nameが発行されるので，その名前と入力したパスワードを共有する．</p>
+
+<p>共有相手は以下を実行することでsshで仮想マシンにログインする．</p>
+
+<pre><code>$ vagrant connect --ssh bulky-mitchell-9363
+</code></pre>
+
+<p>セキュリティ的に不安な場合は，共有の際に以下のようにすれば，共有相手は一度しかsshでログインできなくなる．</p>
+
+<pre><code class="language-bash">$ vagrant share --ssh --ssh-once
+</code></pre>
+
+<h2 id="disable-http-url-access:1d85e956a6cdd5f11e7748aad846c500">Disable HTTP URL Access</h2>
+
+<p><a href="http://terrible-moose-1613.vagrantshare.com">http://terrible-moose-1613.vagrantshare.com</a>のようなpublicなHTTP URLを無効にした共有もできる．この場合も共有相手にVagrant 1.5以上がインストールされている必要がある．</p>
+
+<p>以下を実行する．</p>
+
+<pre><code class="language-bash">$ vagrant share --disable-http
+==&gt; default: Your Vagrant Share is running! Name: hopeful-kangaroo-2431
+</code></pre>
+
+<p>すると，<code>hopeful-kangaroo-2431</code>のようなshare nameのみが発行されるので，それを共有する．</p>
+
+<p>共有相手は，以下を実行する．</p>
+
+<pre><code class="language-bash">vagrant connect hopeful-kangaroo-2431
+==&gt; connect: SOCKS address: 127.0.0.1:53298
+==&gt; connect: Machine IP: 172.16.0.2
+</code></pre>
+
+<p>すると，共有相手には，固定のIPが割り振られ，ローカルネットワーク内に仮想マシンが存在しているように見える（ローカルで<code>private_network</code>で<code>vagrant up</code>した感じかな）．</p>
+
+<p>共有相手は，<a href="172.16.0.2">172.16.0.2</a>でブラウザから仮想マシン内のHTTPサーバーにアクセスできる．</p>
+
+<h2 id="ngrok:1d85e956a6cdd5f11e7748aad846c500">ngrok</h2>
+
+<p>twitterを眺めていたら，同様の技術に<a href="https://ngrok.com/">ngrok</a>というものがあるのを知った．ローカルに立てたサーバを<a href="https://ngrok.com/">ngrok.com</a>を介して外部に晒すことができる．こちらも試してみた．</p>
+
+<p>まずサーバを立てる．</p>
+
+<pre><code class="language-bash">$ python -m SimpleHTTPServer
+</code></pre>
+
+<p>あとは，以下を実行するだけ．</p>
+
+<pre><code class="language-bash">$ ngrok 8000
+</code></pre>
+
+<p>すると，<a href="http://3d0dbc48.ngrok.com">http://3d0dbc48.ngrok.com</a>のようなURLが発行され，以下のようにforwardingされる．</p>
+
+<pre><code>http://3d0dbc48.ngrok.com -&gt; 127.0.0.1:8000
+</code></pre>
+
+<p>URLを共有すると，サーバを実行したローカルディレクトリがURLを介して外部に晒される（ファイルの共有とかできちゃう）．</p>
+
+<h2 id="まとめ:1d85e956a6cdd5f11e7748aad846c500">まとめ</h2>
+
+<p>Vagrant share素晴らしい．リモートで働いているときとか便利そう（社内なら<code>public_network</code>で事足りそう）．SSHアクセスはエンジニアとの共同作業に，HTTP Accessはエンジニア以外のひとに成果物を見せるときに使えそうだなと思った．</p>
+
+      <div class="social">
+  
+  
+  <a href="https://twitter.com/share" class="twitter-share-button" data-via="deeeet" data-count="none">Tweet</a>
+  
+  
+</div>
+
+    </section>
+
+    <footer>
+      <address>
+        
+        <img src="/images/bio.jpeg"/>
+        
+        <p>Written by <strong><a rel="author" href="https://twitter.com/deeeet" title="Taichi Nakashima" target="_blank">Taichi Nakashima</a></strong><br>
+          <span class="muted">A Tokyo based PaaS engineer. Please contact me via twitter.</span>
+        </p>
+      </address>
+
+    </footer>
+
+  </div>
+</article>
+
+<script type="text/javascript" src="//ajax.googleapis.com/ajax/libs/jquery/1.7.2/jquery.min.js"></script>
+<script type="text/javascript" src="/js/main.js"></script>
+
+<script>!function(d,s,id){var js,fjs=d.getElementsByTagName(s)[0],p=/^http:/.test(d.location)?'http':'https';if(!d.getElementById(id)){js=d.createElement(s);js.id=id;js.src=p+'://platform.twitter.com/widgets.js';fjs.parentNode.insertBefore(js,fjs);}}(document, 'script', 'twitter-wjs');</script>
+
+
+<script type="text/javascript">var HN=[];HN.factory=function(e){return function(){HN.push([e].concat(Array.prototype.slice.call(arguments,0)))};},HN.on=HN.factory("on"),HN.once=HN.factory("once"),HN.off=HN.factory("off"),HN.emit=HN.factory("emit"),HN.load=function(){var e="hn-button.js";if(document.getElementById(e))return;var t=document.createElement("script");t.id=e,t.src="//hn-button.herokuapp.com/hn-button.js";var n=document.getElementsByTagName("script")[0];n.parentNode.insertBefore(t,n)},HN.load();</script>
+
+
+  <script>
+  (function(i,s,o,g,r,a,m){i['GoogleAnalyticsObject']=r;i[r]=i[r]||function(){
+  (i[r].q=i[r].q||[]).push(arguments)},i[r].l=1*new Date();a=s.createElement(o),
+  m=s.getElementsByTagName(o)[0];a.async=1;a.src=g;m.parentNode.insertBefore(a,m)
+  })(window,document,'script','//www.google-analytics.com/analytics.js','ga');
+
+  ga('create', 'UA-45390253-1', 'auto');
+  ga('send', 'pageview');
+
+</script>
+
+
+
+<script>
+  $(document).ready(function() {
+  
+  $('p:has(img)').css('text-align', 'center');
+  $('iframe').css('style', 'display: block; margin: 0px auto;');
+  });
+</script>
+

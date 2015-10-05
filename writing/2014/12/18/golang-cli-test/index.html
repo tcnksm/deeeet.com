@@ -1,0 +1,318 @@
+<!doctype html>
+<html>
+  <head>
+    <meta http-equiv="content-type" content="text/html; charset=utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    
+    <title>Go言語でテストしやすいコマンドラインツールをつくる | SOTA</title>
+    
+    <link href="https://fonts.googleapis.com/css?family=Lato%3a900" rel="stylesheet" type="text/css">
+    <link rel="stylesheet" href="/css/main.css">
+    <link rel="shortcut icon" href="/favicon.png" type="image/x-icon" />
+    <link href="http://deeeet.com//index.xml" rel="alternate" type="application/rss+xml" title="" />
+    <meta name="title" content="http://deeeet.com/writing/2014/12/18/golang-cli-test/">
+    <link rel="canonical" href="http://deeeet.com/writing/2014/12/18/golang-cli-test/">
+    
+    <meta property="og:title" content="Go言語でテストしやすいコマンドラインツールをつくる"/>
+    <meta property="og:url" content="http://deeeet.com/writing/2014/12/18/golang-cli-test/"/>
+  </head>
+  
+  <body>
+    <section class="site-nav">
+      <header>
+        <nav id="navigation">
+          <ul class="menu">
+            <li><a href="https://github.com/tcnksm/talks">Talks</a></li>
+            <li><a href="https://tcnksm.exposure.co/">Photos</a></li>
+          </ul>
+
+          <a class="name" href="/">SOTA</a>
+        </nav>        
+      </header>
+    </section>
+    
+
+
+<article>
+  <div class="container">
+    <header>
+      <div class="meta">
+        <time pubdate datetime="2014-12-18" title="2014-12-18">December 18, 2014</time>
+      </div>
+      <h1 class="title">Go言語でテストしやすいコマンドラインツールをつくる</h1>
+    </header>
+    
+    <section>
+      
+
+<p>本記事は<a href="http://qiita.com/advent-calendar/2014/go">Go Advent Calendar 2014</a>の18日目の記事です．</p>
+
+<p>Go言語は，クロスコンパイルや配布のしやすさからコマンドラインツールの作成に採用されることが多い．自分もGo言語でいくつかのコマンドラインツールを作成してきた．例えば，GitHub Releaseへのツールのアップロードを簡単に行う<a href="https://github.com/tcnksm/ghr">ghr</a>というコマンドラインツールを開発をしている．</p>
+
+<p>コマンドラインツールをつくるときもテストは重要である．Go言語では標準テストパッケージだけで十分なテストを書くことができる．しかし，コマンドラインツールは標準出力や標準入力といったI/O処理が多く発生する．そのテスト，例えばある引数を受けたらこの出力を返し，この終了ステータスで終了するといったテストは，ちゃんとした手法が確立されているわけではなく，迷うことが多い（少なくとも自分は結構悩んだ）．</p>
+
+<p>本記事では，いくつかのOSSツール（得に<a href="https://github.com/hashicorp/atlas-upload-cli">hashicorp/atlas-upload-cli</a>）を参考に，Go言語によるコマンドラインツールおいてI/O処理に関するテストを書きやすくし，すっきりとしたコードを既述する方法について解説する．</p>
+
+<p>なお，特別なパッケージは使用せず，標準パッケージのみを利用する．</p>
+
+<h2 id="tl-dr:4084104a284281eaf945f0012c731af4">TL;DR</h2>
+
+<p><a href="http://golang.org/pkg/io/#Writer">io.Writer</a>を入力とするメソッドをつくり，そこに実処理を書く．main関数やテストからはio.Writerを書き換えて，それを呼び出すようにする（文脈によりioの向き先を変える）．</p>
+
+<h2 id="実例:4084104a284281eaf945f0012c731af4">実例</h2>
+
+<p>ここでは，簡単な例として<code>awesome-cli</code>というコマンドラインツールを作成し，その出力結果と終了コードのテストを書く．</p>
+
+<p><code>awesome-cli</code>は<code>-version</code>オプションを与えると，以下のような出力と，終了コードが得られるとする．</p>
+
+<pre><code class="language-bash">$ awesome-cli -version
+awesome-cli version v0.1.0
+</code></pre>
+
+<pre><code class="language-bash">$ echo $?
+0
+</code></pre>
+
+<p>以下では，この挙動のテストをどのように書くかを，<code>awesome-cli</code>のコードそのものと共に解説する．</p>
+
+<h2 id="コード:4084104a284281eaf945f0012c731af4">コード</h2>
+
+<p><code>awesome-cli</code>は以下の2つのソースで構成する．</p>
+
+<ul>
+<li><code>cli.go</code> - オプション引数処理を含めた具体的な処理</li>
+<li><code>main.go</code> - main関数</li>
+</ul>
+
+<p>そして<code>cli_test.go</code>にI/Oに関わるテスト，ここでは<code>-version</code>オプション引数を与えたときの出力とその終了コードのテスト，を既述する．以下ではこれらを具体的に説明する．</p>
+
+<h3 id="cli-go:4084104a284281eaf945f0012c731af4">cli.go</h3>
+
+<p>まず，引数処理を含めた具体的な処理を行う<code>cli.go</code>は以下のように既述する．引数処理には標準の<a href="http://golang.org/pkg/flag/">flag</a>パッケージを利用する．</p>
+
+<pre><code class="language-go">package main
+
+import (
+    &quot;flag&quot;
+    &quot;fmt&quot;
+    &quot;io&quot;
+)
+
+// 終了コード
+const (
+    ExitCodeOK = iota
+    ExitCodeParseFlagError
+)
+
+type CLI struct
+    outStream, errStream io.Writer
+}
+
+// 引数処理を含めた具体的な処理
+func (c *CLI) Run(args []string) int {
+
+    // オプション引数のパース
+    var version bool
+    flags := flag.NewFlagSet(&quot;awesome-cli&quot;, flag.ContinueOnError)
+    flags.SetOutput(c.errStream)
+    flags.BoolVar(&amp;version, &quot;version&quot;, false, &quot;Print version information and quit&quot;)
+
+    if err := flags.Parse(args[1:]); err != nil
+        return ExitCodeParseFlagError
+    }
+
+    // バージョン情報の表示
+    if version {
+        fmt.Fprintf(c.errStream, &quot;awesome-cli version %sn&quot;, Version)
+        return ExitCodeOK
+    }
+
+    fmt.Fprint(c.outStream, &quot;Do awesome workn&quot;)
+
+    return ExitCodeOK
+}
+</code></pre>
+
+<p>まず，<a href="http://golang.org/pkg/io/#Writer">io.Writer</a>の<code>outStream</code>と<code>errStream</code>をフィールドをもつ<code>CLI</code>構造体を作る．そして<code>CLI</code>構造体をレシーバとし，コマンドライン引数をその引数としてもつ<code>Run()</code>メソッドを定義する．</p>
+
+<p><code>Run()</code>にはオプション引数のパース処理と具体的な処理を既述し，戻り値としてステータスコードを返すようにする．</p>
+
+<p>オプション引数のパースには<a href="http://golang.org/pkg/flag/#FlagSet">flag.FlagSet</a>を新たに作成して行う．これにより以下が可能になる．</p>
+
+<ul>
+<li>出力先を変えられる
+
+<ul>
+<li><code>flags.SetOutput(c.errStream)</code></li>
+</ul></li>
+<li>パースするべきオプション引数を引数として渡せるようになる
+
+<ul>
+<li><code>flags.Parse(args[1:])</code></li>
+</ul></li>
+</ul>
+
+<p>（ちなみに<a href="http://golang.org/pkg/flag/#Parse">flag.Parse()</a>は<code>os.Args[1:]</code>をパースする）</p>
+
+<p>具体的な処理はいつも通り既述する．ただし，I/O処理，例えばユーザに対してエラーを提示する処理などは，<code>outStream</code>と<code>errStream</code>をそれぞれ標準出力，標準エラー出力の書き出し先として利用するようにする．</p>
+
+<p><code>Run()</code>の戻り値は，<code>0</code>（正常）<code>1</code>（エラー）のように直接数値を書いても良いが，<code>ExitCodeOK </code>のように定数として定義しておくとテストときにその可読性につながる．また<code>iota</code>を使えば，エラーコードが増えたときにも簡単に対応できる．</p>
+
+<p>これらにより<code>Run()</code>，つまり引数処理を含めた具体的な処理，をメソッドとしてテストすることができるようになる．</p>
+
+<h3 id="main-go:4084104a284281eaf945f0012c731af4">main.go</h3>
+
+<p>次にmain関数をもつ<code>main.go</code>は以下のように既述する．</p>
+
+<pre><code class="language-go">package main
+
+import (
+    &quot;os&quot;
+)
+
+const Version string = &quot;v0.1.0&quot;
+
+func main() {
+    cli := &amp;CLI{outStream: os.Stdout, errStream: os.Stderr}
+    os.Exit(cli.Run(os.Args))
+}
+</code></pre>
+
+<p>main関数は<code>CLI</code>構造体の<code>outStream</code>と<code>errStream</code>をそれぞれ<code>os.Stdout</code>，<code>os.Stderr</code>として<code>cli.go</code>の<code>Run()</code>メソッドを呼び出すだけ．これにより，コマンドラインツール実行時の出力は標準出力と標準エラー出力に書き出されるようになる．</p>
+
+<p><code>Run()</code>の引数は<code>os.Args</code>を渡すようにする．そして<code>Run()</code>は終了ステータスを返すので，それを受け<code>os.Exit()</code>で終了するようにする．</p>
+
+<h3 id="cli-test-go:4084104a284281eaf945f0012c731af4">cli_test.go</h3>
+
+<p>テストは以下のように既述する．ここでは，<code>-version</code>オプション引数を与えたときの出力とその終了ステータスをテストする．</p>
+
+<pre><code class="language-go">package main
+
+import (
+    &quot;bytes&quot;
+    &quot;fmt&quot;
+    &quot;strings&quot;
+    &quot;testing&quot;
+)
+
+func TestRun_versionFlag(t *testing.T) {
+    outStream, errStream := new(bytes.Buffer), new(bytes.Buffer)
+    cli := &amp;CLIoutStream: outStream, errStream: errStream
+    args := strings.Split(&quot;awesome-cli -version&quot;, &quot; &quot;)
+
+    status := cli.Run(args)
+    if status != ExitCodeOK
+        t.Errorf(&quot;ExitStatus=%d, want %d&quot;, status, ExitCodeOK)
+    }
+
+    expected := fmt.Sprintf(&quot;awesome-cli version %s&quot;, Version)
+    if !strings.Contains(errStream.String(), expected)
+        t.Errorf(&quot;Output=%q, want %q&quot;, errStream.String(), expected)
+     }
+}
+</code></pre>
+
+<p>テストでは，<code>CLI</code>構造体の<code>outStream</code>と<code>errStream</code>をそれぞれ<a href="http://golang.org/pkg/bytes/#Buffer">bytes.Buffer</a>として，<code>Run()</code>メソッドを呼び出す．これにより<code>Run()</code>実行後に各出力を取り出してテストに使うすることができる．</p>
+
+<p>実際にテストしたい，コマンドと引数は以下のように書く．</p>
+
+<pre><code class="language-go">args := strings.Split(&quot;awesome-cli -version&quot;, &quot; &quot;)
+</code></pre>
+
+<p>そして<code>strings.Split()</code>により<code>os.Args</code>と同じものを作り出し，<code>Run()</code>への引数とする．</p>
+
+<p>あとは，いつも通りの<code>if</code>によるテストを書いているだけ．終了ステータスは期待した値が返ってきているか，出力は予期するものが含まれているかを書く．</p>
+
+<h2 id="番外編-環境変数のテスト:4084104a284281eaf945f0012c731af4">番外編（環境変数のテスト）</h2>
+
+<p>軽く番外編．コマンドラインツールでは環境変数を用いることがある．例えば，API  を叩くようなコマンドラインツールは，そのTokenを引数で与えるよりも環境変数で設定させることが多い．このように環境変数が絡んだ場合のテストの書き方についても簡単に紹介する．</p>
+
+<p>以下のようなヘルパー関数を準備するとよい．</p>
+
+<pre><code class="language-go">func setTestEnv(key, val string) func() {
+    preVal := os.Getenv(key)
+    os.Setenv(key, val)
+    return func()
+        os.Setenv(key, preVal)
+    }
+}
+</code></pre>
+
+<p>この関数は，もともと環境変数に設定されていた値を一時的に退避して，実際に使いたい値を設定する．そして，退避した値を再びセットし直すための関数を戻り値として返す．</p>
+
+<p>使うときは以下のようにする．テストが終わると<code>defer</code>により値のリストアが行われる．</p>
+
+<pre><code class="language-go">func TestAPIToken(t *testing.T) {
+    reset = setTestEnv(&quot;Token&quot;,&quot;……&quot;)
+    defer reset()
+
+    // Awesome test
+}
+</code></pre>
+
+<h2 id="まとめ:4084104a284281eaf945f0012c731af4">まとめ</h2>
+
+<p>本記事では，Go言語でテストしやすいコマンドラインツールを書く方法について紹介した．<a href="http://golang.org/pkg/io/#Writer">io.Writer</a>を入力とするメソッドをつくることで，テストしやすい，かつ見通しの良いコードが書けるようになった．</p>
+
+<h3 id="参考:4084104a284281eaf945f0012c731af4">参考</h3>
+
+<ul>
+<li><a href="https://yuya-takeyama.github.io/presentations/2014/11/30/gocon_2014_autumn/#1.0">Unit-testing programs depend on I/O in Go</a></li>
+<li><a href="http://yuuki.hatenablog.com/entry/go-cli-unix">Go言語によるCLIツール開発とUNIX哲学について</a></li>
+</ul>
+
+      <div class="social">
+  
+  
+  <a href="https://twitter.com/share" class="twitter-share-button" data-via="deeeet" data-count="none">Tweet</a>
+  
+  
+</div>
+
+    </section>
+
+    <footer>
+      <address>
+        
+        <img src="/images/bio.jpeg"/>
+        
+        <p>Written by <strong><a rel="author" href="https://twitter.com/deeeet" title="Taichi Nakashima" target="_blank">Taichi Nakashima</a></strong><br>
+          <span class="muted">A Tokyo based PaaS engineer. Please contact me via twitter.</span>
+        </p>
+      </address>
+
+    </footer>
+
+  </div>
+</article>
+
+<script type="text/javascript" src="//ajax.googleapis.com/ajax/libs/jquery/1.7.2/jquery.min.js"></script>
+<script type="text/javascript" src="/js/main.js"></script>
+
+<script>!function(d,s,id){var js,fjs=d.getElementsByTagName(s)[0],p=/^http:/.test(d.location)?'http':'https';if(!d.getElementById(id)){js=d.createElement(s);js.id=id;js.src=p+'://platform.twitter.com/widgets.js';fjs.parentNode.insertBefore(js,fjs);}}(document, 'script', 'twitter-wjs');</script>
+
+
+<script type="text/javascript">var HN=[];HN.factory=function(e){return function(){HN.push([e].concat(Array.prototype.slice.call(arguments,0)))};},HN.on=HN.factory("on"),HN.once=HN.factory("once"),HN.off=HN.factory("off"),HN.emit=HN.factory("emit"),HN.load=function(){var e="hn-button.js";if(document.getElementById(e))return;var t=document.createElement("script");t.id=e,t.src="//hn-button.herokuapp.com/hn-button.js";var n=document.getElementsByTagName("script")[0];n.parentNode.insertBefore(t,n)},HN.load();</script>
+
+
+  <script>
+  (function(i,s,o,g,r,a,m){i['GoogleAnalyticsObject']=r;i[r]=i[r]||function(){
+  (i[r].q=i[r].q||[]).push(arguments)},i[r].l=1*new Date();a=s.createElement(o),
+  m=s.getElementsByTagName(o)[0];a.async=1;a.src=g;m.parentNode.insertBefore(a,m)
+  })(window,document,'script','//www.google-analytics.com/analytics.js','ga');
+
+  ga('create', 'UA-45390253-1', 'auto');
+  ga('send', 'pageview');
+
+</script>
+
+
+
+<script>
+  $(document).ready(function() {
+  
+  $('p:has(img)').css('text-align', 'center');
+  $('iframe').css('style', 'display: block; margin: 0px auto;');
+  });
+</script>
+

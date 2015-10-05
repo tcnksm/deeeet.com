@@ -1,0 +1,489 @@
+<!doctype html>
+<html>
+  <head>
+    <meta http-equiv="content-type" content="text/html; charset=utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    
+    <title>serverspecとdocker-apiでDockerfileをTDD | SOTA</title>
+    
+    <link href="https://fonts.googleapis.com/css?family=Lato%3a900" rel="stylesheet" type="text/css">
+    <link rel="stylesheet" href="/css/main.css">
+    <link rel="shortcut icon" href="/favicon.png" type="image/x-icon" />
+    <link href="http://deeeet.com//index.xml" rel="alternate" type="application/rss+xml" title="" />
+    <meta name="title" content="http://deeeet.com/writing/2014/01/06/tdd-dockerfile/">
+    <link rel="canonical" href="http://deeeet.com/writing/2014/01/06/tdd-dockerfile/">
+    
+    <meta property="og:title" content="serverspecとdocker-apiでDockerfileをTDD"/>
+    <meta property="og:url" content="http://deeeet.com/writing/2014/01/06/tdd-dockerfile/"/>
+  </head>
+  
+  <body>
+    <section class="site-nav">
+      <header>
+        <nav id="navigation">
+          <ul class="menu">
+            <li><a href="https://github.com/tcnksm/talks">Talks</a></li>
+            <li><a href="https://tcnksm.exposure.co/">Photos</a></li>
+          </ul>
+
+          <a class="name" href="/">SOTA</a>
+        </nav>        
+      </header>
+    </section>
+    
+
+
+<article>
+  <div class="container">
+    <header>
+      <div class="meta">
+        <time pubdate datetime="2014-01-06" title="2014-01-06">January 06, 2014</time>
+      </div>
+      <h1 class="title">serverspecとdocker-apiでDockerfileをTDD</h1>
+    </header>
+    
+    <section>
+      
+
+<p>いくつかDockerfileを書いてきた．今書いているDockerfileは短くてシンプルなものばかりだが，もっと長く複雑化した時に不安になりそうだ．不安を解消するにはテストしかない．さらにテスト駆動的にDockerイメージを開発できたら素敵だ．つまり，</p>
+
+<ul>
+<li>テストを書く</li>
+<li>Dockerイメージを作成して，テストの実行 -&gt; <code>RED</code></li>
+<li>Dockerfileの編集</li>
+<li>Dockerイメージを作成して，テストの実行 -&gt; <code>GREEN</code></li>
+<li>テストを&hellip;</li>
+</ul>
+
+<p>の流れができるとよい．</p>
+
+<p>ということで，RSpecを使ってTDDでDockerfileを開発するというのをやってみた，<a href="https://github.com/tcnksm/docker-rspec">tcnksm/docker-rspec</a>．今回実現したのは以下．</p>
+
+<ul>
+<li><a href="http://docs.docker.io/en/latest/api/docker_remote_api/">Docker Remote API</a>でDockerfile特有のコマンド(e.g, <code>CMD</code>や<code>EXPOSE</code>)のRSpecテスト</li>
+<li><a href="http://serverspec.org/">serverspec</a>でパッケージのインストールのRSpecテスト</li>
+</ul>
+
+<p>これらをOSX上からやれるようにした．これでDockerfileの記述内容は網羅的にテストできると思う．</p>
+
+<h2 id="準備-vagrant:98fcb24d79514132415e65a5626bc401">準備 (Vagrant)</h2>
+
+<p>今回は，VagrantのVM上でDockerを動かす．OSはUbuntu12.04．<code>Vagrantfile</code>は以下．</p>
+
+<pre><code>Vagrant.configure(&quot;2&quot;) do |config|
+    config.vm.box = &quot;precise64&quot;
+    config.vm.box_url = &quot;http://files.vagrantup.com/precise64.box&quot;
+    config.vm.network :private_network, ip: &quot;192.168.50.4&quot;
+    config.vm.provision :docker do |d|
+        d.pull_images &quot;base&quot;
+    end
+end
+</code></pre>
+
+<p>やっていることは以下</p>
+
+<ul>
+<li>Vagrant VMにIPアドレス&rdquo;192.168.50.4&rdquo;を割り当て</li>
+<li>Dockerのbaseイメージをpull</li>
+</ul>
+
+<p>Vagrant VMはあらかじめ起動しておく．</p>
+
+<pre><code>vagrant up
+</code></pre>
+
+<p>また，Vagrant VMへのsshの設定を書き出しておく．</p>
+
+<pre><code>vagrant ssh-config --host docker-vm &gt;&gt; ~/.ssh/config
+</code></pre>
+
+<h2 id="docker-remote-apiによるテスト:98fcb24d79514132415e65a5626bc401">Docker Remote APIによるテスト</h2>
+
+<p>まず，Docker Remote APIを使って，Dockerfile特有のテストをする．例えば，イメージが存在しているか，外部に向けたポートが設定されているか(<code>EXPOSE</code>)など．これは，主に<a href="http://blog.wercker.com/2013/12/23/Test-driven-development-for-docker.html">Experimenting with test driven development for docker</a>を参考にした．</p>
+
+<h3 id="準備:98fcb24d79514132415e65a5626bc401">準備</h3>
+
+<p>Docker Remote APIは，デフォルトでunix:///var/run/docker.sockをlistenしており，rootユーザによるローカルからの接続のみしか許容していない (<a href="http://docs.docker.io/en/latest/use/basics/#bind-docker">参考</a>)．外部からのアクセスを許容するため，<code>/etc/init/docker.conf</code>の<code>DOCKER_OPTS</code>を書き換え，起動時にバインドアドレスを指定する．</p>
+
+<pre><code># docker.conf
+script
+    DOCKER=/usr/bin/$UPSTART_JOB
+    DOCKER_OPTS=&quot;-H 0.0.0.0:5422&quot;
+    if [ -f /etc/default/$UPSTART_JOB ]; then
+        . /etc/default/$UPSTART_JOB
+    fi
+    &quot;$DOCKER&quot; -d $DOCKER_OPTS
+end script
+</code></pre>
+
+<p>設定を有効にするために，Docker demonを再起動する．</p>
+
+<p>また，このDocker Remote APIをrubyで使うために<a href="https://github.com/swipely/docker-api">swipely/docker-api</a>をインストールしておく．</p>
+
+<pre><code class="language-bash">$ gem install docker-api
+</code></pre>
+
+<p><code>spec_helper.rb</code>は以下のようにする．</p>
+
+<pre><code class="language-ruby">require &quot;docker&quot;
+Docker.url = &quot;http://192.168.50.4:5422&quot;
+</code></pre>
+
+<p>Dockerが動作しているVagrant VMのIPアドレスに<code>Vagrantfile</code>で指定した値を，portにはRemote APIにバインドさせたportを指定する．</p>
+
+<h3 id="テストを書く:98fcb24d79514132415e65a5626bc401">テストを書く</h3>
+
+<p>簡単にtcnksm/sampleという名前のイメージが存在しているかをテストする．</p>
+
+<pre><code class="language-ruby"># dockerfile_spec.rb
+
+require &quot;spec_helper&quot;
+
+describe &quot;Sample Images&quot; do
+    before(:all) do
+        @image = Docker::Image.all.detect{|image| image.info[&quot;Repository&quot;] == &quot;tcnksm/sample&quot;}
+    end
+
+    it &quot;should exist&quot; do
+        expect(@image).not_to be_nil
+    end
+end
+</code></pre>
+
+<h3 id="テストを実行する-red:98fcb24d79514132415e65a5626bc401">テストを実行する (RED)</h3>
+
+<p>現時点ではtcnksm/sampleというイメージは存在しないため，テストはこける．</p>
+
+<pre><code class="language-bash">$ rspec
+F
+
+Failures:
+
+  1) Sample Images should exist
+       Failure/Error: expect(@image).not_to be_nil
+
+           expected: not nil
+                got: nil
+       # ./spec/dockerfile_spec.rb:10:in `block (2 levels) in &lt;top (required)&gt;'
+
+Finished in 0.82098 seconds
+1 example, 1 failure
+</code></pre>
+
+<h3 id="イメージを作成する:98fcb24d79514132415e65a5626bc401">イメージを作成する</h3>
+
+<p>以下のようなDockerfileを準備してイメージを作成してみる．</p>
+
+<pre><code>FROM base
+MAINTAINER tcnksm &quot;https://github.com/tcnksm&quot;
+</code></pre>
+
+<p>ssh越しにdocerコマンドを実行し，イメージを作成する．</p>
+
+<pre><code>$ ssh docker-vm &quot;docker -H :5422 build -t tcnksm/sample /vagrant/.&quot;
+</code></pre>
+
+<h3 id="テストを実行する-green:98fcb24d79514132415e65a5626bc401">テストを実行する (GREEN)</h3>
+
+<p>tcnksm/sampleイメージは既に作られているため，rspecテストは通る．</p>
+
+<pre><code class="language-bash">$ rspec
+.
+
+Finished in 0.8131 seconds
+1 example, 0 failures
+</code></pre>
+
+<h3 id="テストの自動化:98fcb24d79514132415e65a5626bc401">テストの自動化</h3>
+
+<p>自動化は言えないが，イメージのビルドやテストの実行を毎回打つのは億劫なのでシェルスクリプトにしておく．</p>
+
+<pre><code>#!/bin/bash
+
+echo &quot;Build docker image:&quot;
+ssh docker-vm &quot;docker -H :5422 build -t tcnksm/sample /vagrant/.&quot;
+echo
+
+echo &quot;Run rspec test:&quot;
+rspec
+echo
+</code></pre>
+
+<h3 id="他のテストの書き方:98fcb24d79514132415e65a5626bc401">他のテストの書き方</h3>
+
+<p>イメージの存在をテストする以外にもDockerfile特有のコマンドのテストができる．以下にそれらをまとめておく．</p>
+
+<p>外部向けのポートが設定されているか(<code>EXPOSE</code>)</p>
+
+<pre><code class="language-ruby">it &quot;should expose the default port&quot; do
+    expect(@image.json[&quot;config&quot;][&quot;ExposedPorts&quot;].has_key?(&quot;22/tcp&quot;)).to be_true
+end
+</code></pre>
+
+<p>起動コマンドが設定されているか(<code>CMD</code>)</p>
+
+<pre><code class="language-ruby">it &quot;should have CMD&quot; do
+    expect(@image.json[&quot;config&quot;][&quot;Cmd&quot;]).to include(&quot;/usr/bin/wc&quot;, &quot;--help&quot;)
+end
+</code></pre>
+
+<p>環境変数が設定されているか(<code>ENV</code>)</p>
+
+<pre><code class="language-ruby">it &quot;should have environmental variable&quot; do
+    expect(@image.json[&quot;config&quot;][&quot;Env&quot;]).to include(&quot;TEST=test&quot;)
+end
+</code></pre>
+
+<p>ワークディレクトリが設定されているか(<code>WORKDIR</code>)</p>
+
+<pre><code class="language-ruby">it &quot;should have working directory&quot; do
+    expect(@image.json[&quot;config&quot;][&quot;WorkingDir&quot;]).to eq(&quot;/root&quot;)
+end
+</code></pre>
+
+<h2 id="serverspecによるテスト:98fcb24d79514132415e65a5626bc401">serverspecによるテスト</h2>
+
+<p>次に，serverspecを使ってDockerfileによるパッケージのインストールのテストをする．テストの仕方としては，ssh接続が可能なコンテナを準備することで行う．こちらは，主に<a href="http://d.hatena.ne.jp/naoya/20130621/1371790990">Docker の Retmote API + serverspec で CI - naoyaのはてなダイアリー</a>を参考にした．</p>
+
+<h3 id="準備-ssh-sudoer:98fcb24d79514132415e65a5626bc401">準備 (ssh, sudoer)</h3>
+
+<p>serverspecを動かすには，sshによるログインとsudo権限をもったユーザが準備されている必要がある．以下のような<code>Dockerfile</code>を準備して，これを満たすイメージを準備する．</p>
+
+<pre><code>FROM base
+
+# Install ssh
+RUN apt-get update
+RUN apt-get install -y openssh-server
+
+# Setting ssh
+RUN mkdir /var/run/sshd
+RUN /usr/sbin/sshd
+CMD [&quot;/usr/sbin/sshd&quot;, &quot;-D&quot;]
+
+# Create user and set sudo password
+RUN useradd tcnksm
+RUN echo tcnksm:**** | chpasswd
+
+# Setting ssh login without sudo
+RUN mkdir -p /home/tcnksm/.ssh
+RUN chown tcnksm /home/tcnksm/.ssh
+RUN chmod 700 /home/tcnksm/.ssh
+ADD ./id_rsa.pub /home/tcnksm/.ssh/authorized_keys
+RUN chown tcnksm /home/tcnksm/.ssh/authorized_keys
+RUN chmod 700 /home/tcnksm/.ssh/authorized_keys
+
+# Setting sudoers
+RUN echo &quot;tcnksm   ALL=(ALL)   ALL&quot; &gt; /etc/sudoers.d/tcnksm
+</code></pre>
+
+<p>イメージをビルドする</p>
+
+<pre><code class="language-bash">$ ssh docker-vm &quot;docker -H :5422 build -t tcnksm/sample /vagrant/.&quot;
+</code></pre>
+
+<p>コンテナの起動</p>
+
+<pre><code class="language-bash">$ ssh docker-vm docker -H :5422 run -p 7654:22 -d tcnksm/sample /usr/sbin/sshd -D
+</code></pre>
+
+<p><code>-p 7654:22</code>のオプションをつけるとVagrant VMの7654 portがDockerコンテナの22 portにport forwardされる．<code>Vagrantfile</code>と合わせると，localhost (OSX) からIPアドレス&rdquo; &ldquo;192.168.50.4&rdquo;に7654 portでsshすると，Dockerコンテナの22 portに接続されることになる．</p>
+
+<h3 id="準備-serverspec:98fcb24d79514132415e65a5626bc401">準備 (serverspec)</h3>
+
+<p>serverspecをインストールする．</p>
+
+<pre><code class="language-bash">$ gem install serverspec
+</code></pre>
+
+<p><code>serverspec-init</code>は以下のようにする．</p>
+
+<pre><code class="language-bash">$ serverspec-init
+Select OS type:
+
+  1) UN*X
+  2) Windows
+
+Select number: 1
+
+Select a backend type:
+
+  1) SSH
+  2) Exec (local)
+
+Select number: 1
+
+Vagrant instance y/n: n
+Input target host name: 192.168.50.4
+</code></pre>
+
+<p>hostnameは<code>Vagrantfile</code>でVagrant VMに割り当てたIPアドレスにする．<code>spec_helper.rb</code>はそのまま利用する．</p>
+
+<p><code>~/.ssh/config</code>の設定をする．</p>
+
+<pre><code>Host 192.168.50.4
+  HostName 192.168.50.4
+  User tcnksm
+  Port 7654
+  UserKnownHostsFile /dev/null
+  StrictHostKeyChecking no
+  PasswordAuthentication no
+  IdentityFile /Users/tcnksm/.ssh/id_rsa
+  IdentitiesOnly yes
+  LogLevel FATAL
+</code></pre>
+
+<p>次に，Dockerfileで設定したDockerコンテナ上のsudoユーザのパスワードを設定する．</p>
+
+<pre><code class="language-bash">$ export SUDO_PASSWORD=&quot;****&quot;
+</code></pre>
+
+<h3 id="テストを書く-1:98fcb24d79514132415e65a5626bc401">テストを書く</h3>
+
+<p>サンプルとしてgitがインストールされているかチェックするテストを書く．</p>
+
+<pre><code class="language-ruby">require 'spec_helper'
+
+describe package('git') do
+  it { should be_installed }
+end
+</code></pre>
+
+<h3 id="テストを実行する-red-1:98fcb24d79514132415e65a5626bc401">テストを実行する (RED)</h3>
+
+<p>gitはまだインストールしていないため，テストはこける．</p>
+
+<pre><code class="language-bash">$ rspec
+F
+
+Failures:
+
+  1) Package &quot;git&quot; should be installed
+       Failure/Error: it { should be_installed }
+              sudo dpkg-query -f '${Status}' -W git | grep '^install ok installed$'
+
+dpkg-query: no packages found matching git
+       expected Package &quot;git&quot; to be installed
+            # ./spec/192.168.50.4/git_spec.rb:4:in `block (2 levels) in &lt;top (required)&gt;'
+
+Finished in 0.90756 seconds
+1 examples, 1 failure
+</code></pre>
+
+<h3 id="イメージを作成する-1:98fcb24d79514132415e65a5626bc401">イメージを作成する</h3>
+
+<p>gitのインストールを上記の<code>Dockerfile</code>に追記する．</p>
+
+<pre><code>RUN apt-get install -y git
+</code></pre>
+
+<h3 id="テストを実行する-green-1:98fcb24d79514132415e65a5626bc401">テストを実行する (GREEN)</h3>
+
+<p>もう一度テストを実行する前に先ほど起動したDockerコンテナを削除しておく．</p>
+
+<pre><code>ssh docker-vm &quot;docker -H :5422 stop `ssh docker-vm docker -H :5422 ps -l -q`&quot;
+ssh docker-vm &quot;docker -H :5422 rm `ssh docker-vm docker -H :5422 ps -l -q`&quot;
+</code></pre>
+
+<p>再びイメージを作成し，コンテナを起動してからテストを実行する．今回は，gitが既にインストールされているためテストは通る．</p>
+
+<pre><code class="language-bash">$ rspec
+.
+
+Finished in 0.90842 seconds
+1 examples, 0 failures
+</code></pre>
+
+<h3 id="テストの自動化-1:98fcb24d79514132415e65a5626bc401">テストの自動化</h3>
+
+<p>イメージの作成，コンテナの起動，テストの実行，コンテナの破棄の流れをシェルスクリプトにしておく．</p>
+
+<pre><code>#!/bin/bash
+
+echo &quot;Build docker image:&quot;
+ssh docker-vm &quot;cd /vagrant; docker -H :5422 build -t tcnksm/sample .&quot;
+echo
+
+echo &quot;Run container:&quot;
+ssh docker-vm docker -H :5422 run -p 7654:22 -d tcnksm/sample /usr/sbin/sshd -D
+echo
+
+echo &quot;Run rspec test:&quot;
+rspec
+echo
+
+echo &quot;Delete container:&quot;
+ssh docker-vm &quot;docker -H :5422 stop `ssh docker-vm docker -H :5422 ps -l -q`&quot;
+ssh docker-vm &quot;docker -H :5422 rm `ssh docker-vm docker -H :5422 ps -l -q`&quot;
+</code></pre>
+
+<h2 id="まとめ:98fcb24d79514132415e65a5626bc401">まとめ</h2>
+
+<p>Docker Remote APIとserverspecによるテストは同時に行うことができる．シェルスクリプトを使っているのが少し原始的だが，一度ループを作ってしまえば後はひたすら回すだけなのでそこまでの苦痛ではない．普段使っているRSpecの記法でDockerfileまでテストできるのは嬉しい．serverspecは初めて使ったが，とても簡単に使えた．素敵．</p>
+
+<p>ただ，もっと簡単にDockerのイメージやコンテナをテストするフレームワークはそのうち出てきそうな気がしてる．</p>
+
+<p>参考</p>
+
+<ul>
+<li><a href="http://serverspec.org/">serverspec - home</a></li>
+<li><a href="http://blog.wercker.com/2013/12/23/Test-driven-development-for-docker.html">Experimenting with test driven development for docker</a></li>
+<li><a href="http://www.slideshare.net/ikedai/serverspec">serverspecでサーバ環境のテストを書いてみよう</a></li>
+<li><a href="http://d.hatena.ne.jp/naoya/20130620/1371729625">Docker (土曜日に podcast します) - naoyaのはてなダイアリー</a></li>
+<li><a href="http://shibayu36.hatenablog.com/entry/2013/12/07/233510">Dockerで立てたコンテナにsshで接続する - $shibayu36-&gt;blog;</a></li>
+</ul>
+
+      <div class="social">
+  
+  
+  <a href="https://twitter.com/share" class="twitter-share-button" data-via="deeeet" data-count="none">Tweet</a>
+  
+  
+</div>
+
+    </section>
+
+    <footer>
+      <address>
+        
+        <img src="/images/bio.jpeg"/>
+        
+        <p>Written by <strong><a rel="author" href="https://twitter.com/deeeet" title="Taichi Nakashima" target="_blank">Taichi Nakashima</a></strong><br>
+          <span class="muted">A Tokyo based PaaS engineer. Please contact me via twitter.</span>
+        </p>
+      </address>
+
+    </footer>
+
+  </div>
+</article>
+
+<script type="text/javascript" src="//ajax.googleapis.com/ajax/libs/jquery/1.7.2/jquery.min.js"></script>
+<script type="text/javascript" src="/js/main.js"></script>
+
+<script>!function(d,s,id){var js,fjs=d.getElementsByTagName(s)[0],p=/^http:/.test(d.location)?'http':'https';if(!d.getElementById(id)){js=d.createElement(s);js.id=id;js.src=p+'://platform.twitter.com/widgets.js';fjs.parentNode.insertBefore(js,fjs);}}(document, 'script', 'twitter-wjs');</script>
+
+
+<script type="text/javascript">var HN=[];HN.factory=function(e){return function(){HN.push([e].concat(Array.prototype.slice.call(arguments,0)))};},HN.on=HN.factory("on"),HN.once=HN.factory("once"),HN.off=HN.factory("off"),HN.emit=HN.factory("emit"),HN.load=function(){var e="hn-button.js";if(document.getElementById(e))return;var t=document.createElement("script");t.id=e,t.src="//hn-button.herokuapp.com/hn-button.js";var n=document.getElementsByTagName("script")[0];n.parentNode.insertBefore(t,n)},HN.load();</script>
+
+
+  <script>
+  (function(i,s,o,g,r,a,m){i['GoogleAnalyticsObject']=r;i[r]=i[r]||function(){
+  (i[r].q=i[r].q||[]).push(arguments)},i[r].l=1*new Date();a=s.createElement(o),
+  m=s.getElementsByTagName(o)[0];a.async=1;a.src=g;m.parentNode.insertBefore(a,m)
+  })(window,document,'script','//www.google-analytics.com/analytics.js','ga');
+
+  ga('create', 'UA-45390253-1', 'auto');
+  ga('send', 'pageview');
+
+</script>
+
+
+
+<script>
+  $(document).ready(function() {
+  
+  $('p:has(img)').css('text-align', 'center');
+  $('iframe').css('style', 'display: block; margin: 0px auto;');
+  });
+</script>
+

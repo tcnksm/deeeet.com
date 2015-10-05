@@ -1,0 +1,342 @@
+<!doctype html>
+<html>
+  <head>
+    <meta http-equiv="content-type" content="text/html; charset=utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    
+    <title>CoreOSクラスタ内のDockerコンテナの動的リンク | SOTA</title>
+    
+    <link href="https://fonts.googleapis.com/css?family=Lato%3a900" rel="stylesheet" type="text/css">
+    <link rel="stylesheet" href="/css/main.css">
+    <link rel="shortcut icon" href="/favicon.png" type="image/x-icon" />
+    <link href="http://deeeet.com//index.xml" rel="alternate" type="application/rss+xml" title="" />
+    <meta name="title" content="http://deeeet.com/writing/2014/11/26/coreos-etcd-docker-link/">
+    <link rel="canonical" href="http://deeeet.com/writing/2014/11/26/coreos-etcd-docker-link/">
+    
+    <meta property="og:title" content="CoreOSクラスタ内のDockerコンテナの動的リンク"/>
+    <meta property="og:url" content="http://deeeet.com/writing/2014/11/26/coreos-etcd-docker-link/"/>
+  </head>
+  
+  <body>
+    <section class="site-nav">
+      <header>
+        <nav id="navigation">
+          <ul class="menu">
+            <li><a href="https://github.com/tcnksm/talks">Talks</a></li>
+            <li><a href="https://tcnksm.exposure.co/">Photos</a></li>
+          </ul>
+
+          <a class="name" href="/">SOTA</a>
+        </nav>        
+      </header>
+    </section>
+    
+
+
+<article>
+  <div class="container">
+    <header>
+      <div class="meta">
+        <time pubdate datetime="2014-11-26" title="2014-11-26">November 26, 2014</time>
+      </div>
+      <h1 class="title">CoreOSクラスタ内のDockerコンテナの動的リンク</h1>
+    </header>
+    
+    <section>
+      
+
+<p><a href="https://coreos.com/blog/docker-dynamic-ambassador-powered-by-etcd/">Dynamic Docker links with an ambassador powered by etcd</a></p>
+
+<p>上記の記事を参考にCoreOSのクラスタ内で複数ホスト間にまたがりDockerコンテナを連携させる方法について検証した．</p>
+
+<h2 id="背景と問題:596208b804d94d869541a12339f27b5b">背景と問題</h2>
+
+<p>複数ホストにまたがりDockerのコンテナを接続する方法としては<a href="http://docs.docker.com/articles/ambassador_pattern_linking/">Ambassador パターン</a>が有名である．これはトラフィックを別ホストへforwardすることに特化したコンテナを立てる方法で，ホストに無駄な設定なし，かつDockerコンテナのみで行えるシンプルな方法である．例えば，あるホストから<code>redis-cli</code>を使って，別ホストで動く<code>redis</code>に接続する場合は以下のように接続する．</p>
+
+<pre><code class="language-bash">(redis-cli) --&gt; (ambassador) ---network---&gt; (ambassador) --&gt; (redis)
+</code></pre>
+
+<p><code>redis-cli</code>コンテナと<code>ambassador</code>コンテナ，<code>redis</code>コンテナと<code>ambassador</code>コンテナはdockerのlink機能で接続し，<code>ambassador</code>コンテナはトラフィックをネットワーク越しにフォワードする．</p>
+
+<p>この方法は，接続側がその相手先のホストを知っている必要がある．例えば上記の場合，<code>redis-cli</code>コンテナ側の<code>ambassador</code>コンテナは以下のように相手先のホストのIP（e.g., <code>192.168.1.52</code>）を指定して起動しなければならない．</p>
+
+<pre><code class="language-bash">$ docker run -d --name ambassador --expose 6379 -e REDIS_PORT_6379_TCP=tcp://192.168.1.52:6379 svendowideit/ambassador
+</code></pre>
+
+<p>ホストが固定されている場合は問題ないが，CoreOSのように動的にホストが変わる可能性がある場合は問題になる．接続先のホスト情報を直接既述すると，ホストが変わる度に設定を更新する必要があり，かなり億劫な感じになる．</p>
+
+<h2 id="coreosにおける1つの解法:596208b804d94d869541a12339f27b5b">CoreOSにおける1つの解法</h2>
+
+<p>CoreOSはクラスタの形成に分散Key-Valueストアであるetcdを使っている．このetcdを使うと動的な<code>ambassador</code>パターンを作り上げることができる．つまり，以下のようなことをする．</p>
+
+<ul>
+<li>接続される側は接続情報をetcdに書き込み続けるコンテナを立てる</li>
+<li>接続する側はその情報を読み込み続ける動的な<code>ambassador</code>コンテナを立てる</li>
+</ul>
+
+<p>あとは，この動的な<code>ambassador</code>コンテナとlink接続すれば，相手先の情報を環境変数として取得するとができる．これで接続する側は接続相手のホスト情報を知らなくてもよくなる．</p>
+
+<h2 id="検証ストーリー:596208b804d94d869541a12339f27b5b">検証ストーリー</h2>
+
+<p>これを実際にCoreOSクラスタを立てて検証してみる．</p>
+
+<p>ここでは，Docker公式のドキュメント<a href="http://docs.docker.com/articles/ambassador_pattern_linking/">&ldquo;Link via an Ambassador Container&rdquo;</a>と同様の例を用いる．クラスタ内のあるホストより<code>redis-cli</code>コンテナを使って，別ホストの<code>redis</code>コンテナに接続するという状況を考える．</p>
+
+<h2 id="coreosクラスタを立てる:596208b804d94d869541a12339f27b5b">CoreOSクラスタを立てる</h2>
+
+<p>利用するCoreOSクラスタは<a href="https://github.com/tcnksm/vagrant-digitalocean-coreos">tcnksm/vagrant-digitalocean-coreos</a>を使って，VagrantでDigitalOcean上に立てる．</p>
+
+<pre><code class="language-bash">$ export NUM_INSTANCES=3
+$ vagrant up --provider=digital_ocean
+</code></pre>
+
+<p>これで，DigitalOcean上に3つのCoreOSインスタンスが立ち上がる．</p>
+
+<h2 id="利用するコンテナ:596208b804d94d869541a12339f27b5b">利用するコンテナ</h2>
+
+<p>全部で5つのコンテナを用いる．</p>
+
+<p><img src="https://coreos.com/assets/images/media/etcd-ambassador-hosts.png" alt="https://coreos.com/assets/images/media/etcd-ambassador-hosts.png" />
+</p>
+
+<p><a href="https://coreos.com/assets/images/media/etcd-ambassador-hosts.png">https://coreos.com/assets/images/media/etcd-ambassador-hosts.png</a></p>
+
+<p>HostA（<code>redis</code>を動かすホスト）では以下のコンテナを立てる．</p>
+
+<ul>
+<li><strong>crosbymichael/redis</strong> - <a href="http://docs.docker.com/articles/ambassador_pattern_linking/">Ambassador パターン</a>で使われているものと同様のRedisコンテナ</li>
+<li><strong>polvi/simple-amb</strong> - <code>socat</code>コマンドを使って，特定のポートへのトラフィックを与えられたホストにforwardするだけのコンテナ．etcdへのフォーワードに利用する．</li>
+<li><strong>polvi/docker-register</strong> - <code>docker port</code>コマンドを使って与えられたDockerコンテナのIPとPortを取得し，etcdにそれを登録するコンテナ</li>
+</ul>
+
+<p>HostB（<code>redis-cli</code>を動かすホスト）では以下のコンテナを立てる．</p>
+
+<ul>
+<li><strong>polvi/simple-amb</strong> - HostAと同様のコンテナ．etcdへのフォーワードに利用する．</li>
+<li><strong>polvi/dynamic-etcd-amb</strong> - etcdからRedisコンテナのホストとIPを取得し，環境変数にそれを設定するコンテナ</li>
+<li><strong>relateiq/redis-cli</strong> - <a href="http://docs.docker.com/articles/ambassador_pattern_linking/">Ambassador パターン</a>で使われているものと同様のコンテナ</li>
+</ul>
+
+<h2 id="unitファイル:596208b804d94d869541a12339f27b5b">Unitファイル</h2>
+
+<p>CoreOSはコンテナの管理とスケジューリングにFleetを用い，その設定はUnitファイルで行う．上述したDockerコンテナを起動するためのUnitファイルについて簡単に説明する．なお，Fleetの詳しい使いかたなどは，<a href="http://deeeet.com/writing/2014/11/20/fleet/">&ldquo;Fleetの使い方，Unitファイルの書き方&rdquo;</a>に書いた．</p>
+
+<h3 id="hosta:596208b804d94d869541a12339f27b5b">HostA</h3>
+
+<p><strong>crosbymichael/redis</strong>を動かすための<code>redis.service</code>は以下．</p>
+
+<pre><code>[Unit]
+Description=Run redis
+
+[Service]
+TimeoutStartSec=0
+KillMode=none
+EnvironmentFile=/etc/environment
+ExecStartPre=-/usr/bin/docker kill %n
+ExecStartPre=-/usr/bin/docker rm %n
+ExecStartPre=/usr/bin/docker pull crosbymichael/redis
+ExecStart=/usr/bin/docker run --rm --name %n -p $COREOS_PRIVATE_IPV46379 crosbymichael/redis
+ExecStop=/usr/bin/docker stop -t 3 %n
+</code></pre>
+
+<p>単純に<strong>crosbymichael/redis</strong>コンテナを起動するだけ．<strong>polvi/docker-register</strong>コンテナを使って，ホストのIPとPortをetcdに登録する必要があるので，<code>-p ${COREOS_PRIVATE_IPV4}::6379</code>を指定して起動する．CoreOSはそのホスト情報を<code>/etc/environment</code>に保存しているので，それをそのまま使う．どのホストかを直接指定する必要はない．</p>
+
+<p><code>%n</code>はsystemdのUnitファイルの記法で，そのファイル名が代入される（今回の場合は，<code>redis.service</code>）．</p>
+
+<p><strong>polvi/simple-amb</strong>を動かすための<code>etcd-amb-redis.service</code>は以下．</p>
+
+<pre><code>[Unit]
+Description=Forward all traffic it gets on port 10000 to 172.17.42.1:4001 (redis)
+
+[Service]
+TimeoutStartSec=0
+KillMode=none
+ExecStartPre=-/usr/bin/docker kill %n
+ExecStartPre=-/usr/bin/docker rm %n
+ExecStartPre=/usr/bin/docker pull polvi/simple-amb
+ExecStart=/usr/bin/docker run --rm --name %n polvi/simple-amb 172.17.42.1:4001
+ExecStop=/usr/bin/docker stop -t 3 %n
+
+[X-Fleet]
+X-ConditionMachineOf=redis.service
+</code></pre>
+
+<p>このコンテナは特定のポート（<code>10000</code>port）のトラフィックを与えられた引数のホストにforwardする．CoreOSのDockerコンテナからは<code>172.17.42.1:4001</code>でそのetcdにアクセスできる．引数にそれを与えることで<code>10000</code>portへのトラフィックはすべてetcdにforwardされるようになる．</p>
+
+<p><code>X-ConditionMachineOf</code>に<code>redis.service</code>を指定することで，このコンテナは，<strong>crosbymichael/redis</strong>コンテナと同じホストにスケジューリングされるようになる．</p>
+
+<p><strong>polvi/docker-register</strong>の<code>register-redis-etcd.service</code>は以下．</p>
+
+<pre><code>[Unit]
+Description=Read the IP and port of redis.service from Docker API and publish it to etcd as service name of redis-A
+After=redis.service
+After=etcd-amb-redis.service
+Require=etcd-amb-redis.service
+
+[Service]
+TimeoutStartSec=0
+KillMode=none
+ExecStartPre=-/usr/bin/docker kill %n
+ExecStartPre=-/usr/bin/docker rm %n
+ExecStartPre=/usr/bin/docker pull polvi/docker-register
+ExecStart=/usr/bin/docker run --link etcd-amb-redis.service:etcd -v /var/run/docker.sock:/var/run/docker.sock --rm --name %n polvi/docker-register redis.service 6379 redis-A
+ExecStop=/usr/bin/docker stop -t 3 %n
+
+[X-Fleet]
+X-ConditionMachineOf=redis.service
+</code></pre>
+
+<p>このコンテナは与えられたコンテナのホストにおけるIPとPortのマッピング情報を取得し，それをetcdに登録する．今回は<strong>crosbymichael/redis</strong>コンテナの<code>6379</code>portのホストにおけるIPとPortのマッピング情報を<code>redis-A</code>という名前でetcdに登録する．<strong>polvi/docker-register</strong>コンテナとlinkで接続することにより，環境変数で<code>etcd</code>の接続先を取得する．</p>
+
+<p><code>X-ConditionMachineOf</code>に<code>redis.service</code>を指定することで，このコンテナは<strong>crosbymichael/redis</strong>コンテナと同じホストにスケジューリングされるようになる．</p>
+
+<h3 id="hostb:596208b804d94d869541a12339f27b5b">HostB</h3>
+
+<p><strong>polvi/simple-amb</strong>を動かすための<code>etcd-amb-redis-cli.service</code>は以下．</p>
+
+<pre><code>[Unit]
+Description=Forward all traffic it gets on port 10000 to 172.17.42.1:4001 (etcd)
+
+[Service]
+TimeoutStartSec=0
+KillMode=none
+ExecStartPre=-/usr/bin/docker kill %n
+ExecStartPre=-/usr/bin/docker rm %n
+ExecStartPre=/usr/bin/docker pull polvi/simple-amb
+ExecStart=/usr/bin/docker run --rm --name %n polvi/simple-amb 172.17.42.1:4001
+ExecStop=/usr/bin/docker stop -t 3 %n
+
+[X-Fleet]
+X-Conflicts=redis.service
+</code></pre>
+
+<p>内容はHostAの<code>etcd-amb-redis.service</code>と同様だが，スケジューリングの条件が異なる．<code>X-Conflicts</code>に<code>redis.service</code>を指定することで<strong>crosbymichael/redis</strong>コンテナとは異なるホストにスケジューリングされるようになる．</p>
+
+<p><strong>polvi/dynamic-etcd-amb</strong>の<code>redis-dyn-amb.service</code>は以下．</p>
+
+<pre><code>[Unit]
+Description=Tells the proxy to expose port 6379 and point it to the service registered as redis-A in etcd.
+After=etcd-amb-redis-cli.service
+Require=etcd-amb-redis-cli.service
+After=register-redis-etcd
+
+[Service]
+TimeoutStartSec=0
+KillMode=none
+ExecStartPre=-/usr/bin/docker kill %n
+ExecStartPre=-/usr/bin/docker rm %n
+ExecStartPre=/usr/bin/docker pull polvi/dynamic-etcd-amb
+ExecStart=/usr/bin/docker run --link etcd-amb-redis-cli.service:etcd --rm --name %n -p 127.0.0.16379 polvi/dynamic-etcd-amb redis-A 6379
+ExecStop=/usr/bin/docker stop -t 3 %n
+
+[X-Fleet]
+X-ConditionMachineOf=etcd-amb-redis-cli.service
+</code></pre>
+
+<p>このコンテナはetcdに保存されたホストへのプロキシとして動作する．<code>6379</code>portを解放し，そこへの接続を<code>redis-A</code>という名前でetcdに登録された<strong>crosbymichael/redis</strong>コンテナが動くIPとPortに向けるようにする．<strong>polvi/docker-register</strong>コンテナとlinkで接続することにより，環境変数で<code>etcd</code>の接続先を取得する．</p>
+
+<p><strong>relateiq/redis-cli</strong>コンテナは，このコンテナと接続することで，ネットワーク越しに<strong>crosbymichael/redis</strong>コンテナに接続する．</p>
+
+<h2 id="接続を試す:596208b804d94d869541a12339f27b5b">接続を試す</h2>
+
+<p>上述したUnitファイルで定義したサービスをCoreOSクラスタにデプロイし<code>redis</code>コンテナに接続してみる．</p>
+
+<p>まず，サービスのデプロイする．<code>.service</code>ファイルがあるディレクトリで以下を実行する．</p>
+
+<pre><code class="language-bash">$ fleetctl start *.service
+</code></pre>
+
+<p>サービスの起動を確認する．Unitファイルで定義したように別々のホストでサービスが起動していることが確認できる．</p>
+
+<pre><code class="language-bash">$ fleetctl list-units
+UNIT                            MACHINE                         ACTIVE  SUB
+etcd-amb-redis-cli.service      7f0be3a3.../10.132.180.245      active  running
+redis-dyn-amb.service           7f0be3a3.../10.132.180.245      active  running
+etcd-amb-redis.service          dc324c84.../10.132.181.182      active  running
+redis.service                   dc324c84.../10.132.181.182      active  running
+register-redis-etcd.service     dc324c84.../10.132.181.182      active  running
+</code></pre>
+
+<p><code>redis</code>コンテナに接続するには，<code>etcd-amb-redis-cli</code>コンテナが動いているホストに移動する必要がある．以下で移動できる．</p>
+
+<pre><code class="language-bash">$ fleetctl ssh etcd-amb-redis-cli
+</code></pre>
+
+<p>実際に接続してみる．</p>
+
+<pre><code class="language-bash">$ docker run -it --link redis-dyn-amb.service:redis relateiq/redis-cli
+redis 172.17.0.3:6379&gt; ping
+PONG
+</code></pre>
+
+<p>etcdに保存された情報をみると，<code>redis.service</code>が動いているホストの情報が保存されているのが確認できる．</p>
+
+<pre><code class="language-bash">$ etcdctl get /services/redis-A/redis.service
+{ &quot;port&quot;: 49155, &quot;host&quot;: &quot;10.132.181.182&quot; }
+</code></pre>
+
+<h3 id="耐障害性:596208b804d94d869541a12339f27b5b">耐障害性</h3>
+
+<p><code>redis</code>コンテナを再起動してもすぐに設定は更新され再接続できる．これは，<code>redis</code>コンテナが動くホスト情報のetcdへの動的な書き込み，読み込みにより実現できる．</p>
+
+<p>また，<code>redis</code>コンテナが動くホストを，ホストごと殺しても再び接続できる．これは，fleetによるフェイルオーバー（再スケジューリング）とetcdの動的に書き込み・読み込みにより実現できる．</p>
+
+<h2 id="まとめ:596208b804d94d869541a12339f27b5b">まとめ</h2>
+
+<p>CoreOSのクラスタ内で複数ホスト間にまたがりDockerコンテナを連携させる方法について検証した．etcdに接続先のホストを保存することで，コンテナがどのホストで動いているかを意識しないでそれに接続することができた．</p>
+
+      <div class="social">
+  
+  
+  <a href="https://twitter.com/share" class="twitter-share-button" data-via="deeeet" data-count="none">Tweet</a>
+  
+  
+</div>
+
+    </section>
+
+    <footer>
+      <address>
+        
+        <img src="/images/bio.jpeg"/>
+        
+        <p>Written by <strong><a rel="author" href="https://twitter.com/deeeet" title="Taichi Nakashima" target="_blank">Taichi Nakashima</a></strong><br>
+          <span class="muted">A Tokyo based PaaS engineer. Please contact me via twitter.</span>
+        </p>
+      </address>
+
+    </footer>
+
+  </div>
+</article>
+
+<script type="text/javascript" src="//ajax.googleapis.com/ajax/libs/jquery/1.7.2/jquery.min.js"></script>
+<script type="text/javascript" src="/js/main.js"></script>
+
+<script>!function(d,s,id){var js,fjs=d.getElementsByTagName(s)[0],p=/^http:/.test(d.location)?'http':'https';if(!d.getElementById(id)){js=d.createElement(s);js.id=id;js.src=p+'://platform.twitter.com/widgets.js';fjs.parentNode.insertBefore(js,fjs);}}(document, 'script', 'twitter-wjs');</script>
+
+
+<script type="text/javascript">var HN=[];HN.factory=function(e){return function(){HN.push([e].concat(Array.prototype.slice.call(arguments,0)))};},HN.on=HN.factory("on"),HN.once=HN.factory("once"),HN.off=HN.factory("off"),HN.emit=HN.factory("emit"),HN.load=function(){var e="hn-button.js";if(document.getElementById(e))return;var t=document.createElement("script");t.id=e,t.src="//hn-button.herokuapp.com/hn-button.js";var n=document.getElementsByTagName("script")[0];n.parentNode.insertBefore(t,n)},HN.load();</script>
+
+
+  <script>
+  (function(i,s,o,g,r,a,m){i['GoogleAnalyticsObject']=r;i[r]=i[r]||function(){
+  (i[r].q=i[r].q||[]).push(arguments)},i[r].l=1*new Date();a=s.createElement(o),
+  m=s.getElementsByTagName(o)[0];a.async=1;a.src=g;m.parentNode.insertBefore(a,m)
+  })(window,document,'script','//www.google-analytics.com/analytics.js','ga');
+
+  ga('create', 'UA-45390253-1', 'auto');
+  ga('send', 'pageview');
+
+</script>
+
+
+
+<script>
+  $(document).ready(function() {
+  
+  $('p:has(img)').css('text-align', 'center');
+  $('iframe').css('style', 'display: block; margin: 0px auto;');
+  });
+</script>
+

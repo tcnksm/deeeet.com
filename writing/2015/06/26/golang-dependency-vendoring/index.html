@@ -1,0 +1,292 @@
+<!doctype html>
+<html>
+  <head>
+    <meta http-equiv="content-type" content="text/html; charset=utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    
+    <title>Go言語のDependency/Vendoringの問題と今後．gbあるいはGo1.5 | SOTA</title>
+    
+    <link href="https://fonts.googleapis.com/css?family=Lato%3a900" rel="stylesheet" type="text/css">
+    <link rel="stylesheet" href="/css/main.css">
+    <link rel="shortcut icon" href="/favicon.png" type="image/x-icon" />
+    <link href="http://deeeet.com//index.xml" rel="alternate" type="application/rss+xml" title="" />
+    <meta name="title" content="http://deeeet.com/writing/2015/06/26/golang-dependency-vendoring/">
+    <link rel="canonical" href="http://deeeet.com/writing/2015/06/26/golang-dependency-vendoring/">
+    
+    <meta property="og:title" content="Go言語のDependency/Vendoringの問題と今後．gbあるいはGo1.5"/>
+    <meta property="og:url" content="http://deeeet.com/writing/2015/06/26/golang-dependency-vendoring/"/>
+  </head>
+  
+  <body>
+    <section class="site-nav">
+      <header>
+        <nav id="navigation">
+          <ul class="menu">
+            <li><a href="https://github.com/tcnksm/talks">Talks</a></li>
+            <li><a href="https://tcnksm.exposure.co/">Photos</a></li>
+          </ul>
+
+          <a class="name" href="/">SOTA</a>
+        </nav>        
+      </header>
+    </section>
+    
+
+
+<article>
+  <div class="container">
+    <header>
+      <div class="meta">
+        <time pubdate datetime="2015-06-26" title="2015-06-26">June 26, 2015</time>
+      </div>
+      <h1 class="title">Go言語のDependency/Vendoringの問題と今後．gbあるいはGo1.5</h1>
+    </header>
+    
+    <section>
+      
+
+<p>Go言語のDependency/Vendoringは長く批判の的になってきた（cf. <a href="http://0x74696d.com/posts/go-get-considered-harmful/">&ldquo;0x74696d | go get considered harmful&rdquo;</a>, <a href="https://news.ycombinator.com/item?id=9508022">HN</a>）．Go1.5からは実験的にVendoringの機能が入り，サードパーティからは<a href="https://twitter.com/davecheney">Dave Chaney</a>氏を中心として<a href="http://getgb.io/">gb</a>というプロジェクベースのビルドツールが登場している．なぜこれらのリリースやツールが登場したのか?それらはどのように問題を解決しようとしているのか?をつらつらと書いてみる．</p>
+
+<h2 id="dependencyの問題:c291a143fe15f6359ac59e461ca480d7">Dependencyの問題</h2>
+
+<p>最初にGo言語におけるDependecy（依存解決）の問題についてまとめる．Go言語のDependencyで問題なのはビルドの再現性が保証できないこと．この原因は<code>import</code>文にある．</p>
+
+<p>Go言語で外部パッケージを利用したいときは<code>import</code>文を使ってソースコード内にそれを記述する．この<code>import</code>文は2通りの解釈のされ方をする．<code>go get</code>はリモートレポジトリのfetch URLとして解釈し，コンパイラはローカルディスク上のソースのPathとして解釈する．例えばコマンドラインツールを作るときに外部パッケージとして<a href="https://github.com/mitchellh/cli">mitchellh/cli</a>を使いたい場合は以下のように記述する．</p>
+
+<pre><code class="language-go">import &quot;github.com/mitchellh/cli&quot;
+</code></pre>
+
+<p>これが書かれたコードを<code>go get</code>すると，ローカルディスクに<a href="https://github.com/mitchellh/cli">mitchellh/cli</a>がなければ<code>$GOPATH/src</code>以下にそれがfetchされる．ビルド時はそのPathに存在するコードが利用される．</p>
+
+<p><code>import</code>で問題になるのは，そこにバージョン（もしくはタグ，Revision）を指定できないこと．そのため独立した2つの<code>go get</code>が異なるコードをfetchしてしまう可能性がある．そのコードが互換をぶっ壊していたらビルドは失敗するかもしれない．つまり現状何もしないとビルドの再現性は保証できない．</p>
+
+<p>では以下のようにタグやバージョンを書けるようにすれば?となる．が，これは言語の互換を壊すことになる．</p>
+
+<pre><code class="language-go">import &quot;github.com/pkg/term&quot; &quot;{hash,tag,version}&quot;
+</code></pre>
+
+<p>以下のようにディレクトリ名にバージョン番号を埋め込むという方法もよく見る．が，これも結局異なるRevisionのコードをFetchしてまうことに変わりはなくビルドに再現性があるとは言えない．</p>
+
+<pre><code class="language-go">import &quot;github.com/project/v7/library&quot;
+</code></pre>
+
+<h2 id="vendoring:c291a143fe15f6359ac59e461ca480d7">Vendoring</h2>
+
+<p>再現性の問題を解決する方法として，依存するレポジトリを自分のレポジトリにそのまま含めてしまう（vendoringと呼ばれる）方法がある．こうしておくと依存レポジトリのupstreamの変更に影響を受けず，いつでもどのマシンでもビルドを再現できる．</p>
+
+<p>しかし何もしないとコンパイラがそのレポジトリのPathを探せなくなりビルドができなくなる．ビルドするには以下のどちらかを行う必要がある．</p>
+
+<ul>
+<li><code>$GOPATH</code>の書き換え</li>
+<li><code>import</code>の書き換え</li>
+</ul>
+
+<h3 id="gopath-の書き換え:c291a143fe15f6359ac59e461ca480d7"><code>$GOPATH</code>の書き換え</h3>
+
+<p>まずは<code>$GOPATH</code>を書き換える方法．この場合はそもそもコードをvendoringするときに<code>$GOPATH/src/github.com...</code>と同じディレクトリ構成を作らなければならない．その上でそのディレクトリを<code>$GOPATH</code>に追加してビルドを実行する．</p>
+
+<p>例えば外部パッケージ<a href="https://github.com/mitchellh/cli">mitchellh/cli</a>をレポジトリ内の<code>ext</code>ディレクトリにvendoringしたい場合は，まず以下のようなディレクトリ構成でそれをvendoringをする．</p>
+
+<pre><code class="language-go">$ tree ext
+ext
+└── src
+    └── github.com
+        └── mitchellh
+            └── cli
+</code></pre>
+
+<p>そしてビルド時は以下のように<code>$GOPATH</code>に<code>ext</code>ディレクトリを含めるようにする．</p>
+
+<pre><code class="language-bash">$ GOPATH=$(pwd)/ext:$GOPATH go build 
+</code></pre>
+
+<p>このやり方が微妙なのは毎回自分で<code>$GOPATH</code>の変更を意識しないといけないこと（Fork先でも意識してもらわないといけない）．</p>
+
+<h3 id="importの書き換え:c291a143fe15f6359ac59e461ca480d7">importの書き換え</h3>
+
+<p>次に<code>import</code>を書き換える方法．レポジトリ内のvendoringしたディレクトリへと書き換えてしまう．例えば<code>github.com/tcnksm/r</code>というレポジトリの<code>ext</code>ディレクトリに外部パッケージ<a href="https://github.com/mitchellh/cli">mitchellh/cli</a>をvendoringしたとする．この場合は以下のように<code>import</code>を書き換える．</p>
+
+<pre><code class="language-go">import &quot;github.com/mitchellh/cli&quot; // Before
+</code></pre>
+
+<pre><code class="language-go">import &quot;github.com/tcnksm/r/ext/cli&quot; // After
+</code></pre>
+
+<p>これはあまり見ない．そもそもソースを書き換えるのが好まれないし，upstreamを見失うかもしれない．また多くの場合<code>import</code>文が異常に長く複雑になる．</p>
+
+<h3 id="godep:c291a143fe15f6359ac59e461ca480d7">Godep</h3>
+
+<p><code>$GOPATH</code>の書き換えやそれに合ったディレクトリの作成，<code>import</code>の書き換えを自分で管理するのは煩雑なのでこれらを簡単にするツールは多く登場している．その中で多く使われているのが<a href="https://github.com/tools/godep">godep</a>というツール．</p>
+
+<p><code>godep</code>は使い始めるのも簡単で，例えば現在のレポジトリの依存をすべてvendoringするには以下を実行するだけで良い．</p>
+
+<pre><code class="language-bash">$ godep save
+</code></pre>
+
+<p><code>godep</code>はレポジトリ内に<code>Godep/_workspace</code>を作成しその中に<code>$GOPATH</code>の流儀に従い依存をvendoringする．そして同時に<code>Godep.json</code>ファイルを作成し依存のバージョンも管理してくれる．</p>
+
+<p><code>go</code>コマンドを実行する場合は，以下のようにそれを<code>godep</code>でラップすれば<code>$GOAPTH</code>の書き換えもしてくれる．</p>
+
+<pre><code class="language-bash">$ godep go build
+</code></pre>
+
+<p><code>godep save -r</code>とすると<code>import</code>を書き換えになる．そうすると以後<code>$GOPATH</code>の書き換えは不要になり<code>godep</code>コマンドは不要になる．</p>
+
+<h3 id="godep-1:c291a143fe15f6359ac59e461ca480d7">Godep?</h3>
+
+<p><code>Godep</code>は多く使われているが以下のような問題がある</p>
+
+<ul>
+<li><code>Godep.json</code>は決定版の依存管理ファイルではない</li>
+<li>そもそも依存管理ファイル（<code>Godep.json</code>）を持つのが鬱陶しい</li>
+<li><code>$GOAPATH</code>書き換え方式だと<code>go get</code>が使えない</li>
+</ul>
+
+<p><code>import</code>の書き換え（<code>godep save -r</code>）をすると<code>go get</code>は使えるが問題が起こる．例えば<code>r</code>というレポジトリがあり，mainパッケージ<code>r/c</code>とmainパッケージではない<code>r/p</code>があるとする．<code>r/c</code>は<code>r/p</code>をimportしており，<code>r/p</code>は外部パッケージの<code>d</code>に依存しているとする．このとき<code>d</code>を<code>r/Godeps/_workspace</code>にvendoringして<code>import</code>を<code>d</code>から<code>r/Godeps/_workspace/.../d</code>に書き換えるとする．</p>
+
+<p>これだけなら問題ないが，別のパッケージ<code>u</code>が登場して<code>r/p</code>と<code>d</code>に依存していると問題が起こる．<code>r/p</code>はもはや<code>d</code>に依存しておらず<code>r/Godeps/_workspace/.../d</code>をimportする．<code>d</code>と<code>r/Godeps/_workspace/.../d</code>は異なるパッケージなのでtype assertionなどで死ぬ</p>
+
+<pre><code class="language-bash">cannot use d (type &quot;github.com/tcnksm/r/Godeps/_workspace/src/github.com/dep/d&quot;.D) as type &quot;github.com/tcnksm/d&quot;.D in argument to ...
+</code></pre>
+
+<p>こういうわけでvendoringはまだ最高の解が存在するとは言えない．</p>
+
+<h2 id="gb:c291a143fe15f6359ac59e461ca480d7">gb</h2>
+
+<ul>
+<li><a href="http://dave.cheney.net/2015/06/09/gb-a-project-based-build-tool-for-the-go-programming-language">gb, a project based build tool for the Go programming language</a></li>
+<li><a href="http://getgb.io/rationale/">gb · Design rationale</a></li>
+</ul>
+
+<p>そんな中<code>gb</code>というツールも登場している．<code>gb</code>はプロジェクトベースのビルドツール．プロジェクトごとに必要なコード/その依存をすべてvendoringし同じビルドを再現する．なぜプロジェクトベースが良いのか．</p>
+
+<ul>
+<li>自分で書いたコードとそれが依存する他人が書いたコードを明確に分けて（ディレクトリを分けて）管理することができる</li>
+<li>ビルドのたびに外部にfetchする必要がなくいつでもビルドができる．外的要因（e.g., GitHubがダウンしている）の影響を受けない</li>
+<li>逆に依存はすべてプロジェクトに含まれているので依存ライブラリのアップデートはatomicになり，チームメンバーすべてに影響する（<code>go get -u</code>は不要になる）</li>
+</ul>
+
+<p>そして<code>gb</code>には以下の特徴がある．</p>
+
+<ul>
+<li><code>go</code> toolのWrapperではない（すべて書き直されている）</li>
+<li><code>$GOPATH</code>の書き換えをしない</li>
+<li><code>import</code>の書き換えをしない</li>
+<li>依存管理ファイルが必要ない（<code>gb-vendor</code>プラグインを使うと必要）</li>
+</ul>
+
+<p>使い心地は<a href="http://dave.cheney.net/2015/06/09/gb-a-project-based-build-tool-for-the-go-programming-language">本人による記事</a>を見るのが良い．プロジェクトとしてすべてのコードを管理することになるのでシンプルかつ明確になるなと思う．vendoringと自分のソースの境界も明確なので，vendoringしたパッケージのアップデートもそこまで苦ではない（<code>gb-vendor</code>を使う，もしくは<code>git</code>や<code>hg</code>を使う）．</p>
+
+<p><code>Godep</code>のようなハックではないのも良い．特に複数人のチームで大規模な開発をしていくときに便利なのではと思う（そういう場合がちゃんと考えられてる）．「<code>go</code>toolの書き直し」て！と思うかもしれないがDave Chaney氏なので信頼できる．</p>
+
+<h2 id="go1-5:c291a143fe15f6359ac59e461ca480d7">Go1.5</h2>
+
+<ul>
+<li><a href="https://docs.google.com/document/d/1CJnU6ZKvsp21B0lQwbJlKFt8Zz4EWscaCRy_EwK8ja8">Go 1.5+ &ldquo;External&rdquo; Packages</a></li>
+<li><a href="https://groups.google.com/forum/#!msg/golang-dev/74zjMON9glU/4lWCRDCRZg0J">proposal: external packages</a></li>
+</ul>
+
+<p>Go本家もちゃんとこの問題には取り組んでいて2015年8月にリリースされる予定になっているGo1.5にvendoringの機能が実験的に入りそう．まだちゃんとしたProposalではなさそうだが以下のようになりそう．</p>
+
+<ul>
+<li><code>r</code>というレポジトリのパッケージ<code>r/p</code>がパッケージ<code>d</code>に依存しているとする</li>
+<li>パッケージ<code>d</code>を<code>r/vendor/d</code>にvendoringし<code>r</code>内でビルドすると<code>d</code>は<code>r/vendor/d</code>と解釈される</li>
+<li><code>r/vendor/p</code>が存在しない（vendoringしていない）場合は<code>p</code>と解釈する</li>
+<li>複数の解釈がありえる場合はもっとも長いspecificなものを選択する</li>
+</ul>
+
+<p>例えば<code>github.com/tcnksm/r</code>というレポジトリに<a href="https://github.com/mitchellh/cli">mitchellh/cli</a>をvendoringしたい場合は，<code>vendor</code>ディレクトリに以下のようにvendoringする．</p>
+
+<pre><code class="language-go">$ tree vendor
+vendor
+└── github.com
+    └── mitchellh
+        └── cli
+</code></pre>
+
+<p>この時vendoring機能を有効にしてビルドすると<code>vendor</code>が存在するので</p>
+
+<pre><code class="language-go">import &quot;github.com/mitchellh/cli&quot;
+</code></pre>
+
+<p>は，以下のように解釈される．</p>
+
+<pre><code class="language-go">import &quot;github.com/tcnksm/r/vendor/github.com/mitchellh/cli&quot;
+</code></pre>
+
+<p>この機能はすでに試すことができる．Go1.5をビルドして以下の環境変数を有効にすればよい．</p>
+
+<pre><code class="language-bash">$ export GO15VENDOREXPERIMENT=1
+</code></pre>
+
+<p>これは<code>import</code>文のResolution（解像度）を考慮しないといけなくなるが，普通に良さそう．<code>import</code>を書き換える必要もないし<code>vendor</code>を使うか使わないかをプロジェクトごとにわけることができる．まだ確定ではないので静観するが<code>go</code> toolだけでなんとかできるならそれに越したことはない．</p>
+
+<h2 id="まとめ:c291a143fe15f6359ac59e461ca480d7">まとめ</h2>
+
+<p>とりあえず社内でチーム開発するもの，かつ大規模になりそう（外部の依存が多そう）なものには<code>gb</code>を考えてみても良いのではと思っている．個人的に開発してるものはそこまで外部パッケージに依存してないので困ってない．もし必要になればGo本家が確定するまでは<code>Makefile</code>と<code>Godep</code>で頑張る．</p>
+
+<h3 id="参考:c291a143fe15f6359ac59e461ca480d7">参考</h3>
+
+<ul>
+<li><a href="http://go-talks.appspot.com/github.com/davecheney/presentations/reproducible-builds.slide#1">Reproducible Builds</a></li>
+<li><a href="https://walledcity.com/supermighty/building-go-projects-with-gb">Building Go projects with gb - Supermighty</a></li>
+<li><a href="https://github.com/tools/godep/issues/127">how to rewrite import paths #127</a></li>
+<li><a href="http://talks.golang.org/2015/state-of-go-may.slide#1">The State of Go</a></li>
+<li><a href="http://talks.golang.org/2015/gogo.slide#1">Go in Go</a></li>
+</ul>
+
+      <div class="social">
+  
+  
+  <a href="https://twitter.com/share" class="twitter-share-button" data-via="deeeet" data-count="none">Tweet</a>
+  
+  
+</div>
+
+    </section>
+
+    <footer>
+      <address>
+        
+        <img src="/images/bio.jpeg"/>
+        
+        <p>Written by <strong><a rel="author" href="https://twitter.com/deeeet" title="Taichi Nakashima" target="_blank">Taichi Nakashima</a></strong><br>
+          <span class="muted">A Tokyo based PaaS engineer. Please contact me via twitter.</span>
+        </p>
+      </address>
+
+    </footer>
+
+  </div>
+</article>
+
+<script type="text/javascript" src="//ajax.googleapis.com/ajax/libs/jquery/1.7.2/jquery.min.js"></script>
+<script type="text/javascript" src="/js/main.js"></script>
+
+<script>!function(d,s,id){var js,fjs=d.getElementsByTagName(s)[0],p=/^http:/.test(d.location)?'http':'https';if(!d.getElementById(id)){js=d.createElement(s);js.id=id;js.src=p+'://platform.twitter.com/widgets.js';fjs.parentNode.insertBefore(js,fjs);}}(document, 'script', 'twitter-wjs');</script>
+
+
+<script type="text/javascript">var HN=[];HN.factory=function(e){return function(){HN.push([e].concat(Array.prototype.slice.call(arguments,0)))};},HN.on=HN.factory("on"),HN.once=HN.factory("once"),HN.off=HN.factory("off"),HN.emit=HN.factory("emit"),HN.load=function(){var e="hn-button.js";if(document.getElementById(e))return;var t=document.createElement("script");t.id=e,t.src="//hn-button.herokuapp.com/hn-button.js";var n=document.getElementsByTagName("script")[0];n.parentNode.insertBefore(t,n)},HN.load();</script>
+
+
+  <script>
+  (function(i,s,o,g,r,a,m){i['GoogleAnalyticsObject']=r;i[r]=i[r]||function(){
+  (i[r].q=i[r].q||[]).push(arguments)},i[r].l=1*new Date();a=s.createElement(o),
+  m=s.getElementsByTagName(o)[0];a.async=1;a.src=g;m.parentNode.insertBefore(a,m)
+  })(window,document,'script','//www.google-analytics.com/analytics.js','ga');
+
+  ga('create', 'UA-45390253-1', 'auto');
+  ga('send', 'pageview');
+
+</script>
+
+
+
+<script>
+  $(document).ready(function() {
+  
+  $('p:has(img)').css('text-align', 'center');
+  $('iframe').css('style', 'display: block; margin: 0px auto;');
+  });
+</script>
+

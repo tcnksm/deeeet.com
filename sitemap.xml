@@ -1,0 +1,875 @@
+<?xml version="1.0" encoding="utf-8" standalone="yes" ?>
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+  
+  <url>
+    <loc>http://deeeet.com/</loc>
+    <lastmod>2015-10-04T22:07:21+09:00</lastmod>
+    <priority>0</priority>
+    
+  </url>
+  
+  <url>
+    <loc>http://deeeet.com/writing/2015/10/04/otto/</loc>
+    <lastmod>2015-10-04T22:07:21+09:00</lastmod>
+    
+  </url>
+  
+  <url>
+    <loc>http://deeeet.com/writing/2015/09/25/talking/</loc>
+    <lastmod>2015-09-25T08:48:30+09:00</lastmod>
+    
+  </url>
+  
+  <url>
+    <loc>http://deeeet.com/writing/2015/09/17/qa-omega/</loc>
+    <lastmod>2015-09-17T18:47:11+09:00</lastmod>
+    
+  </url>
+  
+  <url>
+    <loc>http://deeeet.com/writing/2015/09/01/apache-kafka/</loc>
+    <lastmod>2015-09-01T18:13:38+09:00</lastmod>
+    
+  </url>
+  
+  <url>
+    <loc>http://deeeet.com/writing/2015/08/17/boot2kubernetes-jp/</loc>
+    <lastmod>2015-08-17T23:47:14+09:00</lastmod>
+    
+  </url>
+  
+  <url>
+    <loc>http://deeeet.com/writing/2015/07/22/go1_5-cross-compile/</loc>
+    <lastmod>2015-07-22T09:54:57+09:00</lastmod>
+    
+  </url>
+  
+  <url>
+    <loc>http://deeeet.com/writing/2015/06/26/golang-dependency-vendoring/</loc>
+    <lastmod>2015-06-26T12:15:03+09:00</lastmod>
+    
+  </url>
+  
+  <url>
+    <loc>http://deeeet.com/writing/2015/06/07/sf-coffee/</loc>
+    <lastmod>2015-06-07T23:03:03-07:00</lastmod>
+    
+  </url>
+  
+  <url>
+    <loc>http://deeeet.com/writing/2015/06/03/visit-docker-inc/</loc>
+    <lastmod>2015-06-03T16:56:34-07:00</lastmod>
+    
+  </url>
+  
+  <url>
+    <loc>http://deeeet.com/writing/2015/05/11/gox-server/</loc>
+    <lastmod>2015-05-11T22:35:55+09:00</lastmod>
+    
+  </url>
+  
+  <url>
+    <loc>http://deeeet.com/writing/2015/05/07/heroku-docker/</loc>
+    <lastmod>2015-05-07T09:08:55+09:00</lastmod>
+    
+  </url>
+  
+  <url>
+    <loc>http://deeeet.com/writing/2015/04/28/pingo/</loc>
+    <lastmod>2015-04-28T13:18:07+09:00</lastmod>
+    
+  </url>
+  
+  <url>
+    <loc>http://deeeet.com/writing/2015/04/20/docker-1_6_distribution/</loc>
+    <lastmod>2015-04-20T22:55:35+09:00</lastmod>
+    
+  </url>
+  
+  <url>
+    <loc>http://deeeet.com/writing/2015/04/17/panicwrap/</loc>
+    <lastmod>2015-04-17T00:18:38+09:00</lastmod>
+    
+  </url>
+  
+  <url>
+    <loc>http://deeeet.com/writing/2015/04/13/coreos-meetup-tokyo-1/</loc>
+    <lastmod>2015-04-13T22:03:28+09:00</lastmod>
+    
+  </url>
+  
+  <url>
+    <loc>http://deeeet.com/writing/2015/04/07/go-latest/</loc>
+    <lastmod>2015-04-07T00:02:56+09:00</lastmod>
+    
+  </url>
+  
+  <url>
+    <loc>http://deeeet.com/writing/2015/03/17/serverspec-for-automation/</loc>
+    <lastmod>2015-03-17T16:16:17+09:00</lastmod>
+    
+  </url>
+  
+  <url>
+    <loc>http://deeeet.com/writing/2015/03/12/appc-discover/</loc>
+    <lastmod>2015-03-12T23:20:39+09:00</lastmod>
+    
+  </url>
+  
+  <url>
+    <loc>http://deeeet.com/writing/2015/03/12/rocket/</loc>
+    <lastmod>2015-03-12T00:58:54+09:00</lastmod>
+    
+  </url>
+  
+  <url>
+    <loc>http://deeeet.com/writing/2015/02/17/docker-bad-points/</loc>
+    <lastmod>2015-02-17T23:32:16+09:00</lastmod>
+    
+  </url>
+  
+  <url>
+    <loc>http://deeeet.com/writing/2015/02/11/docker-1_5/</loc>
+    <lastmod>2015-02-11T22:04:50+09:00</lastmod>
+    
+  </url>
+  
+  <url>
+    <loc>http://deeeet.com/writing/2015/02/03/crypt/</loc>
+    <lastmod>2015-02-03T23:09:51+09:00</lastmod>
+    
+  </url>
+  
+  <url>
+    <loc>http://deeeet.com/writing/2015/01/26/review-orchestrating-docker/</loc>
+    <lastmod>2015-01-26T00:00:00+00:00</lastmod>
+    
+  </url>
+  
+  <url>
+    <loc>http://deeeet.com/talking/2015/01/21/docker-meetup-4/</loc>
+    <lastmod>2015-01-21T00:00:00+00:00</lastmod>
+    
+  </url>
+  
+  <url>
+    <loc>http://deeeet.com/writing/2015/01/08/dockerhub-hook/</loc>
+    <lastmod>2015-01-08T20:29:53+09:00</lastmod>
+    
+  </url>
+  
+  <url>
+    <loc>http://deeeet.com/writing/2015/01/07/terraform-coreos/</loc>
+    <lastmod>2015-01-07T00:00:00+00:00</lastmod>
+    
+  </url>
+  
+  <url>
+    <loc>http://deeeet.com/writing/2014/12/31/music-2014/</loc>
+    <lastmod>2014-12-31T13:09:00+09:00</lastmod>
+    
+  </url>
+  
+  <url>
+    <loc>http://deeeet.com/writing/2014/12/25/hugo/</loc>
+    <lastmod>2014-12-25T01:34:57+09:00</lastmod>
+    
+  </url>
+  
+  <url>
+    <loc>http://deeeet.com/writing/2014/12/18/golang-cli-test/</loc>
+    <lastmod>2014-12-18T00:00:00+00:00</lastmod>
+    
+  </url>
+  
+  <url>
+    <loc>http://deeeet.com/writing/2014/12/01/docker-link-pattern/</loc>
+    <lastmod>2014-12-01T00:00:00+00:00</lastmod>
+    
+  </url>
+  
+  <url>
+    <loc>http://deeeet.com/writing/2014/12/01/go-conference-2014-autumn/</loc>
+    <lastmod>2014-12-01T00:00:00+00:00</lastmod>
+    
+  </url>
+  
+  <url>
+    <loc>http://deeeet.com/writing/2014/11/26/coreos-etcd-docker-link/</loc>
+    <lastmod>2014-11-26T00:00:00+00:00</lastmod>
+    
+  </url>
+  
+  <url>
+    <loc>http://deeeet.com/writing/2014/11/20/fleet/</loc>
+    <lastmod>2014-11-20T00:00:00+00:00</lastmod>
+    
+  </url>
+  
+  <url>
+    <loc>http://deeeet.com/writing/2014/11/17/coreos/</loc>
+    <lastmod>2014-11-17T00:00:00+00:00</lastmod>
+    
+  </url>
+  
+  <url>
+    <loc>http://deeeet.com/writing/2014/11/04/dockerfile-centos/</loc>
+    <lastmod>2014-11-04T00:00:00+00:00</lastmod>
+    
+  </url>
+  
+  <url>
+    <loc>http://deeeet.com/writing/2014/10/30/fabric/</loc>
+    <lastmod>2014-10-30T00:00:00+00:00</lastmod>
+    
+  </url>
+  
+  <url>
+    <loc>http://deeeet.com/talking/2014/10/23/communities-meetup/</loc>
+    <lastmod>2014-10-23T22:37:06+09:00</lastmod>
+    
+  </url>
+  
+  <url>
+    <loc>http://deeeet.com/writing/2014/10/16/golang-in-ci-as-a-service/</loc>
+    <lastmod>2014-10-16T00:00:00+00:00</lastmod>
+    
+  </url>
+  
+  <url>
+    <loc>http://deeeet.com/writing/2014/10/16/wercker/</loc>
+    <lastmod>2014-10-16T00:00:00+00:00</lastmod>
+    
+  </url>
+  
+  <url>
+    <loc>http://deeeet.com/writing/2014/10/08/boot2docker-guest-additions/</loc>
+    <lastmod>2014-10-08T00:00:00+00:00</lastmod>
+    
+  </url>
+  
+  <url>
+    <loc>http://deeeet.com/writing/2014/10/02/docker-private-registry-auth/</loc>
+    <lastmod>2014-10-02T00:00:00+00:00</lastmod>
+    
+  </url>
+  
+  <url>
+    <loc>http://deeeet.com/writing/2014/09/25/dockerhub-official-language-stacks/</loc>
+    <lastmod>2014-09-25T00:00:00+00:00</lastmod>
+    
+  </url>
+  
+  <url>
+    <loc>http://deeeet.com/writing/2014/09/17/docker-1-2-restart/</loc>
+    <lastmod>2014-09-17T00:00:00+00:00</lastmod>
+    
+  </url>
+  
+  <url>
+    <loc>http://deeeet.com/writing/2014/09/10/microservices/</loc>
+    <lastmod>2014-09-10T00:00:00+00:00</lastmod>
+    
+  </url>
+  
+  <url>
+    <loc>http://deeeet.com/writing/2014/09/09/tmux-plugin-manager/</loc>
+    <lastmod>2014-09-09T00:00:00+00:00</lastmod>
+    
+  </url>
+  
+  <url>
+    <loc>http://deeeet.com/talking/2014/08/31/yapc-2014/</loc>
+    <lastmod>2014-08-31T00:00:00+00:00</lastmod>
+    
+  </url>
+  
+  <url>
+    <loc>http://deeeet.com/writing/2014/08/31/yapc-2014/</loc>
+    <lastmod>2014-08-31T00:00:00+00:00</lastmod>
+    
+  </url>
+  
+  <url>
+    <loc>http://deeeet.com/writing/2014/08/27/cli-reference/</loc>
+    <lastmod>2014-08-27T00:00:00+00:00</lastmod>
+    
+  </url>
+  
+  <url>
+    <loc>http://deeeet.com/writing/2014/08/18/unix-wildcards-gone-wild/</loc>
+    <lastmod>2014-08-18T00:00:00+00:00</lastmod>
+    
+  </url>
+  
+  <url>
+    <loc>http://deeeet.com/talking/2014/08/11/golang-study/</loc>
+    <lastmod>2014-08-11T00:00:00+00:00</lastmod>
+    
+  </url>
+  
+  <url>
+    <loc>http://deeeet.com/writing/2014/08/11/golang-study/</loc>
+    <lastmod>2014-08-11T00:00:00+00:00</lastmod>
+    
+  </url>
+  
+  <url>
+    <loc>http://deeeet.com/writing/2014/08/07/github-heroku-dist/</loc>
+    <lastmod>2014-08-07T00:00:00+00:00</lastmod>
+    
+  </url>
+  
+  <url>
+    <loc>http://deeeet.com/writing/2014/08/06/podcast-2014/</loc>
+    <lastmod>2014-08-06T00:00:00+00:00</lastmod>
+    
+  </url>
+  
+  <url>
+    <loc>http://deeeet.com/writing/2014/08/04/terraform-heroku/</loc>
+    <lastmod>2014-08-04T00:00:00+00:00</lastmod>
+    
+  </url>
+  
+  <url>
+    <loc>http://deeeet.com/writing/2014/07/31/readme/</loc>
+    <lastmod>2014-07-31T00:00:00+00:00</lastmod>
+    
+  </url>
+  
+  <url>
+    <loc>http://deeeet.com/writing/2014/07/30/golang-parallel-by-cpu/</loc>
+    <lastmod>2014-07-30T00:00:00+00:00</lastmod>
+    
+  </url>
+  
+  <url>
+    <loc>http://deeeet.com/writing/2014/07/29/ghr/</loc>
+    <lastmod>2014-07-29T00:00:00+00:00</lastmod>
+    
+  </url>
+  
+  <url>
+    <loc>http://deeeet.com/writing/2014/07/23/github-release/</loc>
+    <lastmod>2014-07-23T00:00:00+00:00</lastmod>
+    
+  </url>
+  
+  <url>
+    <loc>http://deeeet.com/writing/2014/07/23/golang-pull-request/</loc>
+    <lastmod>2014-07-23T00:00:00+00:00</lastmod>
+    
+  </url>
+  
+  <url>
+    <loc>http://deeeet.com/writing/2014/07/15/docker-container-name/</loc>
+    <lastmod>2014-07-15T00:00:00+00:00</lastmod>
+    
+  </url>
+  
+  <url>
+    <loc>http://deeeet.com/writing/2014/07/14/libswarm/</loc>
+    <lastmod>2014-07-14T00:00:00+00:00</lastmod>
+    
+  </url>
+  
+  <url>
+    <loc>http://deeeet.com/talking/2014/07/07/docker-meetup-3/</loc>
+    <lastmod>2014-07-07T00:00:00+00:00</lastmod>
+    
+  </url>
+  
+  <url>
+    <loc>http://deeeet.com/writing/2014/07/07/flynn/</loc>
+    <lastmod>2014-07-07T00:00:00+00:00</lastmod>
+    
+  </url>
+  
+  <url>
+    <loc>http://deeeet.com/writing/2014/07/01/docker-behind-proxy/</loc>
+    <lastmod>2014-07-01T00:00:00+00:00</lastmod>
+    
+  </url>
+  
+  <url>
+    <loc>http://deeeet.com/writing/2014/06/27/yo/</loc>
+    <lastmod>2014-06-27T00:00:00+00:00</lastmod>
+    
+  </url>
+  
+  <url>
+    <loc>http://deeeet.com/writing/2014/06/22/cli-init/</loc>
+    <lastmod>2014-06-22T00:00:00+00:00</lastmod>
+    
+  </url>
+  
+  <url>
+    <loc>http://deeeet.com/writing/2014/06/17/hikarie-go1/</loc>
+    <lastmod>2014-06-17T00:00:00+00:00</lastmod>
+    
+  </url>
+  
+  <url>
+    <loc>http://deeeet.com/writing/2014/06/02/heroku-api-design/</loc>
+    <lastmod>2014-06-02T00:00:00+00:00</lastmod>
+    
+  </url>
+  
+  <url>
+    <loc>http://deeeet.com/writing/2014/05/30/ylug-111/</loc>
+    <lastmod>2014-05-30T00:00:00+00:00</lastmod>
+    
+  </url>
+  
+  <url>
+    <loc>http://deeeet.com/writing/2014/05/26/go-code-review/</loc>
+    <lastmod>2014-05-26T00:00:00+00:00</lastmod>
+    
+  </url>
+  
+  <url>
+    <loc>http://deeeet.com/writing/2014/05/23/heroku-meetup-12/</loc>
+    <lastmod>2014-05-23T00:00:00+00:00</lastmod>
+    
+  </url>
+  
+  <url>
+    <loc>http://deeeet.com/writing/2014/05/20/brew-tap/</loc>
+    <lastmod>2014-05-20T00:00:00+00:00</lastmod>
+    
+  </url>
+  
+  <url>
+    <loc>http://deeeet.com/writing/2014/05/19/gox/</loc>
+    <lastmod>2014-05-19T00:00:00+00:00</lastmod>
+    
+  </url>
+  
+  <url>
+    <loc>http://deeeet.com/writing/2014/05/18/shell-template/</loc>
+    <lastmod>2014-05-18T00:00:00+00:00</lastmod>
+    
+  </url>
+  
+  <url>
+    <loc>http://deeeet.com/writing/2014/05/14/logspout/</loc>
+    <lastmod>2014-05-14T00:00:00+00:00</lastmod>
+    
+  </url>
+  
+  <url>
+    <loc>http://deeeet.com/writing/2014/05/13/brewfile-version/</loc>
+    <lastmod>2014-05-13T00:00:00+00:00</lastmod>
+    
+  </url>
+  
+  <url>
+    <loc>http://deeeet.com/writing/2014/05/11/docker-host-networking/</loc>
+    <lastmod>2014-05-11T00:00:00+00:00</lastmod>
+    
+  </url>
+  
+  <url>
+    <loc>http://deeeet.com/writing/2014/05/11/docker-network/</loc>
+    <lastmod>2014-05-11T00:00:00+00:00</lastmod>
+    
+  </url>
+  
+  <url>
+    <loc>http://deeeet.com/writing/2014/05/08/vagrant-docker-provider/</loc>
+    <lastmod>2014-05-08T00:00:00+00:00</lastmod>
+    
+  </url>
+  
+  <url>
+    <loc>http://deeeet.com/writing/2014/05/06/direnv/</loc>
+    <lastmod>2014-05-06T00:00:00+00:00</lastmod>
+    
+  </url>
+  
+  <url>
+    <loc>http://deeeet.com/writing/2014/05/01/what-is-docker/</loc>
+    <lastmod>2014-05-01T00:00:00+00:00</lastmod>
+    
+  </url>
+  
+  <url>
+    <loc>http://deeeet.com/writing/2014/04/30/beer-on-terminal/</loc>
+    <lastmod>2014-04-30T00:00:00+00:00</lastmod>
+    
+  </url>
+  
+  <url>
+    <loc>http://deeeet.com/writing/2014/04/23/martini/</loc>
+    <lastmod>2014-04-23T00:00:00+00:00</lastmod>
+    
+  </url>
+  
+  <url>
+    <loc>http://deeeet.com/writing/2014/04/20/lightroom-s3/</loc>
+    <lastmod>2014-04-20T00:00:00+00:00</lastmod>
+    
+  </url>
+  
+  <url>
+    <loc>http://deeeet.com/writing/2014/04/13/docker-meetup-2/</loc>
+    <lastmod>2014-04-13T00:00:00+00:00</lastmod>
+    
+  </url>
+  
+  <url>
+    <loc>http://deeeet.com/writing/2014/04/08/docker-serf-haproxy/</loc>
+    <lastmod>2014-04-08T00:00:00+00:00</lastmod>
+    
+  </url>
+  
+  <url>
+    <loc>http://deeeet.com/writing/2014/04/01/serf-haproxy/</loc>
+    <lastmod>2014-04-01T00:00:00+00:00</lastmod>
+    
+  </url>
+  
+  <url>
+    <loc>http://deeeet.com/writing/2014/03/31/docker-serf/</loc>
+    <lastmod>2014-03-31T00:00:00+00:00</lastmod>
+    
+  </url>
+  
+  <url>
+    <loc>http://deeeet.com/writing/2014/03/30/docker-alias/</loc>
+    <lastmod>2014-03-30T00:00:00+00:00</lastmod>
+    
+  </url>
+  
+  <url>
+    <loc>http://deeeet.com/writing/2014/03/23/serf-basic/</loc>
+    <lastmod>2014-03-23T00:00:00+00:00</lastmod>
+    
+  </url>
+  
+  <url>
+    <loc>http://deeeet.com/writing/2014/03/22/docker-orchard/</loc>
+    <lastmod>2014-03-22T00:00:00+00:00</lastmod>
+    
+  </url>
+  
+  <url>
+    <loc>http://deeeet.com/writing/2014/03/21/docker-onbuild/</loc>
+    <lastmod>2014-03-21T00:00:00+00:00</lastmod>
+    
+  </url>
+  
+  <url>
+    <loc>http://deeeet.com/writing/2014/03/20/docker-link-container/</loc>
+    <lastmod>2014-03-20T00:00:00+00:00</lastmod>
+    
+  </url>
+  
+  <url>
+    <loc>http://deeeet.com/writing/2014/03/17/gem-man/</loc>
+    <lastmod>2014-03-17T00:00:00+00:00</lastmod>
+    
+  </url>
+  
+  <url>
+    <loc>http://deeeet.com/writing/2014/03/13/korean-noir/</loc>
+    <lastmod>2014-03-13T00:00:00+00:00</lastmod>
+    
+  </url>
+  
+  <url>
+    <loc>http://deeeet.com/writing/2014/03/12/docker-share/</loc>
+    <lastmod>2014-03-12T00:00:00+00:00</lastmod>
+    
+  </url>
+  
+  <url>
+    <loc>http://deeeet.com/writing/2014/03/11/vagrant-share/</loc>
+    <lastmod>2014-03-11T00:00:00+00:00</lastmod>
+    
+  </url>
+  
+  <url>
+    <loc>http://deeeet.com/writing/2014/03/10/osx-vagrant-box/</loc>
+    <lastmod>2014-03-10T00:00:00+00:00</lastmod>
+    
+  </url>
+  
+  <url>
+    <loc>http://deeeet.com/writing/2014/03/06/rbdock/</loc>
+    <lastmod>2014-03-06T00:00:00+00:00</lastmod>
+    
+  </url>
+  
+  <url>
+    <loc>http://deeeet.com/writing/2014/03/05/rake-alias/</loc>
+    <lastmod>2014-03-05T00:00:00+00:00</lastmod>
+    
+  </url>
+  
+  <url>
+    <loc>http://deeeet.com/writing/2014/03/03/why-building-docker-by-packer/</loc>
+    <lastmod>2014-03-03T00:00:00+00:00</lastmod>
+    
+  </url>
+  
+  <url>
+    <loc>http://deeeet.com/writing/2014/03/02/build-docker-image-by-packer/</loc>
+    <lastmod>2014-03-02T00:00:00+00:00</lastmod>
+    
+  </url>
+  
+  <url>
+    <loc>http://deeeet.com/writing/2014/03/02/packer/</loc>
+    <lastmod>2014-03-02T00:00:00+00:00</lastmod>
+    
+  </url>
+  
+  <url>
+    <loc>http://deeeet.com/writing/2014/02/25/vagrant-up-and-running/</loc>
+    <lastmod>2014-02-25T00:00:00+00:00</lastmod>
+    
+  </url>
+  
+  <url>
+    <loc>http://deeeet.com/writing/2014/02/24/vagrant-oracle-db/</loc>
+    <lastmod>2014-02-24T00:00:00+00:00</lastmod>
+    
+  </url>
+  
+  <url>
+    <loc>http://deeeet.com/writing/2014/02/24/vagrant-secret/</loc>
+    <lastmod>2014-02-24T00:00:00+00:00</lastmod>
+    
+  </url>
+  
+  <url>
+    <loc>http://deeeet.com/writing/2014/02/19/vagrant-pushover/</loc>
+    <lastmod>2014-02-19T00:00:00+00:00</lastmod>
+    
+  </url>
+  
+  <url>
+    <loc>http://deeeet.com/writing/2014/02/16/vagrant-chef-minimum/</loc>
+    <lastmod>2014-02-16T00:00:00+00:00</lastmod>
+    
+  </url>
+  
+  <url>
+    <loc>http://deeeet.com/writing/2014/02/15/7lines-rakefile/</loc>
+    <lastmod>2014-02-15T00:00:00+00:00</lastmod>
+    
+  </url>
+  
+  <url>
+    <loc>http://deeeet.com/writing/2014/02/12/git-cmb/</loc>
+    <lastmod>2014-02-12T00:00:00+00:00</lastmod>
+    
+  </url>
+  
+  <url>
+    <loc>http://deeeet.com/writing/2014/02/11/gitsh/</loc>
+    <lastmod>2014-02-11T00:00:00+00:00</lastmod>
+    
+  </url>
+  
+  <url>
+    <loc>http://deeeet.com/writing/2014/02/09/pushover/</loc>
+    <lastmod>2014-02-09T00:00:00+00:00</lastmod>
+    
+  </url>
+  
+  <url>
+    <loc>http://deeeet.com/writing/2014/02/07/stupid-presentation/</loc>
+    <lastmod>2014-02-07T00:00:00+00:00</lastmod>
+    
+  </url>
+  
+  <url>
+    <loc>http://deeeet.com/writing/2014/02/05/first-oss/</loc>
+    <lastmod>2014-02-05T00:00:00+00:00</lastmod>
+    
+  </url>
+  
+  <url>
+    <loc>http://deeeet.com/writing/2014/02/05/middleman/</loc>
+    <lastmod>2014-02-05T00:00:00+00:00</lastmod>
+    
+  </url>
+  
+  <url>
+    <loc>http://deeeet.com/writing/2014/01/28/boot2docker-osx/</loc>
+    <lastmod>2014-01-28T00:00:00+00:00</lastmod>
+    
+  </url>
+  
+  <url>
+    <loc>http://deeeet.com/writing/2014/01/21/third-wave-tokyo/</loc>
+    <lastmod>2014-01-21T00:00:00+00:00</lastmod>
+    
+  </url>
+  
+  <url>
+    <loc>http://deeeet.com/writing/2014/01/10/docker-from-osx/</loc>
+    <lastmod>2014-01-10T00:00:00+00:00</lastmod>
+    
+  </url>
+  
+  <url>
+    <loc>http://deeeet.com/writing/2014/01/06/tdd-dockerfile/</loc>
+    <lastmod>2014-01-06T00:00:00+00:00</lastmod>
+    
+  </url>
+  
+  <url>
+    <loc>http://deeeet.com/writing/2013/12/31/music-2013/</loc>
+    <lastmod>2013-12-31T00:00:00+00:00</lastmod>
+    
+  </url>
+  
+  <url>
+    <loc>http://deeeet.com/writing/2013/12/27/sinatra-on-docker/</loc>
+    <lastmod>2013-12-27T00:00:00+00:00</lastmod>
+    
+  </url>
+  
+  <url>
+    <loc>http://deeeet.com/writing/2013/12/23/brewfile/</loc>
+    <lastmod>2013-12-23T00:00:00+00:00</lastmod>
+    
+  </url>
+  
+  <url>
+    <loc>http://deeeet.com/writing/2013/12/23/haml-angular-js/</loc>
+    <lastmod>2013-12-23T00:00:00+00:00</lastmod>
+    
+  </url>
+  
+  <url>
+    <loc>http://deeeet.com/writing/2013/12/16/where-are-docker-images-storede/</loc>
+    <lastmod>2013-12-16T00:00:00+00:00</lastmod>
+    
+  </url>
+  
+  <url>
+    <loc>http://deeeet.com/writing/2013/12/13/ci-with-docker/</loc>
+    <lastmod>2013-12-13T00:00:00+00:00</lastmod>
+    
+  </url>
+  
+  <url>
+    <loc>http://deeeet.com/writing/2013/12/12/docker-rbenv/</loc>
+    <lastmod>2013-12-12T00:00:00+00:00</lastmod>
+    
+  </url>
+  
+  <url>
+    <loc>http://deeeet.com/writing/2013/12/12/docker-rbenv-en/</loc>
+    <lastmod>2013-12-12T00:00:00+00:00</lastmod>
+    
+  </url>
+  
+  <url>
+    <loc>http://deeeet.com/writing/2013/12/12/go-build-for-windows/</loc>
+    <lastmod>2013-12-12T00:00:00+00:00</lastmod>
+    
+  </url>
+  
+  <url>
+    <loc>http://deeeet.com/writing/2013/12/09/fatest-docker-iso/</loc>
+    <lastmod>2013-12-09T00:00:00+00:00</lastmod>
+    
+  </url>
+  
+  <url>
+    <loc>http://deeeet.com/writing/2013/12/08/docker-cheat-with-exmaple/</loc>
+    <lastmod>2013-12-08T00:00:00+00:00</lastmod>
+    
+  </url>
+  
+  <url>
+    <loc>http://deeeet.com/writing/2013/12/08/docker-cheat/</loc>
+    <lastmod>2013-12-08T00:00:00+00:00</lastmod>
+    
+  </url>
+  
+  <url>
+    <loc>http://deeeet.com/writing/2013/11/20/vagrant-chef-ruby/</loc>
+    <lastmod>2013-11-20T00:00:00+00:00</lastmod>
+    
+  </url>
+  
+  <url>
+    <loc>http://deeeet.com/writing/2013/11/07/rspec-actionmailer/</loc>
+    <lastmod>2013-11-07T00:00:00+00:00</lastmod>
+    
+  </url>
+  
+  <url>
+    <loc>http://deeeet.com/writing/2013/11/06/rlwrap/</loc>
+    <lastmod>2013-11-06T00:00:00+00:00</lastmod>
+    
+  </url>
+  
+  <url>
+    <loc>http://deeeet.com/writing/2013/11/04/divisionism/</loc>
+    <lastmod>2013-11-04T00:00:00+00:00</lastmod>
+    
+  </url>
+  
+  <url>
+    <loc>http://deeeet.com/writing/2013/10/31/arukuyouna/</loc>
+    <lastmod>2013-10-31T00:00:00+00:00</lastmod>
+    
+  </url>
+  
+  <url>
+    <loc>http://deeeet.com/writing/2013/10/28/slate/</loc>
+    <lastmod>2013-10-28T00:00:00+00:00</lastmod>
+    
+  </url>
+  
+  <url>
+    <loc>http://deeeet.com/writing/2013/10/16/chef-dev-env/</loc>
+    <lastmod>2013-10-16T00:00:00+00:00</lastmod>
+    
+  </url>
+  
+  <url>
+    <loc>http://deeeet.com/writing/2013/10/15/after-google-reader-death/</loc>
+    <lastmod>2013-10-15T00:00:00+00:00</lastmod>
+    
+  </url>
+  
+  <url>
+    <loc>http://deeeet.com/writing/2013/10/09/create-octpress-design/</loc>
+    <lastmod>2013-10-09T00:00:00+00:00</lastmod>
+    
+  </url>
+  
+  <url>
+    <loc>http://deeeet.com/writing/2013/07/07/hashirutoki/</loc>
+    <lastmod>2013-07-07T00:00:00+00:00</lastmod>
+    
+  </url>
+  
+  <url>
+    <loc>http://deeeet.com/writing/2013/05/21/the-third-wave/</loc>
+    <lastmod>2013-05-21T00:00:00+00:00</lastmod>
+    
+  </url>
+  
+  <url>
+    <loc>http://deeeet.com/writing/2013/01/13/blog-by-octopress/</loc>
+    <lastmod>2013-01-13T00:00:00+00:00</lastmod>
+    
+  </url>
+  
+  <url>
+    <loc>http://deeeet.com/writing/2012/12/31/music-2012/</loc>
+    <lastmod>2012-12-31T00:00:00+00:00</lastmod>
+    
+  </url>
+  
+</urlset>

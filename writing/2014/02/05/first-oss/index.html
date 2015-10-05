@@ -1,0 +1,125 @@
+<!doctype html>
+<html>
+  <head>
+    <meta http-equiv="content-type" content="text/html; charset=utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    
+    <title>初めてのOSSコミットはhomebrew-caskがいい感じ | SOTA</title>
+    
+    <link href="https://fonts.googleapis.com/css?family=Lato%3a900" rel="stylesheet" type="text/css">
+    <link rel="stylesheet" href="/css/main.css">
+    <link rel="shortcut icon" href="/favicon.png" type="image/x-icon" />
+    <link href="http://deeeet.com//index.xml" rel="alternate" type="application/rss+xml" title="" />
+    <meta name="title" content="http://deeeet.com/writing/2014/02/05/first-oss/">
+    <link rel="canonical" href="http://deeeet.com/writing/2014/02/05/first-oss/">
+    
+    <meta property="og:title" content="初めてのOSSコミットはhomebrew-caskがいい感じ"/>
+    <meta property="og:url" content="http://deeeet.com/writing/2014/02/05/first-oss/"/>
+  </head>
+  
+  <body>
+    <section class="site-nav">
+      <header>
+        <nav id="navigation">
+          <ul class="menu">
+            <li><a href="https://github.com/tcnksm/talks">Talks</a></li>
+            <li><a href="https://tcnksm.exposure.co/">Photos</a></li>
+          </ul>
+
+          <a class="name" href="/">SOTA</a>
+        </nav>        
+      </header>
+    </section>
+    
+
+
+<article>
+  <div class="container">
+    <header>
+      <div class="meta">
+        <time pubdate datetime="2014-02-05" title="2014-02-05">February 05, 2014</time>
+      </div>
+      <h1 class="title">初めてのOSSコミットはhomebrew-caskがいい感じ</h1>
+    </header>
+    
+    <section>
+      <p><a href="http://deeeet.com/writing/2013/12/23/brewfile/">BrewfileでHomebrewパッケージを管理する</a>にも書いたが，homebrew-caskというのは，本家Homebrewではインストールできない，Google ChromeやVagrantといったdmg配布のアプリをBrewでインストール可能にするサイドプロジェクト．</p>
+
+<p>先日koboのデスクトップアプリで本を読めるようになったが，まだhomebrew-caskではインストールできない状態だった．ということで，<a href="https://github.com/phinze/homebrew-cask">homebrew-cask</a>，厳密にはhomebrew-caskで管理されるアプリの派生バージョンを管理している<a href="https://github.com/caskroom/homebrew-versions">homebrew-cask-versions</a>に新しいCaskの追加のPull requestを送ってマージされた．この時，homebrew-caskは初めてのOSSコミットの経験にとても良いと感じた．</p>
+
+<p>理由は以下の2点．</p>
+
+<ul>
+<li>Contributeの仕方がとても丁寧にまとめてあること（<a href="https://github.com/phinze/homebrew-cask/blob/master/CONTRIBUTING.md">CONTRIBUTING.md</a>）</li>
+<li>Caskの追加はとても単純であること</li>
+</ul>
+
+<p>1つ目は読めばわかるけど，cloneからpull requestまでこうしてくださいってのがとても丁寧に書いてある．コミットメッセージはこう書くべきだというアドバイスまである．2つ目の理由として，新しいCask（追加したいアプリのインストール元のURLやバージョンなどを記載する，Chefのレシピのようなもの）の追加は，rubyの単純なDSLを書くだけでいい．今回だと<a href="https://github.com/caskroom/homebrew-versions/blob/master/Casks/kobo-jp.rb">こんな感じ</a>．しかも個々のCaskは独立しているので，conflictしたらどうしようとか，余計なことを考える必要がない．</p>
+
+<p>これらの理由から，gitとGithubを使ったOSSコミットの一通りのフロー，cloneから，commitして，pullして最新版に追従して，squashして，適切なコミットメッセージ書いて，pushして，pull requestして，issueでやりとりして(今回だと<a href="https://github.com/caskroom/homebrew-versions/pull/95">こんな感じ</a>)，mergeされるまで，を経験するのにhomebrew-caskはとてもおすすめ．</p>
+
+<p>自分が使ってるアプリでまだCaskに登録されてなければ，是非一度経験してみるといいと思う．</p>
+
+<p>ちなみに，こんなことをtwitterでつぶやいていたらhomebrew-caskの作者にも<a href="https://twitter.com/phinze/status/427527187915624449">同意された</a>．</p>
+
+<p>参考</p>
+
+<ul>
+<li><a href="http://tbaggery.com/2008/04/19/a-note-about-git-commit-messages.html">A Note About Git Commit Messages</a></li>
+</ul>
+
+      <div class="social">
+  
+  
+  <a href="https://twitter.com/share" class="twitter-share-button" data-via="deeeet" data-count="none">Tweet</a>
+  
+  
+</div>
+
+    </section>
+
+    <footer>
+      <address>
+        
+        <img src="/images/bio.jpeg"/>
+        
+        <p>Written by <strong><a rel="author" href="https://twitter.com/deeeet" title="Taichi Nakashima" target="_blank">Taichi Nakashima</a></strong><br>
+          <span class="muted">A Tokyo based PaaS engineer. Please contact me via twitter.</span>
+        </p>
+      </address>
+
+    </footer>
+
+  </div>
+</article>
+
+<script type="text/javascript" src="//ajax.googleapis.com/ajax/libs/jquery/1.7.2/jquery.min.js"></script>
+<script type="text/javascript" src="/js/main.js"></script>
+
+<script>!function(d,s,id){var js,fjs=d.getElementsByTagName(s)[0],p=/^http:/.test(d.location)?'http':'https';if(!d.getElementById(id)){js=d.createElement(s);js.id=id;js.src=p+'://platform.twitter.com/widgets.js';fjs.parentNode.insertBefore(js,fjs);}}(document, 'script', 'twitter-wjs');</script>
+
+
+<script type="text/javascript">var HN=[];HN.factory=function(e){return function(){HN.push([e].concat(Array.prototype.slice.call(arguments,0)))};},HN.on=HN.factory("on"),HN.once=HN.factory("once"),HN.off=HN.factory("off"),HN.emit=HN.factory("emit"),HN.load=function(){var e="hn-button.js";if(document.getElementById(e))return;var t=document.createElement("script");t.id=e,t.src="//hn-button.herokuapp.com/hn-button.js";var n=document.getElementsByTagName("script")[0];n.parentNode.insertBefore(t,n)},HN.load();</script>
+
+
+  <script>
+  (function(i,s,o,g,r,a,m){i['GoogleAnalyticsObject']=r;i[r]=i[r]||function(){
+  (i[r].q=i[r].q||[]).push(arguments)},i[r].l=1*new Date();a=s.createElement(o),
+  m=s.getElementsByTagName(o)[0];a.async=1;a.src=g;m.parentNode.insertBefore(a,m)
+  })(window,document,'script','//www.google-analytics.com/analytics.js','ga');
+
+  ga('create', 'UA-45390253-1', 'auto');
+  ga('send', 'pageview');
+
+</script>
+
+
+
+<script>
+  $(document).ready(function() {
+  
+  $('p:has(img)').css('text-align', 'center');
+  $('iframe').css('style', 'display: block; margin: 0px auto;');
+  });
+</script>
+

@@ -1,0 +1,211 @@
+<!doctype html>
+<html>
+  <head>
+    <meta http-equiv="content-type" content="text/html; charset=utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    
+    <title>TerraformでHerokuアプリのセットアップ | SOTA</title>
+    
+    <link href="https://fonts.googleapis.com/css?family=Lato%3a900" rel="stylesheet" type="text/css">
+    <link rel="stylesheet" href="/css/main.css">
+    <link rel="shortcut icon" href="/favicon.png" type="image/x-icon" />
+    <link href="http://deeeet.com//index.xml" rel="alternate" type="application/rss+xml" title="" />
+    <meta name="title" content="http://deeeet.com/writing/2014/08/04/terraform-heroku/">
+    <link rel="canonical" href="http://deeeet.com/writing/2014/08/04/terraform-heroku/">
+    
+    <meta property="og:title" content="TerraformでHerokuアプリのセットアップ"/>
+    <meta property="og:url" content="http://deeeet.com/writing/2014/08/04/terraform-heroku/"/>
+  </head>
+  
+  <body>
+    <section class="site-nav">
+      <header>
+        <nav id="navigation">
+          <ul class="menu">
+            <li><a href="https://github.com/tcnksm/talks">Talks</a></li>
+            <li><a href="https://tcnksm.exposure.co/">Photos</a></li>
+          </ul>
+
+          <a class="name" href="/">SOTA</a>
+        </nav>        
+      </header>
+    </section>
+    
+
+
+<article>
+  <div class="container">
+    <header>
+      <div class="meta">
+        <time pubdate datetime="2014-08-04" title="2014-08-04">August 04, 2014</time>
+      </div>
+      <h1 class="title">TerraformでHerokuアプリのセットアップ</h1>
+    </header>
+    
+    <section>
+      
+
+<p>ちょうど新しくHerokuでアプリケーションを作り始めたので，<a href="http://www.terraform.io/">Terraform</a>を使ってセットアップをしてみた．</p>
+
+<h2 id="terraformとは:3e4eedb46fe996cc32991959ecc5a30a">Terraformとは</h2>
+
+<p><a href="http://www.terraform.io/">Terraform</a>は<a href="http://www.hashicorp.com/">Hashicorp</a>の新作．インフラの構成をコード（テンプレートファイル）に落とし込んで，構築/変更することができる．インフラの構成は，複数のプロバイダやツール，例えば，AWSやConsul，DigitalOcean，Herokuなどにまたがって記述することができる．</p>
+
+<p>Terraformが良いのは，各設定値を変数としてサービス間で共有できるところ．例えば，Herokuでアプリケーションを立ち上げた際に自動で割り振られるホスト名を，DNSimpleの設定項目に渡してCNAMEを設定するといったことが1つのファイルに書けてしまう（<a href="http://www.terraform.io/intro/examples/cross-provider.html">Cross Provider - Terraform</a>）</p>
+
+<p>他に良い点は，</p>
+
+<ul>
+<li>依存関係をグラフで管理しており，依存がない部分を並列で実行するため速い</li>
+<li>実行する前にDry-run的に実行計画を出力できる</li>
+<li>ワークフロー（コマンド）がとてもシンプルである</li>
+</ul>
+
+<h2 id="簡単な例:3e4eedb46fe996cc32991959ecc5a30a">簡単な例</h2>
+
+<p><a href="https://github.com/tcnksm/re-dist-ghr">tcnksm/re-dist-ghr・Github</a></p>
+
+<p>実際に，Terraformを使ってHerokuに新規アプリケーションをセットアップし，作成中のGo言語のWebアプリをデプロイしてみた．</p>
+
+<p>まず，設定ファイルである<code>heroku.tf</code>は以下．</p>
+
+<pre><code class="language-ruby">variable &quot;heroku_email&quot; {}
+variable &quot;heroku_api_key&quot; {}
+
+provider &quot;heroku&quot; {
+  email = &quot;${var.heroku_email}&quot;
+  api_key = &quot;${var.heroku_api_key}&quot;
+}
+
+resource &quot;heroku_app&quot; &quot;default&quot; {
+  name = &quot;ghr&quot;
+  stack = &quot;cedar&quot;
+  config_vars {
+    BUILDPACK_URL=&quot;https://github.com/kr/heroku-buildpack-go.git&quot;
+  }
+}
+</code></pre>
+
+<p>やっているのは以下．</p>
+
+<ul>
+<li><code>provider</code>で<code>heroku</code>を指定し，APIを利用するための設定を記述する</li>
+<li><code>resource</code>で<code>heroku_app</code>を指定し<code>default</code>アプリケーションを作成し，アプリケーションの名前，利用するStack，環境変数（今回は利用するbuildpack）を記述する</li>
+</ul>
+
+<p>作成前に以下で実行計画（どんな変数が設定されるかなど）を確認することができる．</p>
+
+<pre><code class="language-bash">$ terraform plan \
+    -var heroku_email=$HEROKU_EMAIL \
+    -var heroku_api_key=$HEROKU_API_KEY
+</code></pre>
+
+<p>例えば，今回だと以下のような出力が得られる．</p>
+
+<pre><code class="language-bash">+ heroku_app.default
+    config_vars:                 &quot;&quot; =&gt; &quot;&lt;computed&gt;&quot;
+    config_vars.#:               &quot;&quot; =&gt; &quot;1&quot;
+    config_vars.0.BUILDPACK_URL: &quot;&quot; =&gt; &quot;https://github.com/kr/heroku-buildpack-go.git&quot;
+    git_url:                     &quot;&quot; =&gt; &quot;&lt;computed&gt;&quot;
+    heroku_hostname:             &quot;&quot; =&gt; &quot;&lt;computed&gt;&quot;
+    name:                        &quot;&quot; =&gt; &quot;ghr&quot;
+    region:                      &quot;&quot; =&gt; &quot;&lt;computed&gt;&quot;
+    stack:                       &quot;&quot; =&gt; &quot;&lt;computed&gt;&quot;
+    web_url:                     &quot;&quot; =&gt; &quot;&lt;computed&gt;&quot;
+</code></pre>
+
+<p>Herokuを使ったことがあれば，馴染みのある変数が並んでいる．最初の立ち上げなので，各変数には値はなく<code>&quot;&quot;</code>からの変更が表示されているのみ．<code>&lt;computed&gt;</code>は自動で設定される値になる（これらの値も<code>heroku_app.default.XXX</code>という形式で他のサービスの設定に渡すことができる）．試してないが，既に存在しているアプリケーションも，上の変数を指定すれば，Terraformの管理下に置けるはず．</p>
+
+<p>あとは，以下を実行すれば，アプリケーションがセットアップされる．30秒以内で完了する．</p>
+
+<pre><code class="language-bash">$ terraform apply \
+    -var heroku_email=$HEROKU_EMAIL \
+    -var heroku_api_key=$HEROKU_API_KEY
+</code></pre>
+
+<p>セットアップが完了したら<code>git_url</code>へいつも通りアプリケーションをデプロイすればよい．</p>
+
+<pre><code class="language-bash">$ git remote add heroku &lt;git_url&gt;
+$ git push heroku master
+</code></pre>
+
+<p>設定を変更したいときは<code>heroku.tf</code>を更新し，<code>terraform plan</code>で変更を確認して，<code>terrafrom apply</code>で適用すればよい．以後，これをひたすら繰り返していく．とても簡単．</p>
+
+<h2 id="雑感:3e4eedb46fe996cc32991959ecc5a30a">雑感</h2>
+
+<p>Herokuでアプリケーションをセットアップするだけという非常な単純なことしかやってない（Terraformの利点である複数サービスの連携もしてない）けど，ワークフローがとても良い感じになった．まとめると，</p>
+
+<ul>
+<li>基本的なセットアップ（Toolbeltで頑張っていたこと）はTerraformで</li>
+<li>アプリケーションのデプロイはgitで</li>
+</ul>
+
+<p>と分けることができるようになる．toolbeltでやりたいことは簡単にできるけど，毎回コマンドとかを手順としてメモったりしていて，それをコード（設定ファイル）として残せるようになった．</p>
+
+<p>さらに，これから例えばこのアプリケーションに独自のDNSを設定したくなったり，HerokuのAdd-onを追加したくなっても，コード（設定ファイル）にそれを記述するだけでそれを実現できる．つまり，サービスの複雑なスケールさえもコードで記述，管理できるようになる．</p>
+
+<p>Terraformの究極的な目標はまだ見えていないが，自分のような数台程度のサーバーで，小規模（中規模）なサービスを作ってる開発者にとっても全然素敵なツールではと感じた．</p>
+
+<h2 id="参考:3e4eedb46fe996cc32991959ecc5a30a">参考</h2>
+
+<ul>
+<li><a href="http://www.hashicorp.com/blog/terraform.html">Terraform - HashiCorp</a></li>
+<li><a href="http://qiita.com/zembutsu/items/93e546df765f8b2c4f32">Terraform簡易チュートリアル on AWS - Qiita</a></li>
+<li><a href="http://rebuild.fm/52/">Rebuild: 52: TLDR Driven Development (Naoya Ito)</a></li>
+</ul>
+
+      <div class="social">
+  
+  
+  <a href="https://twitter.com/share" class="twitter-share-button" data-via="deeeet" data-count="none">Tweet</a>
+  
+  
+</div>
+
+    </section>
+
+    <footer>
+      <address>
+        
+        <img src="/images/bio.jpeg"/>
+        
+        <p>Written by <strong><a rel="author" href="https://twitter.com/deeeet" title="Taichi Nakashima" target="_blank">Taichi Nakashima</a></strong><br>
+          <span class="muted">A Tokyo based PaaS engineer. Please contact me via twitter.</span>
+        </p>
+      </address>
+
+    </footer>
+
+  </div>
+</article>
+
+<script type="text/javascript" src="//ajax.googleapis.com/ajax/libs/jquery/1.7.2/jquery.min.js"></script>
+<script type="text/javascript" src="/js/main.js"></script>
+
+<script>!function(d,s,id){var js,fjs=d.getElementsByTagName(s)[0],p=/^http:/.test(d.location)?'http':'https';if(!d.getElementById(id)){js=d.createElement(s);js.id=id;js.src=p+'://platform.twitter.com/widgets.js';fjs.parentNode.insertBefore(js,fjs);}}(document, 'script', 'twitter-wjs');</script>
+
+
+<script type="text/javascript">var HN=[];HN.factory=function(e){return function(){HN.push([e].concat(Array.prototype.slice.call(arguments,0)))};},HN.on=HN.factory("on"),HN.once=HN.factory("once"),HN.off=HN.factory("off"),HN.emit=HN.factory("emit"),HN.load=function(){var e="hn-button.js";if(document.getElementById(e))return;var t=document.createElement("script");t.id=e,t.src="//hn-button.herokuapp.com/hn-button.js";var n=document.getElementsByTagName("script")[0];n.parentNode.insertBefore(t,n)},HN.load();</script>
+
+
+  <script>
+  (function(i,s,o,g,r,a,m){i['GoogleAnalyticsObject']=r;i[r]=i[r]||function(){
+  (i[r].q=i[r].q||[]).push(arguments)},i[r].l=1*new Date();a=s.createElement(o),
+  m=s.getElementsByTagName(o)[0];a.async=1;a.src=g;m.parentNode.insertBefore(a,m)
+  })(window,document,'script','//www.google-analytics.com/analytics.js','ga');
+
+  ga('create', 'UA-45390253-1', 'auto');
+  ga('send', 'pageview');
+
+</script>
+
+
+
+<script>
+  $(document).ready(function() {
+  
+  $('p:has(img)').css('text-align', 'center');
+  $('iframe').css('style', 'display: block; margin: 0px auto;');
+  });
+</script>
+

@@ -1,0 +1,155 @@
+<!doctype html>
+<html>
+  <head>
+    <meta http-equiv="content-type" content="text/html; charset=utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    
+    <title>Dockerコンテナ間のlink，database.ymlの書き方 | SOTA</title>
+    
+    <link href="https://fonts.googleapis.com/css?family=Lato%3a900" rel="stylesheet" type="text/css">
+    <link rel="stylesheet" href="/css/main.css">
+    <link rel="shortcut icon" href="/favicon.png" type="image/x-icon" />
+    <link href="http://deeeet.com//index.xml" rel="alternate" type="application/rss+xml" title="" />
+    <meta name="title" content="http://deeeet.com/writing/2014/03/20/docker-link-container/">
+    <link rel="canonical" href="http://deeeet.com/writing/2014/03/20/docker-link-container/">
+    
+    <meta property="og:title" content="Dockerコンテナ間のlink，database.ymlの書き方"/>
+    <meta property="og:url" content="http://deeeet.com/writing/2014/03/20/docker-link-container/"/>
+  </head>
+  
+  <body>
+    <section class="site-nav">
+      <header>
+        <nav id="navigation">
+          <ul class="menu">
+            <li><a href="https://github.com/tcnksm/talks">Talks</a></li>
+            <li><a href="https://tcnksm.exposure.co/">Photos</a></li>
+          </ul>
+
+          <a class="name" href="/">SOTA</a>
+        </nav>        
+      </header>
+    </section>
+    
+
+
+<article>
+  <div class="container">
+    <header>
+      <div class="meta">
+        <time pubdate datetime="2014-03-20" title="2014-03-20">March 20, 2014</time>
+      </div>
+      <h1 class="title">Dockerコンテナ間のlink，database.ymlの書き方</h1>
+    </header>
+    
+    <section>
+      
+
+<p>DockerはLinksというコンテナ同士の連携を簡単に行う仕組みをもつ．
+これは，DB用のコンテナとアプリケーション用のコンテナの連携を行いたいときなどに有用になる．</p>
+
+<p>例えば，1337ポートが<code>EXPOSE</code>された<code>container1</code>という名前のコンテナとの連携を行いたいとする．
+このとき以下のように，<code>-link 連携したいコンテナ名:エイリアス名</code>で新しいコンテナを起動すると，
+そのコンテナ内に連携したいコンテナのポート番号やIPをもった環境変数が現れる．</p>
+
+<pre><code class="language-bash">docker run -d -link container1:alias user/sample bash
+root@48408a38c9b2:/# env
+ALIAS_PORT_5432_TCP_ADDR=172.17.0.2
+ALIAS_PORT=tcp://172.17.0.2:5432
+ALIAS_PORT_5432_TCP=tcp://172.17.0.2:5432
+ALIAS_PORT_5432_TCP_PORT=5432
+...
+</code></pre>
+
+<p>この環境変数を使えば，コンテナからコンテナへのデータの送信などの連携が可能になる．これがLinksの機能．</p>
+
+<h2 id="postgresqlコンテナとrailsコンテナの連携:fe6d69118916d9052fe81d5cc20ceb6e">PostgresqlコンテナとRailsコンテナの連携</h2>
+
+<p>例として，postgresqlコンテナとRailsコンテナを連携させてみる．
+postgresqlのイメージには，dockerコンテナのホスティングサービスである<a href="https://orchardup.com/">Orchard</a>が提供する[orchardup/postgresql]()が使いやすいのでそれを利用する．</p>
+
+<p>まず，postgresqlコンテナを<code>pg</code>という名前で起動する．</p>
+
+<pre><code class="language-bash">$ docker run -d -p 5432:5432 -e POSTGRESQL_USER=docker -e POSTGRESQL_PASS=docker -name pg orchardup/postgresql
+</code></pre>
+
+<p>Railsからこのコンテナのデータベースにアクセスするには，<code>config/database.yml</code>を以下のようにしておく．</p>
+
+<pre><code class="language-ruby">development:
+  adapter: postgresql
+  template: template0
+  encoding: unicode
+  database: my_app_development
+  pool: 5
+  username: docker
+  password: docker
+  host: &lt;%= ENV.fetch('DB_PORT_5432_TCP_ADDR') %&gt;
+  port: &lt;%= ENV.fetch('DB_PORT_5432_TCP_PORT') %&gt;
+</code></pre>
+
+<p>あとは，エイリアス名を<code>db</code>として，Railsコンテナを起動する．</p>
+
+<pre><code class="language-bash">docker run -i -p 3000:3000 -link pg:db -name web -t tcnksm/rails 'rake db:create &amp;&amp; rake db:migrate &amp;&amp; rails s'
+</code></pre>
+
+<p>参考</p>
+
+<ul>
+<li><a href="https://gist.github.com/tcnksm/7700047">Docker虎の巻</a></li>
+</ul>
+
+      <div class="social">
+  
+  
+  <a href="https://twitter.com/share" class="twitter-share-button" data-via="deeeet" data-count="none">Tweet</a>
+  
+  
+</div>
+
+    </section>
+
+    <footer>
+      <address>
+        
+        <img src="/images/bio.jpeg"/>
+        
+        <p>Written by <strong><a rel="author" href="https://twitter.com/deeeet" title="Taichi Nakashima" target="_blank">Taichi Nakashima</a></strong><br>
+          <span class="muted">A Tokyo based PaaS engineer. Please contact me via twitter.</span>
+        </p>
+      </address>
+
+    </footer>
+
+  </div>
+</article>
+
+<script type="text/javascript" src="//ajax.googleapis.com/ajax/libs/jquery/1.7.2/jquery.min.js"></script>
+<script type="text/javascript" src="/js/main.js"></script>
+
+<script>!function(d,s,id){var js,fjs=d.getElementsByTagName(s)[0],p=/^http:/.test(d.location)?'http':'https';if(!d.getElementById(id)){js=d.createElement(s);js.id=id;js.src=p+'://platform.twitter.com/widgets.js';fjs.parentNode.insertBefore(js,fjs);}}(document, 'script', 'twitter-wjs');</script>
+
+
+<script type="text/javascript">var HN=[];HN.factory=function(e){return function(){HN.push([e].concat(Array.prototype.slice.call(arguments,0)))};},HN.on=HN.factory("on"),HN.once=HN.factory("once"),HN.off=HN.factory("off"),HN.emit=HN.factory("emit"),HN.load=function(){var e="hn-button.js";if(document.getElementById(e))return;var t=document.createElement("script");t.id=e,t.src="//hn-button.herokuapp.com/hn-button.js";var n=document.getElementsByTagName("script")[0];n.parentNode.insertBefore(t,n)},HN.load();</script>
+
+
+  <script>
+  (function(i,s,o,g,r,a,m){i['GoogleAnalyticsObject']=r;i[r]=i[r]||function(){
+  (i[r].q=i[r].q||[]).push(arguments)},i[r].l=1*new Date();a=s.createElement(o),
+  m=s.getElementsByTagName(o)[0];a.async=1;a.src=g;m.parentNode.insertBefore(a,m)
+  })(window,document,'script','//www.google-analytics.com/analytics.js','ga');
+
+  ga('create', 'UA-45390253-1', 'auto');
+  ga('send', 'pageview');
+
+</script>
+
+
+
+<script>
+  $(document).ready(function() {
+  
+  $('p:has(img)').css('text-align', 'center');
+  $('iframe').css('style', 'display: block; margin: 0px auto;');
+  });
+</script>
+

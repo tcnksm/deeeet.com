@@ -1,0 +1,199 @@
+<!doctype html>
+<html>
+  <head>
+    <meta http-equiv="content-type" content="text/html; charset=utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    
+    <title>HomeBrewで自作ツールを配布する | SOTA</title>
+    
+    <link href="https://fonts.googleapis.com/css?family=Lato%3a900" rel="stylesheet" type="text/css">
+    <link rel="stylesheet" href="/css/main.css">
+    <link rel="shortcut icon" href="/favicon.png" type="image/x-icon" />
+    <link href="http://deeeet.com//index.xml" rel="alternate" type="application/rss+xml" title="" />
+    <meta name="title" content="http://deeeet.com/writing/2014/05/20/brew-tap/">
+    <link rel="canonical" href="http://deeeet.com/writing/2014/05/20/brew-tap/">
+    
+    <meta property="og:title" content="HomeBrewで自作ツールを配布する"/>
+    <meta property="og:url" content="http://deeeet.com/writing/2014/05/20/brew-tap/"/>
+  </head>
+  
+  <body>
+    <section class="site-nav">
+      <header>
+        <nav id="navigation">
+          <ul class="menu">
+            <li><a href="https://github.com/tcnksm/talks">Talks</a></li>
+            <li><a href="https://tcnksm.exposure.co/">Photos</a></li>
+          </ul>
+
+          <a class="name" href="/">SOTA</a>
+        </nav>        
+      </header>
+    </section>
+    
+
+
+<article>
+  <div class="container">
+    <header>
+      <div class="meta">
+        <time pubdate datetime="2014-05-20" title="2014-05-20">May 20, 2014</time>
+      </div>
+      <h1 class="title">HomeBrewで自作ツールを配布する</h1>
+    </header>
+    
+    <section>
+      
+
+<p><a href="http://deeeet.com/writing/2014/05/19/gox/">複数プラットフォームにGoアプリケーションを配布する</a></p>
+
+<p>上の記事で，Go言語で作ったツールを複数プラットフォーム向けにクロスコンパイルし，作成されたバイナリを<a href="https://bintray.com/">Bintray</a>でホストするまではできた．あとは，ダウンロード・展開・PATHを通す，をやってもらえば，自分の作ったツールを使ってもらえる．</p>
+
+<p>OSX向けにツールを配布する場合はHomeBrewのFormulaを作っておけば，これをもっと簡単にできる．</p>
+
+<h2 id="tl-dr:4b11abad416d891bcfd695d8fce255e3">TL;DR</h2>
+
+<p>以下でインストールできるようにする．</p>
+
+<pre><code class="language-bash">$ brew tap &lt;ユーザ名&gt;/&lt;パッケージ名&gt;
+$ brew install &lt;パッケージ名&gt;
+</code></pre>
+
+<p>ただし作成したツールが，Githubのリリースページや<a href="https://bintray.com/">Bintray</a>にホストされていることを前提とする．</p>
+
+<h2 id="formulaの作成:4b11abad416d891bcfd695d8fce255e3">Formulaの作成</h2>
+
+<p>Formulaとは，HomebrewでインストールするパッケージのURLやビルドの手順が書かれたスクリプト．Homebrewでインストールできるツールは全てこのFormulaが準備されていて，それらは全て<code>/usr/local/Library/Formula</code>以下にある．Formulaは単純なRubyのDSLで簡単に書ける．</p>
+
+<p>まず，Formulaの雛形をつくる．</p>
+
+<pre><code class="language-bash">$ brew create &lt;URL&gt;
+</code></pre>
+
+<p>これを実行すると，URLに基づいた名前でFormulaの雛形が作られる．例えば，<code>http://example.com/foo-0.1.tar.gz</code>だと，<code>foo.rb</code>が作られる．雛形は以下のようになる．</p>
+
+<pre><code class="language-ruby">require &quot;formula&quot;
+
+class Foo &lt; Formula
+  url &quot;http://example.com/foo-0.1.tar.gz&quot;
+  homepage &quot;&quot;
+  sha1 &quot;1234567890ABCDEF1234567890ABCDEF&quot;
+
+　# depends_on &quot;cmake&quot; =&gt; :build
+
+  def install
+      system &quot;./configure&quot;, &quot;--prefix=#{prefix}&quot;, &quot;--disable-debug&quot;, &quot;--disable-dependency-tracking&quot;
+      #system &quot;cmake&quot;, &quot;.&quot;, *std_cmake_args
+      system &quot;make install&quot;
+  end
+end
+</code></pre>
+
+<p>あとは，これを編集するだけ．使えるDSLは<a href="https://github.com/Homebrew/homebrew/wiki/Formula-Cookbook">ここ</a>を見るとよい．<code>system</code>が使えるのでやりたい放題といえばやりたい放題．</p>
+
+<h3 id="dslを書く:4b11abad416d891bcfd695d8fce255e3">DSLを書く</h3>
+
+<p>ここでは，最低限使えそうなものを紹介する．</p>
+
+<p>Go言語のクロスコンパイルでは<code>amd64</code>と<code>386</code>のバイナリをそれぞれ作れるので，それに応じてインストールURLを変更できるようにする．これには<code>Hardware.is_64_bit?</code>を使う．以下のように書ける．</p>
+
+<pre><code class="language-ruby">if Hardware.is_64_bit?
+    url &quot;http://exmaple.com/foo_amd64.zip&quot;
+    sha1 &quot;dce04210f14dcff0c7863e14695986e02ada4e02&quot;
+else
+    url &quot;http://exmaple.com/foo_386.zip&quot;
+    sha1 &quot;3226bdbcaf982e03d88f881878a1076d6ffbe423&quot;
+end
+</code></pre>
+
+<p>バイナリをPATHが通っているディレクトリに配置するには<code>bin.install</code>を使う．パッケージは基本的に<code>/usr/local/Cellar</code>以下にダウンロード・展開される．<code>bin.install</code>は，Cellarから<code>/usr/local/bin</code>に対してシンボリックリンクを貼ってくれる．</p>
+
+<pre><code class="language-ruby">def install
+    bin.install '&lt;バイナリ名&gt;'
+end          
+</code></pre>
+
+<p><code>/usr/local/etc</code>等にもリンクをはることができる．</p>
+
+<p>インストール完了後に，メッセージを表示した場合は，<code>caveats</code>関数を準備する．例えば，「xxxを<code>.bashrc</code>や<code>.zshrc</code>に書いてください」といった文言を表示したいとき．</p>
+
+<pre><code class="language-ruby">def caveats
+     msg = &lt;&lt;-EOF.undent
+Add the following line to your ~/.bash_profile or ~/.zshrc file (and remember to source the file to update your current session):
+[[ -s `brew --prefix`/etc/jj.sh ]] &amp;&amp; . `brew --prefix`/etc/jj.sh
+EOF
+end
+</code></pre>
+
+<p>最終的に自分が書いたFormulaは<a href="https://github.com/tcnksm/homebrew-jj/blob/master/jj.rb">こちら</a></p>
+
+<h3 id="テストする:4b11abad416d891bcfd695d8fce255e3">テストする</h3>
+
+<p>Formulaができたらいつも通り<code>brew</code>コマンドを叩いてテストする．<code>brew install</code>を実行しても，<code>brew uninstall</code>すれば貼られたシンボリックリンクは消される．DSLを使う限り動作は全て<code>/usr/local/bin</code>で完結するので，調査もしやすい．Formulaそのものを消したければ<code>git checkout</code>してしまえばよい．</p>
+
+<h2 id="tap:4b11abad416d891bcfd695d8fce255e3">Tap</h2>
+
+<p>公式のレポジトリに取り込んでもらいたい場合は，そのままブランチを切ってPull requestを送る．</p>
+
+<p>公式に取り込まれるのに腰が引ける場合は，自分用のGithubレポジトリを作り，その中にFormulaをぶっ込む．レポジトリ名は<code>homebrew-&lt;レポジトリ名&gt;</code>とする．例えば，上の例で言うと，<code>foo.rb</code>を<code>homebrew-foo</code>レポジトリに入れて公開する．あとはユーザに以下を実行してもらえば，自分のFormulaをHomeBrewのインストール対象にすることができる．</p>
+
+<pre><code class="language-bash">$ brew tap &lt;ユーザ名&gt;/&lt;レポジトリ名&gt;
+</code></pre>
+
+<p><code>tap</code>もやっていることは単純で，<code>/usr/local/Library/Taps</code>以下にレポジトリを<code>clone</code>してきて，<code>/usr/local/Library/Formula</code>に対してシンボリックリンクを貼っているだけ．</p>
+
+      <div class="social">
+  
+  
+  <a href="https://twitter.com/share" class="twitter-share-button" data-via="deeeet" data-count="none">Tweet</a>
+  
+  
+</div>
+
+    </section>
+
+    <footer>
+      <address>
+        
+        <img src="/images/bio.jpeg"/>
+        
+        <p>Written by <strong><a rel="author" href="https://twitter.com/deeeet" title="Taichi Nakashima" target="_blank">Taichi Nakashima</a></strong><br>
+          <span class="muted">A Tokyo based PaaS engineer. Please contact me via twitter.</span>
+        </p>
+      </address>
+
+    </footer>
+
+  </div>
+</article>
+
+<script type="text/javascript" src="//ajax.googleapis.com/ajax/libs/jquery/1.7.2/jquery.min.js"></script>
+<script type="text/javascript" src="/js/main.js"></script>
+
+<script>!function(d,s,id){var js,fjs=d.getElementsByTagName(s)[0],p=/^http:/.test(d.location)?'http':'https';if(!d.getElementById(id)){js=d.createElement(s);js.id=id;js.src=p+'://platform.twitter.com/widgets.js';fjs.parentNode.insertBefore(js,fjs);}}(document, 'script', 'twitter-wjs');</script>
+
+
+<script type="text/javascript">var HN=[];HN.factory=function(e){return function(){HN.push([e].concat(Array.prototype.slice.call(arguments,0)))};},HN.on=HN.factory("on"),HN.once=HN.factory("once"),HN.off=HN.factory("off"),HN.emit=HN.factory("emit"),HN.load=function(){var e="hn-button.js";if(document.getElementById(e))return;var t=document.createElement("script");t.id=e,t.src="//hn-button.herokuapp.com/hn-button.js";var n=document.getElementsByTagName("script")[0];n.parentNode.insertBefore(t,n)},HN.load();</script>
+
+
+  <script>
+  (function(i,s,o,g,r,a,m){i['GoogleAnalyticsObject']=r;i[r]=i[r]||function(){
+  (i[r].q=i[r].q||[]).push(arguments)},i[r].l=1*new Date();a=s.createElement(o),
+  m=s.getElementsByTagName(o)[0];a.async=1;a.src=g;m.parentNode.insertBefore(a,m)
+  })(window,document,'script','//www.google-analytics.com/analytics.js','ga');
+
+  ga('create', 'UA-45390253-1', 'auto');
+  ga('send', 'pageview');
+
+</script>
+
+
+
+<script>
+  $(document).ready(function() {
+  
+  $('p:has(img)').css('text-align', 'center');
+  $('iframe').css('style', 'display: block; margin: 0px auto;');
+  });
+</script>
+

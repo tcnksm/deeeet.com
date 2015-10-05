@@ -1,0 +1,233 @@
+<!doctype html>
+<html>
+  <head>
+    <meta http-equiv="content-type" content="text/html; charset=utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    
+    <title>Docker Meetup Tokyo #2 でLTしてきた &#43; DigitalOceanとGCEでもDocker Applicationを動かしてみた | SOTA</title>
+    
+    <link href="https://fonts.googleapis.com/css?family=Lato%3a900" rel="stylesheet" type="text/css">
+    <link rel="stylesheet" href="/css/main.css">
+    <link rel="shortcut icon" href="/favicon.png" type="image/x-icon" />
+    <link href="http://deeeet.com//index.xml" rel="alternate" type="application/rss+xml" title="" />
+    <meta name="title" content="http://deeeet.com/writing/2014/04/13/docker-meetup-2/">
+    <link rel="canonical" href="http://deeeet.com/writing/2014/04/13/docker-meetup-2/">
+    
+    <meta property="og:title" content="Docker Meetup Tokyo #2 でLTしてきた &#43; DigitalOceanとGCEでもDocker Applicationを動かしてみた"/>
+    <meta property="og:url" content="http://deeeet.com/writing/2014/04/13/docker-meetup-2/"/>
+  </head>
+  
+  <body>
+    <section class="site-nav">
+      <header>
+        <nav id="navigation">
+          <ul class="menu">
+            <li><a href="https://github.com/tcnksm/talks">Talks</a></li>
+            <li><a href="https://tcnksm.exposure.co/">Photos</a></li>
+          </ul>
+
+          <a class="name" href="/">SOTA</a>
+        </nav>        
+      </header>
+    </section>
+    
+
+
+<article>
+  <div class="container">
+    <header>
+      <div class="meta">
+        <time pubdate datetime="2014-04-13" title="2014-04-13">April 13, 2014</time>
+      </div>
+      <h1 class="title">Docker Meetup Tokyo #2 でLTしてきた &#43; DigitalOceanとGCEでもDocker Applicationを動かしてみた</h1>
+    </header>
+    
+    <section>
+      
+
+<script async class="speakerdeck-embed" data-id="21343140a3970131166e024e11a95d47" data-ratio="1.33333333333333" src="http://speakerdeck.com/assets/embed.js"></script>
+
+<p><a href="https://speakerdeck.com/tcnksm/docker-applicationwodaasnidepuroi-number-dockerjp">&ldquo;Docker ApplicationをDaaSにデプロイ #dockerjp // Speaker Deck&rdquo;</a></p>
+
+<p><a href="http://connpass.com/event/5640/">Docker Meetup Tokyo #2</a>でLTをしてきた．Docker as a Service (DaaS) でDocker Application（Rails）を動かしてみたという内容で，基本は<a href="http://deeeet.com/writing/2014/03/22/docker-orchard/">&ldquo;OrchardにDockerアプリケーションをデプロイ&rdquo;</a>に書いたことをプレゼンにした．</p>
+
+<p>発表時間は5分だけで，当日までにいろいろ試したことすべてを話すことができなかったので少し追記しておく．</p>
+
+<p>LTではDockerコンテナ専用のホスティングサービスの話をしたが，それ以外のホスティングサービスでもDockerのサポートがされ始めている．例えば，DigitalOceanやGoogle Compute Engineなどがある．これらでもDocker Applicationを動かしてみた．まさに[@naoya_ito]()さんが話してたような，Build Once, Run Anywhereをやってみた感じ．</p>
+
+<h2 id="概要:f8f15b6f2f9d266345553f2d62219249">概要</h2>
+
+<p>動かすDocker ApplicationはLTで話したのと同様にRailsコンテナ（<a href="https://github.com/tcnksm/sample-docker-orchard/blob/master/Dockerfile">tcnksm/rails</a>）と，DBにPostgresqlのコンテナ（[orchard/postgresql]()）で，それぞれ立ち上げて連携する．なおどちらもDocker Registryにあらかじめpushしておく．</p>
+
+<p>これをローカル環境，Docker as a Service（Orchard），DigitalOcean，Google Compute Engingeで動かしてみる．</p>
+
+<h2 id="ローカル環境:f8f15b6f2f9d266345553f2d62219249">ローカル環境</h2>
+
+<p>ローカル環境（OSX）では，boot2dockerを使う．</p>
+
+<p>あらかじめ，Port Forwardingした上で，VMを立ち上げる．</p>
+
+<pre><code class="language-bash">$ boot2docker init
+$ VBoxManage modifyvm &quot;boot2docker-vm&quot; --natpf1 &quot;tcp-port3000,tcp,,3000,,3000&quot;
+$ boot2docker up
+</code></pre>
+
+<p>後は，以下でコンテナを起動するだけ．</p>
+
+<pre><code class="language-bash">$ docker run -d -p 5432:5432 -e POSTGRESQL_USER=docker -e POSTGRESQL_PASS=docker --name pg orchardup/postgresql
+$ docker run -d -p 3000:3000 --link pg:db --name web -t tcnksm/rails 'rake db:create &amp;&amp; rake db:migrate &amp;&amp; rails s'
+</code></pre>
+
+<p>[<a href="http://localhost:3000]()でアクセスできる．">http://localhost:3000]()でアクセスできる．</a></p>
+
+<h2 id="orchard-docker-as-a-service:f8f15b6f2f9d266345553f2d62219249">Orchard（Docker as a Service）</h2>
+
+<p>Orchardの場合は，あらかじめログインしてホストを立ち上げておく必要がある．</p>
+
+<pre><code class="language-bash">$ orchard hosts create
+</code></pre>
+
+<p>あとは，以下でコンテナを起動するだけ，違いは先頭に<code>orchard</code>をつけるところ．</p>
+
+<pre><code class="language-bash">$ orchard docker run -d -p 5432:5432 -e POSTGRESQL_USER=docker -e POSTGRESQL_PASS=docker --name pg orchardup/postgresql
+$ orchard docker run -d -p 80:3000 --link pg:db --name web -t tcnksm/rails 'rake db:create &amp;&amp; rake db:migrate &amp;&amp; rails s'
+</code></pre>
+
+<p>ちなみに，Docker as a Serviceについては，<a href="https://twitter.com/nyarla">@nyarla</a>さんが<a href="http://qiita.com/nyarla/items/2015840bb6ed955d0250">&ldquo;Docker as a Serviceの比較(2014年4月版)&rdquo;</a>で比較されているので，参考に．</p>
+
+<h2 id="google-compute-engine:f8f15b6f2f9d266345553f2d62219249">Google Compute Engine</h2>
+
+<p>GCEの場合は，インスタンスを立ち上げて，Dockerをインストールする必要がある．やりかたは，公式にドキュメントがある（<a href="http://docs.docker.io/en/latest/installation/google/">&ldquo;Installation on Google Cloud Platform - Docker Documentation&rdquo;</a>）．</p>
+
+<p>まず，インスタンスを立てる．</p>
+
+<pre><code class="language-bash">$ gcloud auth login
+$ gcutil addinstance docker-playground --image=backports-debian-7
+</code></pre>
+
+<p>ログインしてdockerをインストール＆起動する．</p>
+
+<pre><code class="language-bash">$ gcutil ssh docker-playground
+$ curl get.docker.io | bash
+$ sudo update-rc.d docker defaults
+</code></pre>
+
+<p>後は，コンテナを起動するだけ．</p>
+
+<pre><code class="language-bash">$ sudo docker run -d -p 5432:5432 -e POSTGRESQL_USER=docker -e POSTGRESQL_PASS=docker --name pg orchardup/postgresql
+$ sudo docker run -d -p 80:3000 --link pg:db --name web -t tcnksm/rails 'rake db:create &amp;&amp; rake db:migrate &amp;&amp; rails s'
+</code></pre>
+
+<p>インスタンスに外部からアクセスできるようにするためには，ポートを解放しておく必要がある．</p>
+
+<pre><code class="language-bash">$ gcutil addfirewall http --allowed=tcp:80
+</code></pre>
+
+<p>ちなみにGCEが提供している<a href="https://github.com/GoogleCloudPlatform/docker-cloud">GoogleCloudPlatform/docker-cloud</a>を使うと，Proxy噛ましてローカルからコマンドを叩けるようになる．</p>
+
+<h2 id="digitalocean:f8f15b6f2f9d266345553f2d62219249">DigitalOcean</h2>
+
+<p>DigitalOceanの場合は，以下のようなVagrantfileを準備する．</p>
+
+<pre><code class="language-ruby">Dotenv.load
+
+Vagrant.configure('2') do |config|
+    config.vm.hostname = &quot;#{ENV['VM_HOSTNAME']}&quot;
+
+    config.vm.provider :digital_ocean do |provider, override|
+        override.ssh.private_key_path = '~/.ssh/id_rsa'
+        override.vm.box = 'digital_ocean'
+        override.vm.box_url = &quot;https://github.com/smdahlen/vagrant-digitalocean/raw/master/box/digital_ocean.box&quot;
+        provider.client_id = &quot;#{ENV['CLIENT_ID']}&quot;
+        provider.api_key   = &quot;#{ENV['API_KEY']}&quot;
+        provider.image     = 'CentOS 6.4 x64'
+        provider.region    = 'San Francisco 1'
+        provider.size      = '512MB'
+        provider.ca_path   = '/usr/local/opt/curl-ca-bundle/share/ca-bundle.crt'
+        provider.ssh_key_name = &quot;#{ENV['SSH_KEY_NAME']}&quot;
+    end
+
+    config.vm.provision :docker do |d|
+        d.run &quot;pg&quot;, image: &quot;orchardup/postgresql&quot;, args: &quot;-d -p 5432:5432 -e POSTGRESQL_USER=docker -e POSTGRESQL_PASS=docker&quot;
+        d.run &quot;web&quot;, image: &quot;tcnksm/rails&quot;, args: &quot;-p 80:3000 -link pg:db&quot;, cmd: &quot;'rake db:create &amp;&amp; rake db:migrate &amp;&amp; rails s'&quot;
+    end
+end
+            
+</code></pre>
+
+<p>あとは，立ち上げるだけ．</p>
+
+<pre><code class="language-bash">$ vagrant up --provider=digital_ocean
+</code></pre>
+
+<h2 id="まとめ:f8f15b6f2f9d266345553f2d62219249">まとめ</h2>
+
+<p>いろいろ試してみたがまだまだ分からんというのが現状．自分的にはOrchardの軽さは好きだし，DigitalOceanはVagrantで使い慣れてて好きってのもある．LTの最後にも話したようにまだまだ立ち上げることばかりを考えすぎていて，実際の運用のことが抜けている．こういうホスティングサービスの選択も運用のことや実現したいことが明確になってくれば自然と決まってくるのかなと思う．</p>
+
+<p>ただ，Docker Applicationのポータビリティは実際に手を動かしてみてすごいなと実感できた．</p>
+
+<p>最後にDocker Meetupで，LTする機会をつくって頂いた，主催者の<a href="https://twitter.com/mainyaa">@mainyaa</a>さんと<a href="https://twitter.com/kazunori_279">@kazunori_279</a>さん，他のスタッフのみなさんありがとうございました．楽しかったです．</p>
+
+<h3 id="参考:f8f15b6f2f9d266345553f2d62219249">参考</h3>
+
+<ul>
+<li><a href="https://speakerdeck.com/naoya/dockerapurikesiyonfalsepotabiriteiwokao-eru-number-dockerjp">&ldquo;Dockerアプリケーションのポータビリティを考える #dockerjp // Speaker Deck&rdquo;</a></li>
+<li><a href="http://d.hatena.ne.jp/mainyaa/20140411/p1">&ldquo;Docker Meetup Tokyo #2 を主催＆話してきた #dockerjp - Happy New World&rdquo;</a></li>
+<li><a href="http://gitpub.hatenablog.com/entry/2014/04/12/020901">&ldquo;Docker Meetup Tokyo #2　まとめ - /dev/null&rdquo;</a></li>
+</ul>
+
+      <div class="social">
+  
+  
+  <a href="https://twitter.com/share" class="twitter-share-button" data-via="deeeet" data-count="none">Tweet</a>
+  
+  
+</div>
+
+    </section>
+
+    <footer>
+      <address>
+        
+        <img src="/images/bio.jpeg"/>
+        
+        <p>Written by <strong><a rel="author" href="https://twitter.com/deeeet" title="Taichi Nakashima" target="_blank">Taichi Nakashima</a></strong><br>
+          <span class="muted">A Tokyo based PaaS engineer. Please contact me via twitter.</span>
+        </p>
+      </address>
+
+    </footer>
+
+  </div>
+</article>
+
+<script type="text/javascript" src="//ajax.googleapis.com/ajax/libs/jquery/1.7.2/jquery.min.js"></script>
+<script type="text/javascript" src="/js/main.js"></script>
+
+<script>!function(d,s,id){var js,fjs=d.getElementsByTagName(s)[0],p=/^http:/.test(d.location)?'http':'https';if(!d.getElementById(id)){js=d.createElement(s);js.id=id;js.src=p+'://platform.twitter.com/widgets.js';fjs.parentNode.insertBefore(js,fjs);}}(document, 'script', 'twitter-wjs');</script>
+
+
+<script type="text/javascript">var HN=[];HN.factory=function(e){return function(){HN.push([e].concat(Array.prototype.slice.call(arguments,0)))};},HN.on=HN.factory("on"),HN.once=HN.factory("once"),HN.off=HN.factory("off"),HN.emit=HN.factory("emit"),HN.load=function(){var e="hn-button.js";if(document.getElementById(e))return;var t=document.createElement("script");t.id=e,t.src="//hn-button.herokuapp.com/hn-button.js";var n=document.getElementsByTagName("script")[0];n.parentNode.insertBefore(t,n)},HN.load();</script>
+
+
+  <script>
+  (function(i,s,o,g,r,a,m){i['GoogleAnalyticsObject']=r;i[r]=i[r]||function(){
+  (i[r].q=i[r].q||[]).push(arguments)},i[r].l=1*new Date();a=s.createElement(o),
+  m=s.getElementsByTagName(o)[0];a.async=1;a.src=g;m.parentNode.insertBefore(a,m)
+  })(window,document,'script','//www.google-analytics.com/analytics.js','ga');
+
+  ga('create', 'UA-45390253-1', 'auto');
+  ga('send', 'pageview');
+
+</script>
+
+
+
+<script>
+  $(document).ready(function() {
+  
+  $('p:has(img)').css('text-align', 'center');
+  $('iframe').css('style', 'display: block; margin: 0px auto;');
+  });
+</script>
+

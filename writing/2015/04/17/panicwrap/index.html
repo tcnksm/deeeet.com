@@ -1,0 +1,252 @@
+<!doctype html>
+<html>
+  <head>
+    <meta http-equiv="content-type" content="text/html; charset=utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    
+    <title>Go言語のCLIツールのpanicをラップしてクラッシュレポートをつくる | SOTA</title>
+    
+    <link href="https://fonts.googleapis.com/css?family=Lato%3a900" rel="stylesheet" type="text/css">
+    <link rel="stylesheet" href="/css/main.css">
+    <link rel="shortcut icon" href="/favicon.png" type="image/x-icon" />
+    <link href="http://deeeet.com//index.xml" rel="alternate" type="application/rss+xml" title="" />
+    <meta name="title" content="http://deeeet.com/writing/2015/04/17/panicwrap/">
+    <link rel="canonical" href="http://deeeet.com/writing/2015/04/17/panicwrap/">
+    
+    <meta property="og:title" content="Go言語のCLIツールのpanicをラップしてクラッシュレポートをつくる"/>
+    <meta property="og:url" content="http://deeeet.com/writing/2015/04/17/panicwrap/"/>
+  </head>
+  
+  <body>
+    <section class="site-nav">
+      <header>
+        <nav id="navigation">
+          <ul class="menu">
+            <li><a href="https://github.com/tcnksm/talks">Talks</a></li>
+            <li><a href="https://tcnksm.exposure.co/">Photos</a></li>
+          </ul>
+
+          <a class="name" href="/">SOTA</a>
+        </nav>        
+      </header>
+    </section>
+    
+
+
+<article>
+  <div class="container">
+    <header>
+      <div class="meta">
+        <time pubdate datetime="2015-04-17" title="2015-04-17">April 17, 2015</time>
+      </div>
+      <h1 class="title">Go言語のCLIツールのpanicをラップしてクラッシュレポートをつくる</h1>
+    </header>
+    
+    <section>
+      
+
+<p><a href="https://github.com/mitchellh/panicwrap">mitchellh/panicwrap</a></p>
+
+<p>Go言語でpanicが発生したらどうしようもない．普通はちゃんとテストをしてそもそもpanicが発生しないようにする（もしくはトップレベルで<code>recover</code>する）．しかし，クロスコンパイルして様々な環境に配布することを，もしくはユーザが作者が思ってもいない使いかたをすることを考慮すると，すべてを作者の想像力の範疇のテストでカバーし，panicをゼロにできるとは限らない．</p>
+
+<p>panicが発生した場合，ユーザからすると何が起こったか分からない（Go言語を使ったことがあるユーザなら「あの表示」を見て，panicが起こったことがわかるかもしれない）．適切なエラーメッセージを表示できると良い．開発者からすると，そのpanicの詳しい発生状況を基に修正を行い，新たなテストケースを追加して二度とそのバグが発生しないようにしておきたい．</p>
+
+<p><a href="https://github.com/mitchellh/panicwrap">mitchellh/panicwrap</a>を使うと，panicが発生したときにそれ（バイナリ）を再び実行し，設定したhandlerを実行することで，その標準出力/エラー出力を取得することができる．このパッケージを使えばpanicが起こったときに詳細なクラッシュレポートを作成し，ユーザにそれを報告してもらうことができる．</p>
+
+<h2 id="使い方:fc683d9200d02aa9313aee343da796ef">使い方</h2>
+
+<p>使い方は簡単でトップレベルにhandlerを登録するだけ．まず簡単に動作例を説明する．以下の例はpanicが発生したときにそのpanicの出力を<code>crash.log</code>に書き込む例．</p>
+
+<pre><code class="language-golang">package main
+
+import (
+    &quot;fmt&quot;
+    &quot;os&quot;
+
+    &quot;github.com/mitchellh/panicwrap&quot;
+)
+
+func main() {
+    // (1)
+    exitStatus, _ := panicwrap.BasicWrap(handler)    
+
+    // (2)
+    if exitStatus &gt;= 0 {
+        os.Exit(exitStatus)
+    }
+
+    // (3)
+    panic(&quot;Panic happend here...&quot;)
+}
+
+func handler(output string) {
+    f, _ := os.Create(&quot;crash.log&quot;)
+    fmt.Fprintf(f, &quot;The child panicked!\n\n%s&quot;,output)
+    os.Exit(1)
+}
+</code></pre>
+
+<p>以下のように動作する．</p>
+
+<ul>
+<li><code>(1)</code>ではhandlerを<code>BasicWrap</code>に登録する</li>
+<li><code>(2)</code>はpanicが発生した場合．この場合<code>exitStatus</code>は0以上の値になる</li>
+<li><code>(3)</code>は通常の実行．ここで<code>panic</code>を発生させている．</li>
+</ul>
+
+<p>動作としては<code>(2)</code>でpanicが発生し<code>(0)</code>で登録したhandler（ここでは<code>crash.log</code>への書き込み）を実行し，<code>(1)</code>で終了する．</p>
+
+<h2 id="内部の仕組み:fc683d9200d02aa9313aee343da796ef">内部の仕組み</h2>
+
+<p><code>panicwrap</code>が何をしているかを簡単に見てみる．<code>BasicWrap</code>から<code>Wrap</code>が呼ばれ中で自分自身（バイナリ）を実行している．</p>
+
+<pre><code class="language-golang">exePath, err := osext.Executable()
+....
+
+cmd := exec.Command(exePath, os.Args[1:]...)
+cmd.Env = append(os.Environ(), c.CookieKey+&quot;=&quot;+c.CookieValue)
+...
+
+if err := cmd.Start(); err != nil {
+    return 1, err
+}
+...    
+</code></pre>
+
+<p>実行する際には環境変数にあらかじめ決められた<code>Cookie</code>を設定し，自分が子プロセス（<code>Wrap</code>から呼ばれたプロセス）なのか親プロセス（<code>Wrap</code>を読んだプロセス）なのかを判別できるようにしている．子プロセスの場合は<code>Wrap</code>は<code>-1</code>を返すため，通常のプロセス（上記の例で言うと<code>(2)</code>）が実行される．</p>
+
+<p>panicの発生は，<code>trackPanic</code>がgoroutineとして常に監視している．</p>
+
+<pre><code class="language-golang">func trackPanic(r io.Reader, w io.Writer, dur time.Duration, result chan&lt;- string)
+</code></pre>
+
+<p><code>r</code>には実行中の標準エラー出力が渡ってくるのでそれを読み込み<code>panic:</code>の文字列が含まれないかを検出する．それが検出され，かつ終了コードが0以外の場合はpanicが発生したとしてhandlerを実行する（<code>panic:</code>という文字列を標準エラーに出力してNon-Zeroで終了するとpanicとして扱われる）．</p>
+
+<h2 id="使いこなす:fc683d9200d02aa9313aee343da796ef">使いこなす</h2>
+
+<p><code>BasicWrap</code>を使うだけではpanicの出力しか取得できない．クラッシュレポートにはもっと様々な情報を含めたい．例えば，実行環境は何か，どのような引数を指定して実行したか，などなど．<code>WrapConfig</code>を自分で定義することで出力などをカスタマイズすることができる．</p>
+
+<p>以下は，ユーザが実行したコマンド引数をクラッシュレポートに出力する例</p>
+
+<pre><code class="language-golang">
+func main() {
+
+    // (1)
+    logTempFile, _ := ioutil.TempFile(&quot;&quot;, &quot;tmp-log&quot;)
+
+    var wrapConfig panicwrap.WrapConfig
+
+    // (2)
+    wrapConfig.Handler = handlerFunc(logTempFile)
+    
+    // (3)
+    wrapConfig.Writer = logTempFile
+
+    exitStatus, err := panicwrap.Wrap(&amp;wrapConfig)
+
+    if err != nil {
+        panic(err)
+    }
+
+    if exitStatus &gt;= 0 {
+        os.Exit(exitStatus)
+    }
+
+    // (4)
+    log.SetOutput(os.Stderr)
+    log.Printf(&quot;Run command: %s\n&quot;, strings.Join(os.Args[0:], &quot; &quot;))
+
+    panic(&quot;Fuck!!!&quot;)
+}
+
+func handlerFunc(logF *os.File) panicwrap.HandlerFunc {
+    return func(output string) {
+
+        file, _ := os.Create(&quot;crash.log&quot;)
+
+        // Seek the log file to read from begining
+        logF.Seek(0, 0)
+
+        // Write to crash.log
+        io.Copy(file, logF)
+
+        // Tell user a crash occured and ask to tell us a report.
+        fmt.Fprint(os.Stderr, &quot;\n\n!!! Application crashed, please report this !!! \n\n&quot;)
+
+        os.Exit(1)
+    }
+}
+</code></pre>
+
+<p>（わかりやすさのためにエラー処理や<code>close</code>処理は省略している）</p>
+
+<p>以下のように動作する．</p>
+
+<ul>
+<li><code>(1)</code>ではTempファイルを作成する，クラッシュレポートに出力したい内容はここに書き込む</li>
+<li><code>(2)</code>ではhandlerを指定する．上のTempファイルの内容を<code>crash.log</code>にpanicの出力と共に書き込んで保存するということをする</li>
+<li><code>(3)</code>では<code>wrapConfig.Writer</code>をTempファイルにする．<code>wrapConfig.Writer</code>は<code>Wrap</code>で実行したプロセスの標準エラー出力の書き込み先である（デフォルトは<code>os.Stderr</code>）</li>
+<li><code>(4)</code>からは通常の実行だがlogの出力先を標準エラー出力にする．これで<code>Wrap</code>プロセスの出力はTempファイルに吐き出されることになる．あとはlogにクラッシュレポートに含めたい内容を書き込んでいくだけ．</li>
+</ul>
+
+<h2 id="まとめ:fc683d9200d02aa9313aee343da796ef">まとめ</h2>
+
+<p>現在作ってるCLIツールが複数のプラットフォームに配布する予定なのでこれを利用してpanicしたときの詳しい状況を理解できるようにしている（バグレポート用のURLを表示するということもしている）．バグを報告してくれるかは善意に依るがその障壁は下げておきたい．</p>
+
+<p>Hashicorp系のツールではこれがほとんど使われているので読んでみると面白い．基本はそれらを参考にした．</p>
+
+      <div class="social">
+  
+  
+  <a href="https://twitter.com/share" class="twitter-share-button" data-via="deeeet" data-count="none">Tweet</a>
+  
+  
+</div>
+
+    </section>
+
+    <footer>
+      <address>
+        
+        <img src="/images/bio.jpeg"/>
+        
+        <p>Written by <strong><a rel="author" href="https://twitter.com/deeeet" title="Taichi Nakashima" target="_blank">Taichi Nakashima</a></strong><br>
+          <span class="muted">A Tokyo based PaaS engineer. Please contact me via twitter.</span>
+        </p>
+      </address>
+
+    </footer>
+
+  </div>
+</article>
+
+<script type="text/javascript" src="//ajax.googleapis.com/ajax/libs/jquery/1.7.2/jquery.min.js"></script>
+<script type="text/javascript" src="/js/main.js"></script>
+
+<script>!function(d,s,id){var js,fjs=d.getElementsByTagName(s)[0],p=/^http:/.test(d.location)?'http':'https';if(!d.getElementById(id)){js=d.createElement(s);js.id=id;js.src=p+'://platform.twitter.com/widgets.js';fjs.parentNode.insertBefore(js,fjs);}}(document, 'script', 'twitter-wjs');</script>
+
+
+<script type="text/javascript">var HN=[];HN.factory=function(e){return function(){HN.push([e].concat(Array.prototype.slice.call(arguments,0)))};},HN.on=HN.factory("on"),HN.once=HN.factory("once"),HN.off=HN.factory("off"),HN.emit=HN.factory("emit"),HN.load=function(){var e="hn-button.js";if(document.getElementById(e))return;var t=document.createElement("script");t.id=e,t.src="//hn-button.herokuapp.com/hn-button.js";var n=document.getElementsByTagName("script")[0];n.parentNode.insertBefore(t,n)},HN.load();</script>
+
+
+  <script>
+  (function(i,s,o,g,r,a,m){i['GoogleAnalyticsObject']=r;i[r]=i[r]||function(){
+  (i[r].q=i[r].q||[]).push(arguments)},i[r].l=1*new Date();a=s.createElement(o),
+  m=s.getElementsByTagName(o)[0];a.async=1;a.src=g;m.parentNode.insertBefore(a,m)
+  })(window,document,'script','//www.google-analytics.com/analytics.js','ga');
+
+  ga('create', 'UA-45390253-1', 'auto');
+  ga('send', 'pageview');
+
+</script>
+
+
+
+<script>
+  $(document).ready(function() {
+  
+  $('p:has(img)').css('text-align', 'center');
+  $('iframe').css('style', 'display: block; margin: 0px auto;');
+  });
+</script>
+

@@ -1,0 +1,186 @@
+<!doctype html>
+<html>
+  <head>
+    <meta http-equiv="content-type" content="text/html; charset=utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    
+    <title>Pushover使ってみた | SOTA</title>
+    
+    <link href="https://fonts.googleapis.com/css?family=Lato%3a900" rel="stylesheet" type="text/css">
+    <link rel="stylesheet" href="/css/main.css">
+    <link rel="shortcut icon" href="/favicon.png" type="image/x-icon" />
+    <link href="http://deeeet.com//index.xml" rel="alternate" type="application/rss+xml" title="" />
+    <meta name="title" content="http://deeeet.com/writing/2014/02/09/pushover/">
+    <link rel="canonical" href="http://deeeet.com/writing/2014/02/09/pushover/">
+    
+    <meta property="og:title" content="Pushover使ってみた"/>
+    <meta property="og:url" content="http://deeeet.com/writing/2014/02/09/pushover/"/>
+  </head>
+  
+  <body>
+    <section class="site-nav">
+      <header>
+        <nav id="navigation">
+          <ul class="menu">
+            <li><a href="https://github.com/tcnksm/talks">Talks</a></li>
+            <li><a href="https://tcnksm.exposure.co/">Photos</a></li>
+          </ul>
+
+          <a class="name" href="/">SOTA</a>
+        </nav>        
+      </header>
+    </section>
+    
+
+
+<article>
+  <div class="container">
+    <header>
+      <div class="meta">
+        <time pubdate datetime="2014-02-09" title="2014-02-09">February 09, 2014</time>
+      </div>
+      <h1 class="title">Pushover使ってみた</h1>
+    </header>
+    
+    <section>
+      <p><a href="https://pushover.net/">Pushover</a></p>
+
+<p>PushoverはiOS/Androidの通知アプリ．提供されるシンプルなAPIを介して，アプリに通知を送れる．HTTP POSTさえできればよいので，Shell Scriptからでもrubyやperlからでも簡単に通知が送れる．</p>
+
+<p>Rubyを使って遊んでみた．</p>
+
+<pre><code class="language-ruby">require 'net/https'
+
+url = URI.parse(&quot;https://api.pushover.net/1/messages.json&quot;)
+
+req = Net::HTTP::Post.new(url.path)
+req.set_form_data({
+                    token: &quot;****&quot;,
+                    user:  &quot;****&quot;,                    
+                    message: &quot;Check this link, http://deeeet.com/&quot;,
+                    title: &quot;お知らせ&quot;,    
+                    device: &quot;tcnksm_iphone&quot;,        
+                    url: &quot;tel:117&quot;,
+                    url_title: &quot;Call now&quot;,
+                    sound: &quot;alien&quot;
+                    })
+                    
+res = Net::HTTP.new(url.host, url.port)
+res.use_ssl = true
+res.verify_mode = OpenSSL::SSL::VERIFY_PEER
+res.start {|http| http.request(req)}
+</code></pre>
+
+<p><code>user</code>はsign upするともらえるUser Key．<code>token</code>はアプリを登録するともらえるAPI Token. <code>message</code>は通知の本文． この3つが必須でこれだけでも通知は可能．</p>
+
+<p><code>title</code>は通知のタイトル．指定しない場合は登録したアプリ名が使われる．<code>device</code>は通知したいデバイスを指定する．指定しない場合は登録されている全てのデバイスに通知される．</p>
+
+<p>通知は以下のような感じ．</p>
+
+<p><img src="/images/push_normal.PNG" class="image"></p>
+
+<p>通知をタップすると，詳細が表示される．</p>
+
+<p><img src="/images/push_normal2.PNG" class="image"></p>
+
+<p>通知本文内のURLは自動で判別されるため，ブラウザで開くことができる．<code>url</code>と<code>url_title</code>パラメータを与えれば，追加でURLを送ることもできる．これで長いURLも送ることができるし，アプリのURLスキームも使えるので，例えば上のように<code>tel:117</code>とすれば，タップでそのまま電話アプリを開いて117に電話するなんてこともできる（117はありえんが）．また<code>sound</code>パラメータで通知音を変更することもできる．使える音は<a href="https://pushover.net/api#sounds">ここ</a>にある．</p>
+
+<p><code>priority</code>パラメータで通知のレベルも変更することができる．レベルは，Low(-1)，Normal(0)，High(1)，Emergency(2)の4つがある．</p>
+
+<ul>
+<li>Low: 通知は送られるが，通知音は鳴らない</li>
+<li>Normal: デフォルト．自分で設定するQuiet Hoursの間は通知音は鳴らない</li>
+<li>High: Quiet Hoursであっても通知音が鳴る</li>
+<li>Emergency: 通知内の確認ボタンをタップするまで通知音が鳴り続ける</li>
+</ul>
+
+<p>例えば通知のレベルをHighにすると，通知は以下のように赤色になる．</p>
+
+<p><img src="/images/push_hp.PNG" class="image"></p>
+
+<p>通知のレベルをEmergencyにする場合は，以下のように<code>retry</code>で通知の間隔，<code>expire</code>で通知の持続時間を指定する必要がある．</p>
+
+<pre><code class="language-ruby">req.set_form_data({
+                    token: &quot;****&quot;, 
+                    user: &quot;****&quot;,  
+                    title: &quot;めっちゃ緊急！&quot;,
+                    message: &quot;Something happen&quot;,
+                    priority: 2,
+                    retry: 30,
+                    expire: 300,
+                    })
+</code></pre>
+
+<p>通知は以下のように，Highより赤く表示される．</p>
+
+<p><img src="/images/push_em.PNG" class="image"></p>
+
+<p>通知を止めるには，メッセージを開いて&rdquo;Acknowledge Notification&rdquo;をタップする必要がある．</p>
+
+<p><img src="/images/push_em2.PNG" class="image"></p>
+
+<p>ざっと触ってみたけど簡単だった．基本，障害通知を意識して作られてる印象あるけど，もっといろいろ面白い使い道がありそう．<a href="https://ifttt.com/pushover">IFTTTのRecipe</a>も作れるようになってる．IFTTTでは物足りないときに簡単にスクリプト組めそうでよい．</p>
+
+<p>rubyしか見てないが，gemも既にある，<a href="https://github.com/erniebrodeur/pushover">erniebrodeur/pushover</a></p>
+
+<p>参考</p>
+
+<ul>
+<li>今回のサンプルのソース，<a href="https://github.com/tcnksm/pushover">tcnksm/pushover</a></li>
+</ul>
+
+      <div class="social">
+  
+  
+  <a href="https://twitter.com/share" class="twitter-share-button" data-via="deeeet" data-count="none">Tweet</a>
+  
+  
+</div>
+
+    </section>
+
+    <footer>
+      <address>
+        
+        <img src="/images/bio.jpeg"/>
+        
+        <p>Written by <strong><a rel="author" href="https://twitter.com/deeeet" title="Taichi Nakashima" target="_blank">Taichi Nakashima</a></strong><br>
+          <span class="muted">A Tokyo based PaaS engineer. Please contact me via twitter.</span>
+        </p>
+      </address>
+
+    </footer>
+
+  </div>
+</article>
+
+<script type="text/javascript" src="//ajax.googleapis.com/ajax/libs/jquery/1.7.2/jquery.min.js"></script>
+<script type="text/javascript" src="/js/main.js"></script>
+
+<script>!function(d,s,id){var js,fjs=d.getElementsByTagName(s)[0],p=/^http:/.test(d.location)?'http':'https';if(!d.getElementById(id)){js=d.createElement(s);js.id=id;js.src=p+'://platform.twitter.com/widgets.js';fjs.parentNode.insertBefore(js,fjs);}}(document, 'script', 'twitter-wjs');</script>
+
+
+<script type="text/javascript">var HN=[];HN.factory=function(e){return function(){HN.push([e].concat(Array.prototype.slice.call(arguments,0)))};},HN.on=HN.factory("on"),HN.once=HN.factory("once"),HN.off=HN.factory("off"),HN.emit=HN.factory("emit"),HN.load=function(){var e="hn-button.js";if(document.getElementById(e))return;var t=document.createElement("script");t.id=e,t.src="//hn-button.herokuapp.com/hn-button.js";var n=document.getElementsByTagName("script")[0];n.parentNode.insertBefore(t,n)},HN.load();</script>
+
+
+  <script>
+  (function(i,s,o,g,r,a,m){i['GoogleAnalyticsObject']=r;i[r]=i[r]||function(){
+  (i[r].q=i[r].q||[]).push(arguments)},i[r].l=1*new Date();a=s.createElement(o),
+  m=s.getElementsByTagName(o)[0];a.async=1;a.src=g;m.parentNode.insertBefore(a,m)
+  })(window,document,'script','//www.google-analytics.com/analytics.js','ga');
+
+  ga('create', 'UA-45390253-1', 'auto');
+  ga('send', 'pageview');
+
+</script>
+
+
+
+<script>
+  $(document).ready(function() {
+  
+  $('p:has(img)').css('text-align', 'center');
+  $('iframe').css('style', 'display: block; margin: 0px auto;');
+  });
+</script>
+

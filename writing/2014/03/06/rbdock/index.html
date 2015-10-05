@@ -1,0 +1,291 @@
+<!doctype html>
+<html>
+  <head>
+    <meta http-equiv="content-type" content="text/html; charset=utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    
+    <title>rbdockというRuby/Rails/Sinatra用のDockerfileを生成するgemをつくった | SOTA</title>
+    
+    <link href="https://fonts.googleapis.com/css?family=Lato%3a900" rel="stylesheet" type="text/css">
+    <link rel="stylesheet" href="/css/main.css">
+    <link rel="shortcut icon" href="/favicon.png" type="image/x-icon" />
+    <link href="http://deeeet.com//index.xml" rel="alternate" type="application/rss+xml" title="" />
+    <meta name="title" content="http://deeeet.com/writing/2014/03/06/rbdock/">
+    <link rel="canonical" href="http://deeeet.com/writing/2014/03/06/rbdock/">
+    
+    <meta property="og:title" content="rbdockというRuby/Rails/Sinatra用のDockerfileを生成するgemをつくった"/>
+    <meta property="og:url" content="http://deeeet.com/writing/2014/03/06/rbdock/"/>
+  </head>
+  
+  <body>
+    <section class="site-nav">
+      <header>
+        <nav id="navigation">
+          <ul class="menu">
+            <li><a href="https://github.com/tcnksm/talks">Talks</a></li>
+            <li><a href="https://tcnksm.exposure.co/">Photos</a></li>
+          </ul>
+
+          <a class="name" href="/">SOTA</a>
+        </nav>        
+      </header>
+    </section>
+    
+
+
+<article>
+  <div class="container">
+    <header>
+      <div class="meta">
+        <time pubdate datetime="2014-03-06" title="2014-03-06">March 06, 2014</time>
+      </div>
+      <h1 class="title">rbdockというRuby/Rails/Sinatra用のDockerfileを生成するgemをつくった</h1>
+    </header>
+    
+    <section>
+      
+
+<ul>
+<li><a href="https://github.com/tcnksm/rbdock">tcnksm/rbdock</a></li>
+<li><a href="https://rubygems.org/gems/rbdock">rbdock | RubyGems.org | your community gem host</a></li>
+</ul>
+
+<p>実験的に作ってみた．RubyやRails，Sinatraアプリケーションを動かすためのDockerfileを生成する．</p>
+
+<p>これを作った理由は，今まで自分でRuby/Rails/Sinatraのコンテナを作ってみたり，Web上のRuby+Docker関連の記事などを見ていると，どれも同じようなDockerfileを書いていたため．</p>
+
+<p>さらに，Dockerの流れを見ていると，</p>
+
+<ul>
+<li>コンテナは必要なものだけを入れるようになりそう．つまり，RedisならRedisの，nginxならnginxの，RailsならRailsのコンテナをそれぞれ作るようになりそう．</li>
+<li>コンテナの起動やコンテナ間の連携は<a href="http://orchardup.github.io/fig/index.html">Fig</a>などが受け持ってくれそう．</li>
+</ul>
+
+<p>な雰囲気なので，Ruby/Rails/Sinatra用のコンテナをつくるためのDockerfileをつくるところに特化したツールを作ってみようと考えた．ちなみにDocker.ioには，あらかじめRubyがビルドされたイメージが上げられつつある．だから，それをそのまま使うのもありだけど，編集可能なDockerfileが手元にある方がよい．</p>
+
+<h2 id="インストール:b3978843e0ab2502d8ab62181cb2e455">インストール</h2>
+
+<p>gemでインストールする．</p>
+
+<pre><code class="language-bash">$ gem install rbdock
+</code></pre>
+
+<p>インストールが完了すると<code>rbdock</code>というコマンドが使えるようになる．</p>
+
+<pre><code class="language-bash">$ rbdock --version
+rbdock 0.1.0
+</code></pre>
+
+<h2 id="使い方-rubyのみ:b3978843e0ab2502d8ab62181cb2e455">使い方（Rubyのみ）</h2>
+
+<p>使い方は以下．使いたいバージョンのRubyを指定するだけで，そのバージョンのRubyが使えるDockerfileが生成される．</p>
+
+<pre><code class="language-bash">$ rbdock &lt;ruby-versions&gt; [&lt;args&gt;]
+</code></pre>
+
+<p>例えば，ruby 2.1.0が使えるDockerfileを生成したい場合は以下のようにする．</p>
+
+<pre><code class="language-bash">$ rbdock 2.1.0
+</code></pre>
+
+<p>生成結果は以下．</p>
+
+<pre><code>FROM ubuntu
+
+# Install basic packages
+RUN apt-get update
+RUN apt-get install -y build-essential wget curl git
+RUN apt-get install -y zlib1g-dev libssl-dev libreadline-dev libyaml-dev libxml2-dev libxslt-dev
+RUN apt-get install -y sqlite3 libsqlite3-dev
+RUN apt-get clean
+
+# Install ruby-build
+RUN git clone https://github.com/sstephenson/ruby-build.git .ruby-build
+RUN .ruby-build/install.sh
+RUN rm -fr .ruby-build
+
+# Install ruby-2.1.0
+RUN ruby-build 2.1.0 /usr/local
+
+# Install bundler
+RUN gem update --system
+RUN gem install bundler --no-rdoc --no-ri
+</code></pre>
+
+<p>あとは，このDockerfileを基にイメージをビルドするだけ．</p>
+
+<pre><code class="language-bash">$ docker build -t tcnksm/ruby:2.1.0
+$ docker run -i -t tcnksm/ruby:2.1.0 bash -c -l 'ruby -v'
+ruby 2.1.0p0 (2013-12-25 revision 44422) [x86_64-linux]
+</code></pre>
+
+<p>複数のバージョンを指定することもできる．</p>
+
+<pre><code class="language-bash">$ rbdock 2.0.0-p353 1.9.3-p484
+</code></pre>
+
+<p>生成結果は，<a href="https://gist.github.com/tcnksm/9388736">こちら</a>．複数のRubyをインストールする場合デフォルトでは<a href="https://github.com/sstephenson/rbenv">rbenv</a>が使われるが，<code>--rvm</code>オプションで<a href="https://rvm.io/">rvm</a>を使うこともできる．</p>
+
+<h2 id="使い方-rails-sinatra:b3978843e0ab2502d8ab62181cb2e455">使い方（Rails/Sinatra）</h2>
+
+<p>Rails/Sinatraアプリケーションを同梱したイメージを作るためのDockerfileも生成できる．例えば，ローカルのRailsアプリケーションを含めたい場合は，以下のように<code>--app</code>オプションにアプリケーションのパスを渡す．</p>
+
+<pre><code class="language-bash">$ rails new my_rails_app
+...
+$ rbdock 2.0.0-p353 --app my_rails_app
+</code></pre>
+
+<p>生成結果は以下．</p>
+
+<pre><code>FROM ubuntu
+
+# Install basic packages
+RUN apt-get update
+RUN apt-get install -y build-essential wget curl git
+RUN apt-get install -y zlib1g-dev libssl-dev libreadline-dev libyaml-dev libxml2-dev libxslt-dev
+RUN apt-get install -y sqlite3 libsqlite3-dev
+RUN apt-get clean
+
+# Install ruby-build
+RUN git clone https://github.com/sstephenson/ruby-build.git .ruby-build
+RUN .ruby-build/install.sh
+RUN rm -fr .ruby-build
+
+# Install ruby-2.0.0-p353
+RUN ruby-build 2.0.0-p353 /usr/local
+
+# Install bundler
+RUN gem update --system
+RUN gem install bundler --no-rdoc --no-ri
+
+# Add application
+RUN mkdir /myapp
+WORKDIR /myapp
+ADD my_rails_app/Gemfile /myapp/Gemfile
+RUN bundle install
+ADD my_rails_app /myapp
+
+ENTRYPOINT [&quot;bash&quot;, &quot;-l&quot;, &quot;-c&quot;]
+</code></pre>
+
+<p>Gemfileを<code>ADD</code>するテクニックは<a href="http://ilikestuffblog.com/2014/01/06/how-to-skip-bundle-install-when-deploying-a-rails-app-to-docker/">&ldquo;How to Skip Bundle Install When Deploying a Rails App to Docker if the Gemfile Hasn’t Changed&rdquo;</a>を参考にしている．</p>
+
+<p>後は，イメージをビルドしてコンテナを起動するだけ．</p>
+
+<pre><code class="language-bash">$ docker build -t tcnksm/rails_app .
+$ docker run -i -p 3000:3000 -t tcnksm/rails_app 'rails server'
+</code></pre>
+
+<p>リモートのレポジトリにホストしているプロジェクトを同梱することも可能．例えば，Githubに置いてあるSinatraアプリケーションを指定する．</p>
+
+<pre><code class="language-bash">$ rbdock 2.0.0-p353 --app https://github.com/tcnksm/trying-space
+</code></pre>
+
+<p>生成結果は，<a href="https://gist.github.com/tcnksm/9389116">こちら</a>．あとは，ビルドして起動するだけ．</p>
+
+<pre><code class="language-bash">$ docker build -t tcnksm/sinatra_app .
+$ docker run -i -p 8080:8080 -t tcnksm/my_sinatra_app 'rackup -p 8080'
+</code></pre>
+
+<h2 id="オプション:b3978843e0ab2502d8ab62181cb2e455">オプション</h2>
+
+<p>指定可能なオプションは以下</p>
+
+<ul>
+<li><code>--image</code>
+
+<ul>
+<li>ベースイメージを指定する．デフォルトはubuntu．現時点ではubuntuとcentosのみに対応している．</li>
+</ul></li>
+<li><code>--rbenv</code>
+
+<ul>
+<li>Rubyのインストールに<a href="https://github.com/sstephenson/rbenv">rbenv</a>を使う．</li>
+</ul></li>
+<li><code>--rvm</code>
+
+<ul>
+<li>Rubyのインストールに<a href="https://github.com/wayneeseguin/rvm">rvm</a>を使う．</li>
+</ul></li>
+<li><code>--app</code>
+
+<ul>
+<li>Rails/SinatraのアプリケーションのPathもしくはレポジトリのURLを指定する．</li>
+</ul></li>
+<li><code>--list</code>
+
+<ul>
+<li>利用可能なRubyのバージョンを表示する．</li>
+</ul></li>
+</ul>
+
+<h2 id="バグ:b3978843e0ab2502d8ab62181cb2e455">バグ</h2>
+
+<p><a href="https://twitter.com/deeeet">@deeeet</a>，もしくはGithubのIssueにお願いします．</p>
+
+<h2 id="参考:b3978843e0ab2502d8ab62181cb2e455">参考</h2>
+
+<ul>
+<li><a href="http://www.sitepoint.com/docker-for-rubyists/">Docker for Rubyists</a></li>
+<li><a href="http://www.powpark.com/blog/programming/2013/11/11/using-docker-and-vagrant-on-mac-osx-for-a-ruby-on-rails-app/">Using Docker and Vagrant on Mac OS X with a Ruby on Rails application</a></li>
+<li><a href="http://dyli.sh/2013/08/23/OSX-Vagrant-Docker-Sinatra.html">OSX, Vagrant, Docker, and Sinatra</a></li>
+<li><a href="http://haanto.com/sinatra-deployment-with-docker/">Sinatra deployment with Docker</a></li>
+<li><a href="http://blog.livedoor.jp/sonots/archives/36632684.html">ruby が色々入っている docker イメージを作っておいたメモ</a></li>
+<li><a href="http://deeeet.com/writing/2013/12/12/docker-rbenv/">Dockerで複数バージョンのrubyがインストールされたイメージを作る</a></li>
+</ul>
+
+      <div class="social">
+  
+  
+  <a href="https://twitter.com/share" class="twitter-share-button" data-via="deeeet" data-count="none">Tweet</a>
+  
+  
+</div>
+
+    </section>
+
+    <footer>
+      <address>
+        
+        <img src="/images/bio.jpeg"/>
+        
+        <p>Written by <strong><a rel="author" href="https://twitter.com/deeeet" title="Taichi Nakashima" target="_blank">Taichi Nakashima</a></strong><br>
+          <span class="muted">A Tokyo based PaaS engineer. Please contact me via twitter.</span>
+        </p>
+      </address>
+
+    </footer>
+
+  </div>
+</article>
+
+<script type="text/javascript" src="//ajax.googleapis.com/ajax/libs/jquery/1.7.2/jquery.min.js"></script>
+<script type="text/javascript" src="/js/main.js"></script>
+
+<script>!function(d,s,id){var js,fjs=d.getElementsByTagName(s)[0],p=/^http:/.test(d.location)?'http':'https';if(!d.getElementById(id)){js=d.createElement(s);js.id=id;js.src=p+'://platform.twitter.com/widgets.js';fjs.parentNode.insertBefore(js,fjs);}}(document, 'script', 'twitter-wjs');</script>
+
+
+<script type="text/javascript">var HN=[];HN.factory=function(e){return function(){HN.push([e].concat(Array.prototype.slice.call(arguments,0)))};},HN.on=HN.factory("on"),HN.once=HN.factory("once"),HN.off=HN.factory("off"),HN.emit=HN.factory("emit"),HN.load=function(){var e="hn-button.js";if(document.getElementById(e))return;var t=document.createElement("script");t.id=e,t.src="//hn-button.herokuapp.com/hn-button.js";var n=document.getElementsByTagName("script")[0];n.parentNode.insertBefore(t,n)},HN.load();</script>
+
+
+  <script>
+  (function(i,s,o,g,r,a,m){i['GoogleAnalyticsObject']=r;i[r]=i[r]||function(){
+  (i[r].q=i[r].q||[]).push(arguments)},i[r].l=1*new Date();a=s.createElement(o),
+  m=s.getElementsByTagName(o)[0];a.async=1;a.src=g;m.parentNode.insertBefore(a,m)
+  })(window,document,'script','//www.google-analytics.com/analytics.js','ga');
+
+  ga('create', 'UA-45390253-1', 'auto');
+  ga('send', 'pageview');
+
+</script>
+
+
+
+<script>
+  $(document).ready(function() {
+  
+  $('p:has(img)').css('text-align', 'center');
+  $('iframe').css('style', 'display: block; margin: 0px auto;');
+  });
+</script>
+

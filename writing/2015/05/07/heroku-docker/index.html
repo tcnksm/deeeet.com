@@ -1,0 +1,264 @@
+<!doctype html>
+<html>
+  <head>
+    <meta http-equiv="content-type" content="text/html; charset=utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    
+    <title>Herokuの&#39;docker:release&#39;の動き | SOTA</title>
+    
+    <link href="https://fonts.googleapis.com/css?family=Lato%3a900" rel="stylesheet" type="text/css">
+    <link rel="stylesheet" href="/css/main.css">
+    <link rel="shortcut icon" href="/favicon.png" type="image/x-icon" />
+    <link href="http://deeeet.com//index.xml" rel="alternate" type="application/rss+xml" title="" />
+    <meta name="title" content="http://deeeet.com/writing/2015/05/07/heroku-docker/">
+    <link rel="canonical" href="http://deeeet.com/writing/2015/05/07/heroku-docker/">
+    
+    <meta property="og:title" content="Herokuの&#39;docker:release&#39;の動き"/>
+    <meta property="og:url" content="http://deeeet.com/writing/2015/05/07/heroku-docker/"/>
+  </head>
+  
+  <body>
+    <section class="site-nav">
+      <header>
+        <nav id="navigation">
+          <ul class="menu">
+            <li><a href="https://github.com/tcnksm/talks">Talks</a></li>
+            <li><a href="https://tcnksm.exposure.co/">Photos</a></li>
+          </ul>
+
+          <a class="name" href="/">SOTA</a>
+        </nav>        
+      </header>
+    </section>
+    
+
+
+<article>
+  <div class="container">
+    <header>
+      <div class="meta">
+        <time pubdate datetime="2015-05-07" title="2015-05-07">May 07, 2015</time>
+      </div>
+      <h1 class="title">Herokuの&#39;docker:release&#39;の動き</h1>
+    </header>
+    
+    <section>
+      
+
+<p><a href="https://blog.heroku.com/archives/2015/5/5/introducing_heroku_docker_release_build_deploy_heroku_apps_with_docker">Introducing &lsquo;heroku docker:release&rsquo;: Build &amp; Deploy Heroku Apps with Docker</a></p>
+
+<p>HerokuがDockerを使ったツールを提供し始めた．一通り触ってコードもちょっと読んでみたので現時点でできること，内部の動きについてまとめる．</p>
+
+<h2 id="tl-dr:0491c64fbb9580a039fc1e6c54efd333">TL;DR</h2>
+
+<ul>
+<li><a href="https://twitter.com/miyagawa/status/596020653540528128">Herokuのデプロイ環境とおなじものをDockerでつくれる</a></li>
+<li>Buildpackを使わないで<code>Dockerfile</code>からSlugを作れる</li>
+</ul>
+
+<p>自分の好きなDockerイメージをHeroku上で動かせるようになるわけではない．</p>
+
+<h2 id="何ができるのか:0491c64fbb9580a039fc1e6c54efd333">何ができるのか</h2>
+
+<p>まず何ができるようになったのかについて簡単に書く．プラグインをインストールするとDockerコマンドが使えるようになる．</p>
+
+<pre><code class="language-bash">$ heroku plugins:install heroku-docker
+</code></pre>
+
+<p>カレントディレクトリの言語/フレームワークに応じた専用の<code>Dockerfile</code>を生成する（これはなんでも好きに書ける<code>Dockerfile</code>ではないことに注意）．</p>
+
+<pre><code class="language-bash">$ heroku docker:init
+Wrote Dockerfile (ruby)
+</code></pre>
+
+<p>上記で作成した<code>Dockerfile</code>をもとにDockerコンテナを起動してコンテナ内でアプリケーションを起動する．</p>
+
+<pre><code class="language-bash">$ heroku docker:start
+...
+web process will be available at http://192.168.59.103:3000/
+</code></pre>
+
+<p>起動したコンテナ内でOne-offコマンドを実行する．</p>
+
+<pre><code class="language-bash">$ heroku docker:exec bundle exec rake db:migrate
+</code></pre>
+
+<p>開発が終わったら上記のDockerイメージから<a href="https://devcenter.heroku.com/articles/slug-compiler">Slug</a>（アプリケーションのソースとその依存関係を全て含めた<code>.tgz</code>）を作成してそれをそのままHeroku上にデプロイすることができる．デプロイされるとそれは通常通りに<a href="https://devcenter.heroku.com/articles/dynos#the-dyno-manager">Dyno</a>になりアクセスできるようになる．</p>
+
+<pre><code class="language-bash">$ heroku docker:release
+$ heroku open
+</code></pre>
+
+<p>以下の制約を満たせば生成された<code>Dockerfile</code>を自分なりに編集することもできる．</p>
+
+<ul>
+<li><code>heroku:cedar</code>イメージをベースにする</li>
+<li><code>/app</code>ディレクトリ以下に変更が入るようにする</li>
+</ul>
+
+<p>詳しくは以下で説明する．</p>
+
+<h2 id="内部の仕組み:0491c64fbb9580a039fc1e6c54efd333">内部の仕組み</h2>
+
+<p>上記のワークフローで実際に何が行われているのかをコード/コマンドレベルで追ってみる．プラグインのソースは<a href="https://github.com/heroku/heroku-docker">https://github.com/heroku/heroku-docker</a>にある．</p>
+
+<h3 id="init:0491c64fbb9580a039fc1e6c54efd333">init</h3>
+
+<p>まず<code>docker:init</code>による<code>Dockerfile</code>の生成．これはカレントディレクトリのソースコードからプラットフォームを判別し，プラットフォーム専用のテンプレートから生成する．テンプレートは<a href="https://github.com/heroku/heroku-docker/tree/master/platforms">heroku/heroku-docker/platforms</a>以下にある．現在はRuby，Node，Scalaがサポートされている．</p>
+
+<p>プラットフォーム判別はBuildpackと同じ仕組み．例えばRubyの場合は以下のように<code>Gemfile</code>の有無により判別する．</p>
+
+<pre><code class="language-js">detect: function(dir) {
+      if (exists.sync(path.resolve(dir, 'Gemfile'))) return true;
+      if (exists.sync(path.resolve(dir, 'Gemfile.lock'))) return true;
+}
+</code></pre>
+
+<p>生成される<code>Dockerfile</code>を見ると大体以下のことをしている．</p>
+
+<ul>
+<li>ベースイメージとして<code>heroku/cedar:14</code>を利用する</li>
+<li><code>/app</code>以下に各種言語のRuntimeや依存パッケージをインストールする</li>
+<li><code>ONBUILD</code>でカレントディレクトリのソースを<code>/app</code>に取り込む</li>
+</ul>
+
+<p><a href="https://devcenter.heroku.com/articles/cedar">Cedar</a>というのはHeroku上でDynoを動かすプラットフォーム．ベースはUbunutで<a href="https://github.com/heroku/stack-images/blob/master/bin/cedar-14.sh">cedar-14.sh</a>スクリプトで作られる（つまり，DockerでローカルにHerokuプラットフォームを再現してその上にアプリケーションを載せている感じになる）．</p>
+
+<p>自分でスクラッチで<code>Dockerfile</code>を書くこともできる．以下で最小限の<code>Dockerfile</code>を生成できる．</p>
+
+<pre><code class="language-bash">$ heroku docker:init --template minimal
+</code></pre>
+
+<h3 id="start:0491c64fbb9580a039fc1e6c54efd333">start</h3>
+
+<p>次に<code>docker:start</code>コマンドによるアプリケーションコンテナの起動．このコマンドでは以下の3つのことを行う．</p>
+
+<ul>
+<li>ベースイメージのビルド</li>
+<li>アプリケーションを含めたイメージのビルド（<code>ONBUILD</code>）</li>
+<li>作成したイメージをもとにコンテナの起動</li>
+</ul>
+
+<p>まずベースイメージのビルドは以下のコマンドを叩いている．</p>
+
+<pre><code class="language-bash">$ docker build --force-rm --file=&quot;${dockerfile}&quot; --tag=&quot;${id}&quot; &quot;${dir}&quot;
+</code></pre>
+
+<p>タグ名は<code>heroku-docker-${hash}</code>でHash値はDockerfileの内容から生成される（ので<code>Dockerfile</code>を更新していなければビルドは走らない）．</p>
+
+<p>次にアプリケーションを含めたイメージのビルド．これは以下のように新しく一時的な<code>Dockerfile</code>を生成してビルドする（<code>execImageId</code>はタグ名）．</p>
+
+<pre><code class="language-js">var contents = `FROM ${execImageId}`;
+var imageId = `${execImageId}-start`;
+var filename = `.Dockerfile-${uuid.v1()}`;
+</code></pre>
+
+<p>上で見たように生成された<code>Dockerfile</code>においてアプリケーションのコードをイメージに含める部分は<code>ONBUILD</code>が使われていた．このステップは<code>ONBUILD</code>を実行するために行われる．この仕組みにより，同じ<code>Dockerfile</code>＋同じ言語のアプリケーションである場合にベースイメージの再度ビルドが不要になる（つまりアプリケーションコードの追加と依存関係の解決のみが走る）．このステップが<code>git push</code>したことと同じになる．</p>
+
+<p>最後にコンテナの起動は以下のコマンドが実行される．</p>
+
+<pre><code class="language-bash">docker run -w /app/src -p 3000:3000 --rm -it ${mountComponent} ${envArgComponent} ${imageId} sh -c &quot;${command}&quot;
+</code></pre>
+
+<p><code>&quot;${command}&quot;</code>には<code>Procfile</code>の内容が使われる．DBのURLなどは<code>.env</code>ファイルに環境変数を書いておけばよい．このファイルはここで読み込まれて<code>-e KEY=VALUME</code>形式で<code>${envArgComponent}</code>に展開される．</p>
+
+<p>以上の仕組みでローカル環境でアプリケーションが起動する．</p>
+
+<h3 id="release:0491c64fbb9580a039fc1e6c54efd333">release</h3>
+
+<p>最後に<code>docker:release</code>コマンドでSlugがHerokuにデプロイされる仕組み．このコマンドでは以下の3つのことを行う．</p>
+
+<ul>
+<li>Slug（<code>slug.tgz</code>）の作成</li>
+<li>起動コマンド（<code>process_types</code>）の設定</li>
+<li>Slugのアップロード</li>
+</ul>
+
+<p>Slugの作成は<code>docker:start</code>コマンドでDockerコンテナを起動し，そのコンテナに対して以下のコマンドを実行する．</p>
+
+<pre><code class="language-bash">$ docker run -d ${imageId} tar cfvz /tmp/slug.tgz -C / --exclude=.git --exclude=.heroku ./app
+$ docker wait ${containerId}
+$ docker cp ${containerId}:/tmp/slug.tgz ${slugPath}
+</code></pre>
+
+<p><code>/app</code>以下を<code>tgz</code>で固めて<code>cp</code>コマンドでそれを取り出している．なので<code>Dockerfile</code>に独自の変更を加えるときは注意が必要で<code>/app</code>以下に依存をちゃんと含めるように書く必要がある．</p>
+
+<p>例えば<a href="http://www.graphicsmagick.org/">GraphicsMagick</a>を依存に含めたいときは以下のように<code>Dockerfile</code>を書いて<code>/app</code>以下に変更が加わるように意識しなければならない．</p>
+
+<pre><code class="language-bash">RUN curl -s http://78.108.103.11/MIRROR/ftp/GraphicsMagick/1.3/GraphicsMagick-1.3.21.tar.gz | tar xvz -C /tmp
+WORKDIR /tmp/GraphicsMagick-1.3.21
+RUN ./configure --disable-shared --disable-installed
+RUN make DESTDIR=/app install
+RUN echo &quot;export PATH=\&quot;/app/usr/local/bin:\$PATH\&quot;&quot; &gt;&gt; /app/.profile.d/nodejs.sh
+ENV PATH /app/usr/local/bin:$PATH
+</code></pre>
+
+<p>（Go言語で書かれた静的リンクされたバイナリを使うのは楽そう）</p>
+
+<p>起動コマンド（<code>process_types</code>）の設定とSlugのアップロードはPlatform APIを叩いているだけ，詳しくは<a href="https://devcenter.heroku.com/articles/platform-api-deploying-slugs">&ldquo;Creating Slugs from Scratch&rdquo;</a>を参考．</p>
+
+<h2 id="まとめ:0491c64fbb9580a039fc1e6c54efd333">まとめ</h2>
+
+<p>Dockerを使うことでHerokuアプリの開発をやりやすくしたという印象．Buildpackとの連携も進むのではないか（Buildpack+Dockerだと<a href="http://www.centurylinklabs.com/heroku-on-docker/">building</a>かなあ）．ローカル開発環境にDocker（boot2docker）はあるっしょという前提でツールを提供する流れだ．Dockerコマンドをラップしたり<code>Dockerfile</code>を自動生成したりね．</p>
+
+<h2 id="参考:0491c64fbb9580a039fc1e6c54efd333">参考</h2>
+
+<ul>
+<li><a href="https://devcenter.heroku.com/articles/introduction-local-development-with-docker">Introduction: Local Development with Docker</a></li>
+</ul>
+
+      <div class="social">
+  
+  
+  <a href="https://twitter.com/share" class="twitter-share-button" data-via="deeeet" data-count="none">Tweet</a>
+  
+  
+</div>
+
+    </section>
+
+    <footer>
+      <address>
+        
+        <img src="/images/bio.jpeg"/>
+        
+        <p>Written by <strong><a rel="author" href="https://twitter.com/deeeet" title="Taichi Nakashima" target="_blank">Taichi Nakashima</a></strong><br>
+          <span class="muted">A Tokyo based PaaS engineer. Please contact me via twitter.</span>
+        </p>
+      </address>
+
+    </footer>
+
+  </div>
+</article>
+
+<script type="text/javascript" src="//ajax.googleapis.com/ajax/libs/jquery/1.7.2/jquery.min.js"></script>
+<script type="text/javascript" src="/js/main.js"></script>
+
+<script>!function(d,s,id){var js,fjs=d.getElementsByTagName(s)[0],p=/^http:/.test(d.location)?'http':'https';if(!d.getElementById(id)){js=d.createElement(s);js.id=id;js.src=p+'://platform.twitter.com/widgets.js';fjs.parentNode.insertBefore(js,fjs);}}(document, 'script', 'twitter-wjs');</script>
+
+
+<script type="text/javascript">var HN=[];HN.factory=function(e){return function(){HN.push([e].concat(Array.prototype.slice.call(arguments,0)))};},HN.on=HN.factory("on"),HN.once=HN.factory("once"),HN.off=HN.factory("off"),HN.emit=HN.factory("emit"),HN.load=function(){var e="hn-button.js";if(document.getElementById(e))return;var t=document.createElement("script");t.id=e,t.src="//hn-button.herokuapp.com/hn-button.js";var n=document.getElementsByTagName("script")[0];n.parentNode.insertBefore(t,n)},HN.load();</script>
+
+
+  <script>
+  (function(i,s,o,g,r,a,m){i['GoogleAnalyticsObject']=r;i[r]=i[r]||function(){
+  (i[r].q=i[r].q||[]).push(arguments)},i[r].l=1*new Date();a=s.createElement(o),
+  m=s.getElementsByTagName(o)[0];a.async=1;a.src=g;m.parentNode.insertBefore(a,m)
+  })(window,document,'script','//www.google-analytics.com/analytics.js','ga');
+
+  ga('create', 'UA-45390253-1', 'auto');
+  ga('send', 'pageview');
+
+</script>
+
+
+
+<script>
+  $(document).ready(function() {
+  
+  $('p:has(img)').css('text-align', 'center');
+  $('iframe').css('style', 'display: block; margin: 0px auto;');
+  });
+</script>
+

@@ -1,0 +1,168 @@
+<!doctype html>
+<html>
+  <head>
+    <meta http-equiv="content-type" content="text/html; charset=utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    
+    <title>Golang Cross Compiler on Heroku (with Docker) | SOTA</title>
+    
+    <link href="https://fonts.googleapis.com/css?family=Lato%3a900" rel="stylesheet" type="text/css">
+    <link rel="stylesheet" href="/css/main.css">
+    <link rel="shortcut icon" href="/favicon.png" type="image/x-icon" />
+    <link href="http://deeeet.com//index.xml" rel="alternate" type="application/rss+xml" title="" />
+    <meta name="title" content="http://deeeet.com/writing/2015/05/11/gox-server/">
+    <link rel="canonical" href="http://deeeet.com/writing/2015/05/11/gox-server/">
+    
+    <meta property="og:title" content="Golang Cross Compiler on Heroku (with Docker)"/>
+    <meta property="og:url" content="http://deeeet.com/writing/2015/05/11/gox-server/"/>
+  </head>
+  
+  <body>
+    <section class="site-nav">
+      <header>
+        <nav id="navigation">
+          <ul class="menu">
+            <li><a href="https://github.com/tcnksm/talks">Talks</a></li>
+            <li><a href="https://tcnksm.exposure.co/">Photos</a></li>
+          </ul>
+
+          <a class="name" href="/">SOTA</a>
+        </nav>        
+      </header>
+    </section>
+    
+
+
+<article>
+  <div class="container">
+    <header>
+      <div class="meta">
+        <time pubdate datetime="2015-05-11" title="2015-05-11">May 11, 2015</time>
+      </div>
+      <h1 class="title">Golang Cross Compiler on Heroku (with Docker)</h1>
+    </header>
+    
+    <section>
+      
+
+<p>Heroku unveils new CLI functionality <code>heroku docker:release</code> (cf. <a href="https://blog.heroku.com/archives/2015/5/5/introducing_heroku_docker_release_build_deploy_heroku_apps_with_docker">&ldquo;Heroku | Introducing &lsquo;heroku docker:release&rsquo;: Build &amp; Deploy Heroku Apps with Docker&rdquo;</a>). You can run Heroku&rsquo;s <a href="https://devcenter.heroku.com/articles/cedar">Cedar</a> environment on Docker container and test your application in local environment (Environment parity). In addition to that, you can create <a href="https://devcenter.heroku.com/articles/platform-api-deploying-slugs">Slug</a> from that docker image and deploy it directly to Heroku.</p>
+
+<p>Before this release, Heroku provided the way to create Slug by <a href="https://devcenter.heroku.com/articles/buildpacks">Buildpack</a>. Buildpack is powerful but for me it&rsquo;s a little bit complex and hard to write from scratch. From this release you can create Slug from <code>Dockerfile</code>. It&rsquo;s more clearly and easy to understand.</p>
+
+<p>So I played it and wrote a simple service, <a href="https://github.com/tcnksm/gox-server">tcnksm/gox-server</a>. This is a golang cross compile service and you can run it on Heroku (Sample application is on <a href="https://gox-server.herokuapp.com/">https://gox-server.herokuapp.com/</a>). You don&rsquo;t need to prepare golang runtime on your local PC. You can get a binary from it (Currently support platform is Darwin/Linux/Windows, 386/amd64 and repository must be on Github).</p>
+
+<p>Usage is simple. Just provide github repository and user name. For example, if you want to get <a href="https://github.com/Soulou/curl-unix-socket">github.com/Soulou/curl-unix-socket</a> compiled binary,</p>
+
+<pre><code class="language-bash">$ curl -A &quot;`uname -sp`&quot; https://gox-server.herokuapp.com/Soulou/curl-unix-socket &gt; curl-unix-socket
+$ chmod a+x curl-unix-socket
+</code></pre>
+
+<p>(This is just POC and playing with Heroku with Docker. Don&rsquo;t depend on this service for production tooling, you should prepare your own build environment. And if repository owner provides binary as release, you should use it.)</p>
+
+<h2 id="tips-of-writing-dockefile-for-heroku:ae3429f92570d09ac34dd4270d8a59f5">Tips of writing Dockefile for Heroku</h2>
+
+<p><code>Dockerfile</code> for this project is <a href="https://github.com/tcnksm/gox-server/blob/master/Dockerfile">https://github.com/tcnksm/gox-server/blob/master/Dockerfile</a>.</p>
+
+<p>I&rsquo;ve started from minimal template,</p>
+
+<pre><code class="language-bash">$ heroku docker:init --template minimal
+Wrote Dockerfile (minimal)
+</code></pre>
+
+<p>Miminal requirement we must follow is below,</p>
+
+<ul>
+<li>Start <code>FROM heroku:cedar:14</code></li>
+<li>Changes localized to the <code>/app</code> directory</li>
+</ul>
+
+<p>While I was writing <code>Dockefile</code> for Heroku Slug, I got some tips. So I&rsquo;ll share them.</p>
+
+<h3 id="debugging:ae3429f92570d09ac34dd4270d8a59f5">Debugging</h3>
+
+<p>You can run application by <code>heroku docker:start</code> command. Actually this is just docker container, so you can enter it like you do <code>heroku run bash</code> for debug. Docker image name is <code>heroku-docker-${hash}-start</code>,</p>
+
+<pre><code class="language-bash">$ docker run -it heroku-docker-${hash}-start /bin/bash
+</code></pre>
+
+<p>Or using <code>exec</code> to running container.</p>
+
+<h3 id="slug-size:ae3429f92570d09ac34dd4270d8a59f5">Slug size</h3>
+
+<p>Slug size must be under <code>300MB</code> (<a href="https://devcenter.heroku.com/articles/slug-compiler#slug-size">https://devcenter.heroku.com/articles/slug-compiler#slug-size</a>). Check it by below commands,</p>
+
+<pre><code class="language-bash">$ docker run -it heroku-docker-${hash}-start /bin/bash
+$ tar cfvz /tmp/slug.tgz -C / --exclude=.git --exclude=.heroku ./app
+$ ls -lh /tmp/slug.tgz
+</code></pre>
+
+<p>(<code>tar</code> command is same as <code>heroku docker:release</code> command does)</p>
+
+<h3 id="procfile:ae3429f92570d09ac34dd4270d8a59f5">Procfile</h3>
+
+<p>You need to prepare <code>Procfile</code> to run the application.</p>
+
+<p>In <code>Procfile</code>, you should not include environmental variable like <code>$PORT</code>. It works on Heroku, but doesn&rsquo;t work on local environment with <code>heroku docekr:start</code>. Because <code>Procfile</code> is  directly used for <code>docker run</code> command and environmental variable in <code>Procfile</code> would extract from your host machine, not docker container. So your need to read environment variable from your source code.</p>
+
+<h3 id="workdir:ae3429f92570d09ac34dd4270d8a59f5">WORKDIR</h3>
+
+<p>You may set <code>WORKDIR</code> on <code>Dockerfile</code>, root directory of <code>docker run</code>. To enable it on Heroku environment, you need to write <code>.procfile.d</code>, so that directory is changed when starting application.</p>
+
+<pre><code class="language-bash">ONBUILD RUN echo &quot;cd /app/src/root&quot;  &gt;&gt; /app/.profile.d/init.sh
+</code></pre>
+
+      <div class="social">
+  
+  
+  <a href="https://news.ycombinator.com/submit" class="hn-button">Vote on Hacker News</a>
+  
+  
+</div>
+
+    </section>
+
+    <footer>
+      <address>
+        
+        <img src="/images/bio.jpeg"/>
+        
+        <p>Written by <strong><a rel="author" href="https://twitter.com/deeeet" title="Taichi Nakashima" target="_blank">Taichi Nakashima</a></strong><br>
+          <span class="muted">A Tokyo based PaaS engineer. Please contact me via twitter.</span>
+        </p>
+      </address>
+
+    </footer>
+
+  </div>
+</article>
+
+<script type="text/javascript" src="//ajax.googleapis.com/ajax/libs/jquery/1.7.2/jquery.min.js"></script>
+<script type="text/javascript" src="/js/main.js"></script>
+
+<script>!function(d,s,id){var js,fjs=d.getElementsByTagName(s)[0],p=/^http:/.test(d.location)?'http':'https';if(!d.getElementById(id)){js=d.createElement(s);js.id=id;js.src=p+'://platform.twitter.com/widgets.js';fjs.parentNode.insertBefore(js,fjs);}}(document, 'script', 'twitter-wjs');</script>
+
+
+<script type="text/javascript">var HN=[];HN.factory=function(e){return function(){HN.push([e].concat(Array.prototype.slice.call(arguments,0)))};},HN.on=HN.factory("on"),HN.once=HN.factory("once"),HN.off=HN.factory("off"),HN.emit=HN.factory("emit"),HN.load=function(){var e="hn-button.js";if(document.getElementById(e))return;var t=document.createElement("script");t.id=e,t.src="//hn-button.herokuapp.com/hn-button.js";var n=document.getElementsByTagName("script")[0];n.parentNode.insertBefore(t,n)},HN.load();</script>
+
+
+  <script>
+  (function(i,s,o,g,r,a,m){i['GoogleAnalyticsObject']=r;i[r]=i[r]||function(){
+  (i[r].q=i[r].q||[]).push(arguments)},i[r].l=1*new Date();a=s.createElement(o),
+  m=s.getElementsByTagName(o)[0];a.async=1;a.src=g;m.parentNode.insertBefore(a,m)
+  })(window,document,'script','//www.google-analytics.com/analytics.js','ga');
+
+  ga('create', 'UA-45390253-1', 'auto');
+  ga('send', 'pageview');
+
+</script>
+
+
+
+<script>
+  $(document).ready(function() {
+  
+  $('p:has(img)').css('text-align', 'center');
+  $('iframe').css('style', 'display: block; margin: 0px auto;');
+  });
+</script>
+

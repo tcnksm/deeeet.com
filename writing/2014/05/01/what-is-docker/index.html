@@ -1,0 +1,241 @@
+<!doctype html>
+<html>
+  <head>
+    <meta http-equiv="content-type" content="text/html; charset=utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    
+    <title>Dockerとは何か？どこで使うべきか？ | SOTA</title>
+    
+    <link href="https://fonts.googleapis.com/css?family=Lato%3a900" rel="stylesheet" type="text/css">
+    <link rel="stylesheet" href="/css/main.css">
+    <link rel="shortcut icon" href="/favicon.png" type="image/x-icon" />
+    <link href="http://deeeet.com//index.xml" rel="alternate" type="application/rss+xml" title="" />
+    <meta name="title" content="http://deeeet.com/writing/2014/05/01/what-is-docker/">
+    <link rel="canonical" href="http://deeeet.com/writing/2014/05/01/what-is-docker/">
+    
+    <meta property="og:title" content="Dockerとは何か？どこで使うべきか？"/>
+    <meta property="og:url" content="http://deeeet.com/writing/2014/05/01/what-is-docker/"/>
+  </head>
+  
+  <body>
+    <section class="site-nav">
+      <header>
+        <nav id="navigation">
+          <ul class="menu">
+            <li><a href="https://github.com/tcnksm/talks">Talks</a></li>
+            <li><a href="https://tcnksm.exposure.co/">Photos</a></li>
+          </ul>
+
+          <a class="name" href="/">SOTA</a>
+        </nav>        
+      </header>
+    </section>
+    
+
+
+<article>
+  <div class="container">
+    <header>
+      <div class="meta">
+        <time pubdate datetime="2014-05-01" title="2014-05-01">May 01, 2014</time>
+      </div>
+      <h1 class="title">Dockerとは何か？どこで使うべきか？</h1>
+    </header>
+    
+    <section>
+      
+
+<p>この記事はDockerに関する実験的な記事や，Buildpackを使ってHeroku AppをDocker Containerとして使えるようにする<a href="https://github.com/CenturyLinkLabs/building">&ldquo;building&rdquo;</a>の開発などで知られるCenturyLink Labsの
+<a href="http://www.centurylinklabs.com/what-is-docker-and-when-to-use-it/">&ldquo;What is Docker and When To Use It&rdquo;</a>の翻訳です．
+Dockerとは何か？Dockerをどこで使うべきか？についてよく見かける記事とは違った視点から説明されています．
+翻訳は<a href="https://twitter.com/CenturyLinkLabs/status/459030687484362752">許可</a>をとった上で行っています．</p>
+
+<h2 id="dockerとは何でないか:3f5ae3a5db5e659c20461228f4ca0cdd">Dockerとは何でないか</h2>
+
+<p>Dockerとは何かを説明する前に，Dockerは何で<strong>ない</strong>かについて述べる．Dockerの否定形は何か？Dockerの制限は何か？Dockerが得意でないことは何か？</p>
+
+<ul>
+<li>DockerはLXCのようなLinux Containerでは<strong>ない</strong></li>
+<li>DockerはLXCだけのラッパーでは<strong>ない</strong>（理論的には仮想マシンも管理できる）</li>
+<li>DockerはChefやPuppet，SaltStackのようなConfiguration toolの代替では<strong>ない</strong></li>
+<li>DockerはPaaSでは<strong>ない</strong></li>
+<li>Dockerは異なるホスト間での連携が得意では<strong>ない</strong></li>
+<li>DockerはLXC同士を隔離するのが得意では<strong>ない</strong></li>
+</ul>
+
+<h2 id="dockerとは何か:3f5ae3a5db5e659c20461228f4ca0cdd">Dockerとは何か</h2>
+
+<p>では，Dockerは何ができるのか？メリットはなにか？</p>
+
+<ul>
+<li>Dockerはインフラを管理することができる</li>
+<li>Dockerはイメージのビルドや，Docker Indexを通じたイメージの共有ができる</li>
+<li>DockerはChefやPuppetといったConfiguration toolによりビルドされたサーバのテンプレートにとって，イメージ配布の良いモデルである</li>
+<li>DockerはCopy-on-wirteのファイルシステムである<a href="http://ja.wikipedia.org/wiki/Btrfs">btrfs</a>を使っており，Gitのようにファイルシステムの差分を管理することができる</li>
+<li>Dockerはイメージのリモートレポジトリをもっているため，簡単にそれらを様々なOS上で動かすことができる</li>
+</ul>
+
+<h2 id="dockerの代替は何か:3f5ae3a5db5e659c20461228f4ca0cdd">Dockerの代替は何か</h2>
+
+<p>Amazonの<a href="https://aws.amazon.com/marketplace/ref=mkt_ste_amis_redirect?b_k=291">AWS Marketplace</a>はDocker Indexに近い．ただし，AMIはAWS上でしか動かすことができないのに対して，Dockerイメージは，Dockerが動いているLinuxサーバであればどこでも動かすことができる．</p>
+
+<p>Cloud Foundryの<a href="https://github.com/cloudfoundry/warden">Warden</a>はLXCの管理ツールであり，Dockerに近い．ただし，Docker Indexのような他人とイメージを共有する仕組みを持っていない．</p>
+
+<h2 id="dockerをいつ使うべきか:3f5ae3a5db5e659c20461228f4ca0cdd">Dockerをいつ使うべきか</h2>
+
+<p>DockerはGitやJavaのような基本的な開発ツールになりうるものであり，日々の開発やオペレーションに導入し始めるべきである．</p>
+
+<p>例えば，</p>
+
+<ul>
+<li>インフラのバージョン管理システムとして使う</li>
+<li>チームにアプケーション用のインフラを配布したいときに使う</li>
+<li>稼働中のサーバーと同様の環境をラップトップ上に再現して，コードを実行したいときに使う（例えば<a href="https://github.com/centurylinklabs/building">building</a>を使う）</li>
+<li>複数の開発フェーズ（dev，stg，prod，QA）が必要なときに使う</li>
+<li><a href="http://tech.paulcz.net/2013/09/creating-immutable-servers-with-chef-and-docker-dot-io.html">ChefのCookbook</a>や<a href="http://puppetlabs.com/blog/building-puppet-based-applications-inside-docker">PuppetのManifest</a>と使う</li>
+</ul>
+
+<h2 id="dockerとjavaはどこが似ているのか:3f5ae3a5db5e659c20461228f4ca0cdd">DockerとJavaはどこが似ているのか</h2>
+
+<p>Javaには&rdquo;Write Once. Run Anywhere（一度書けばどこでも実行できる）&rdquo;という文言がある．</p>
+
+<p>Dockerはそれに似ている．Dockerは，一度イメージをビルドすると，Dockerが動いているLinuxサーバであれば全く同じようにそれを動かすことができる（<a href="https://speakerdeck.com/naoya/dockerapurikesiyonfalsepotabiriteiwokao-eru-number-dockerjp">&ldquo;Build Once．Run Anywhere&rdquo;</a>）．</p>
+
+<p>Javaの場合，例えば以下のようなJavaコードがあるとする．</p>
+
+<pre><code class="language-java">// HelloWorld.java
+class HelloWorldApp {
+    public static void main(String[] args) {
+        System.out.println(&quot;Hello World!&quot;);
+    }
+}
+</code></pre>
+
+<p><code>javac HelloWorld.java</code>により生成される<code>HelloWorld.class</code>は，JVMがあればどこでも動かすことができる．</p>
+
+<p>Dockerの場合，例えば以下のようなDockerfileがあるとする．</p>
+
+<pre><code class="language-bash">FROM ubuntu:13.10
+
+ENV DEBIAN_FRONTEND noninteractive
+RUN apt-get update -qq -y &amp;&amp; \
+    apt-get install curl -qq -y &amp;&amp; \
+    apt-get clean
+
+RUN curl -sSL https://get.rvm.io | bash -s stable --ruby=2.1.1
+</code></pre>
+
+<p><code>docker built -t tcnksm/ruby</code>により生成される<code>tcnksm/ruby</code>イメージは，Dockerが動いていればどこでも動かすことができる．</p>
+
+<h2 id="dockerとgitはどこが似ているのか:3f5ae3a5db5e659c20461228f4ca0cdd">DockerとGitはどこが似ているのか</h2>
+
+<p>Gitの公式には，&rdquo;Tiny footprint with lightning fast performance（高速性能を備えた履歴管理）&rdquo;という文言がある．Dockerはコードの変更履歴ではなく，ファイルシステムの変更履歴を管理する．</p>
+
+<h3 id="diff:3f5ae3a5db5e659c20461228f4ca0cdd">diff</h3>
+
+<p>Gitの場合，以下のようにコードの変更が確認できる．</p>
+
+<pre><code class="language-bash">$ echo 'Hello' &gt; README.md
+$ git diff --name-status
+M       README.md
+</code></pre>
+
+<p>Dockerの場合，以下のようにファイルシステムの変更が確認できる．</p>
+
+<pre><code class="language-bash">$ ID=$(docker run -d ubuntu bash -c 'touch README.md; sleep 100')
+$ docker diff $MY_DOCKER
+A /README.md
+C /dev
+C /dev/core
+C /dev/fd
+C /dev/ptmx
+C /dev/stderr
+C /dev/stdin
+C /dev/stdout
+</code></pre>
+
+<h3 id="commit-push:3f5ae3a5db5e659c20461228f4ca0cdd">commit &amp; push</h3>
+
+<p>Gitの場合，以下のようにコードの変更をコミットし，リモートレポジトリにpushする</p>
+
+<pre><code class="language-bash">$ git commit -m &quot;Add README.md&quot;
+$ git push
+</code></pre>
+
+<p>Dockerの場合，以下のようにファイルシステムの変更をコミットし，リモートレジストリにpushする．</p>
+
+<pre><code class="language-bash">$ docker commit -m &quot;Add README.md&quot; $ID tcnksm/ubuntu
+$ docker push tcnksm/ubuntu
+</code></pre>
+
+<h3 id="pull:3f5ae3a5db5e659c20461228f4ca0cdd">pull</h3>
+
+<p>Gitの場合，以下のようにリモートレポジトリからコードを取得する．</p>
+
+<pre><code class="language-bash">$ git pull
+</code></pre>
+
+<p>Dockerの場合，以下のようにリモートレジストリからイメージを取得する．</p>
+
+<pre><code class="language-bash">$ docker pull tcnksm/ubuntu
+</code></pre>
+
+<h2 id="まとめ:3f5ae3a5db5e659c20461228f4ca0cdd">まとめ</h2>
+
+<p><code>docker push</code>や<code>docker pull</code>といったイメージの共有機能は，Dockerの大きな特徴のひとつ．pullするだけで，あらゆるDockerイメージをどんなマシン上でも動かすことができるのは素晴らしい．push/pullの機能により，AppチームとOpsチームでインフラ構築の共同作業が簡単になる．Appチームは，アプリケーション用のコンテナの構築に集中でき，Opsチームはサービス用のコンテナの作成に集中できる．Appチームはアプリケーション用のコンテナをOpsチームに共有でき，OpsチームはMySQLやPostgreSQL，Redis用のコンテナをAppチームに共有できる．</p>
+
+      <div class="social">
+  
+  
+  <a href="https://twitter.com/share" class="twitter-share-button" data-via="deeeet" data-count="none">Tweet</a>
+  
+  
+</div>
+
+    </section>
+
+    <footer>
+      <address>
+        
+        <img src="/images/bio.jpeg"/>
+        
+        <p>Written by <strong><a rel="author" href="https://twitter.com/deeeet" title="Taichi Nakashima" target="_blank">Taichi Nakashima</a></strong><br>
+          <span class="muted">A Tokyo based PaaS engineer. Please contact me via twitter.</span>
+        </p>
+      </address>
+
+    </footer>
+
+  </div>
+</article>
+
+<script type="text/javascript" src="//ajax.googleapis.com/ajax/libs/jquery/1.7.2/jquery.min.js"></script>
+<script type="text/javascript" src="/js/main.js"></script>
+
+<script>!function(d,s,id){var js,fjs=d.getElementsByTagName(s)[0],p=/^http:/.test(d.location)?'http':'https';if(!d.getElementById(id)){js=d.createElement(s);js.id=id;js.src=p+'://platform.twitter.com/widgets.js';fjs.parentNode.insertBefore(js,fjs);}}(document, 'script', 'twitter-wjs');</script>
+
+
+<script type="text/javascript">var HN=[];HN.factory=function(e){return function(){HN.push([e].concat(Array.prototype.slice.call(arguments,0)))};},HN.on=HN.factory("on"),HN.once=HN.factory("once"),HN.off=HN.factory("off"),HN.emit=HN.factory("emit"),HN.load=function(){var e="hn-button.js";if(document.getElementById(e))return;var t=document.createElement("script");t.id=e,t.src="//hn-button.herokuapp.com/hn-button.js";var n=document.getElementsByTagName("script")[0];n.parentNode.insertBefore(t,n)},HN.load();</script>
+
+
+  <script>
+  (function(i,s,o,g,r,a,m){i['GoogleAnalyticsObject']=r;i[r]=i[r]||function(){
+  (i[r].q=i[r].q||[]).push(arguments)},i[r].l=1*new Date();a=s.createElement(o),
+  m=s.getElementsByTagName(o)[0];a.async=1;a.src=g;m.parentNode.insertBefore(a,m)
+  })(window,document,'script','//www.google-analytics.com/analytics.js','ga');
+
+  ga('create', 'UA-45390253-1', 'auto');
+  ga('send', 'pageview');
+
+</script>
+
+
+
+<script>
+  $(document).ready(function() {
+  
+  $('p:has(img)').css('text-align', 'center');
+  $('iframe').css('style', 'display: block; margin: 0px auto;');
+  });
+</script>
+

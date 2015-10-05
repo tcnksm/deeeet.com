@@ -1,0 +1,156 @@
+<!doctype html>
+<html>
+  <head>
+    <meta http-equiv="content-type" content="text/html; charset=utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    
+    <title>GithubのGo言語プロジェクトにPull Requestを送るときのimport問題 | SOTA</title>
+    
+    <link href="https://fonts.googleapis.com/css?family=Lato%3a900" rel="stylesheet" type="text/css">
+    <link rel="stylesheet" href="/css/main.css">
+    <link rel="shortcut icon" href="/favicon.png" type="image/x-icon" />
+    <link href="http://deeeet.com//index.xml" rel="alternate" type="application/rss+xml" title="" />
+    <meta name="title" content="http://deeeet.com/writing/2014/07/23/golang-pull-request/">
+    <link rel="canonical" href="http://deeeet.com/writing/2014/07/23/golang-pull-request/">
+    
+    <meta property="og:title" content="GithubのGo言語プロジェクトにPull Requestを送るときのimport問題"/>
+    <meta property="og:url" content="http://deeeet.com/writing/2014/07/23/golang-pull-request/"/>
+  </head>
+  
+  <body>
+    <section class="site-nav">
+      <header>
+        <nav id="navigation">
+          <ul class="menu">
+            <li><a href="https://github.com/tcnksm/talks">Talks</a></li>
+            <li><a href="https://tcnksm.exposure.co/">Photos</a></li>
+          </ul>
+
+          <a class="name" href="/">SOTA</a>
+        </nav>        
+      </header>
+    </section>
+    
+
+
+<article>
+  <div class="container">
+    <header>
+      <div class="meta">
+        <time pubdate datetime="2014-07-23" title="2014-07-23">July 23, 2014</time>
+      </div>
+      <h1 class="title">GithubのGo言語プロジェクトにPull Requestを送るときのimport問題</h1>
+    </header>
+    
+    <section>
+      
+
+<h2 id="tl-dr:c8979276b4eb8493737568f8f0b53207">TL;DR</h2>
+
+<p>fork元（オリジナル）を<code>go get</code>してその中で作業，forkした自分のレポジトリにpushしてPull Requestを送る．</p>
+
+<h2 id="問題:c8979276b4eb8493737568f8f0b53207">問題</h2>
+
+<p>Github上のGo言語のプロジェクトにコミットするとき，cloneの仕方で若干ハマることがある．普通のOSSプロジェクトの場合は，forkしてそれをcloneしてpush，Pull Requestとすればよい．Go言語のプロジェクトでは，同じレポジトリの中でパッケージを分け，それをimportして使ってるものがある．そういう場合にforkしたものをそのままcloneすると，importの参照先がfork元の名前になりハマる．</p>
+
+<p>例えば，[github.com/someone/tool]()があるとする．このレポジトリは[github.com/someone/tool/utils]()という別パッケージを持っており，mainがそれを使っているとする．つまり以下のようになっているとする．</p>
+
+<pre><code class="language-go">package main
+
+import (
+    &quot;github.com/someone/tool/utils&quot;
+)
+
+...
+</code></pre>
+
+<p>この場合に，通常のやりかたでforkしてソースを取得する．</p>
+
+<pre><code class="language-bash">$ go get -d github.com/you/tool/...
+</code></pre>
+
+<p>するとソースは，<code>$GOPATH/src/github.com/you</code>に，importしてるutilsパッケージは<code>$GOPATH/src/github.com/someone/tool/utils</code>にあるといったことがおこる．で，<code>$GOPATH/src/github.com/you/utils</code>直しても反映されない，import書き換えないと！とかなる．</p>
+
+<h2 id="良さげなやりかた:c8979276b4eb8493737568f8f0b53207">良さげなやりかた</h2>
+
+<p>[@mopemope]()さんが<a href="https://twitter.com/mopemope/status/491749193522761728">言及していた</a>り，<a href="http://blog.campoy.cat/2014/03/github-and-go-forking-pull-requests-and.html">&ldquo;GitHub and Go: forking, pull requests, and go-getting&rdquo;</a>に書かれているやり方が今のところ良さそう．</p>
+
+<p>まず，fork元（オリジナル）のソースを取得する．</p>
+
+<pre><code class="language-bash">$ go get -d github.com/someone/tool/...
+</code></pre>
+
+<p>作業は，<code>$GOPATH/src/github.com/someone/tool</code>内でブランチを切って行う．</p>
+
+<p>pushはforkした自分のレポジトリにする．</p>
+
+<pre><code class="language-bash">$ git remote add fork https://github.com/you/tool.git
+$ git push fork 
+</code></pre>
+
+<p>あとは，そこからPull Requestを送る．</p>
+
+<h2 id="他のやりかた:c8979276b4eb8493737568f8f0b53207">他のやりかた</h2>
+
+<p>forkして以下のようにcloneするというやり方も見かけた．</p>
+
+<pre><code class="language-bash">$ git clone https://github.com/you/tool.git $GOPATH/src/github.com/someone/tool
+</code></pre>
+
+<p>他にベストなやり方があれば教えてほしい．</p>
+
+      <div class="social">
+  
+  
+  <a href="https://twitter.com/share" class="twitter-share-button" data-via="deeeet" data-count="none">Tweet</a>
+  
+  
+</div>
+
+    </section>
+
+    <footer>
+      <address>
+        
+        <img src="/images/bio.jpeg"/>
+        
+        <p>Written by <strong><a rel="author" href="https://twitter.com/deeeet" title="Taichi Nakashima" target="_blank">Taichi Nakashima</a></strong><br>
+          <span class="muted">A Tokyo based PaaS engineer. Please contact me via twitter.</span>
+        </p>
+      </address>
+
+    </footer>
+
+  </div>
+</article>
+
+<script type="text/javascript" src="//ajax.googleapis.com/ajax/libs/jquery/1.7.2/jquery.min.js"></script>
+<script type="text/javascript" src="/js/main.js"></script>
+
+<script>!function(d,s,id){var js,fjs=d.getElementsByTagName(s)[0],p=/^http:/.test(d.location)?'http':'https';if(!d.getElementById(id)){js=d.createElement(s);js.id=id;js.src=p+'://platform.twitter.com/widgets.js';fjs.parentNode.insertBefore(js,fjs);}}(document, 'script', 'twitter-wjs');</script>
+
+
+<script type="text/javascript">var HN=[];HN.factory=function(e){return function(){HN.push([e].concat(Array.prototype.slice.call(arguments,0)))};},HN.on=HN.factory("on"),HN.once=HN.factory("once"),HN.off=HN.factory("off"),HN.emit=HN.factory("emit"),HN.load=function(){var e="hn-button.js";if(document.getElementById(e))return;var t=document.createElement("script");t.id=e,t.src="//hn-button.herokuapp.com/hn-button.js";var n=document.getElementsByTagName("script")[0];n.parentNode.insertBefore(t,n)},HN.load();</script>
+
+
+  <script>
+  (function(i,s,o,g,r,a,m){i['GoogleAnalyticsObject']=r;i[r]=i[r]||function(){
+  (i[r].q=i[r].q||[]).push(arguments)},i[r].l=1*new Date();a=s.createElement(o),
+  m=s.getElementsByTagName(o)[0];a.async=1;a.src=g;m.parentNode.insertBefore(a,m)
+  })(window,document,'script','//www.google-analytics.com/analytics.js','ga');
+
+  ga('create', 'UA-45390253-1', 'auto');
+  ga('send', 'pageview');
+
+</script>
+
+
+
+<script>
+  $(document).ready(function() {
+  
+  $('p:has(img)').css('text-align', 'center');
+  $('iframe').css('style', 'display: block; margin: 0px auto;');
+  });
+</script>
+

@@ -1,0 +1,321 @@
+<!doctype html>
+<html>
+  <head>
+    <meta http-equiv="content-type" content="text/html; charset=utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    
+    <title>DockerHubのAutomated Buildsをフックして最新のDockerコンテナをデプロイする | SOTA</title>
+    
+    <link href="https://fonts.googleapis.com/css?family=Lato%3a900" rel="stylesheet" type="text/css">
+    <link rel="stylesheet" href="/css/main.css">
+    <link rel="shortcut icon" href="/favicon.png" type="image/x-icon" />
+    <link href="http://deeeet.com//index.xml" rel="alternate" type="application/rss+xml" title="" />
+    <meta name="title" content="http://deeeet.com/writing/2015/01/08/dockerhub-hook/">
+    <link rel="canonical" href="http://deeeet.com/writing/2015/01/08/dockerhub-hook/">
+    
+    <meta property="og:title" content="DockerHubのAutomated Buildsをフックして最新のDockerコンテナをデプロイする"/>
+    <meta property="og:url" content="http://deeeet.com/writing/2015/01/08/dockerhub-hook/"/>
+  </head>
+  
+  <body>
+    <section class="site-nav">
+      <header>
+        <nav id="navigation">
+          <ul class="menu">
+            <li><a href="https://github.com/tcnksm/talks">Talks</a></li>
+            <li><a href="https://tcnksm.exposure.co/">Photos</a></li>
+          </ul>
+
+          <a class="name" href="/">SOTA</a>
+        </nav>        
+      </header>
+    </section>
+    
+
+
+<article>
+  <div class="container">
+    <header>
+      <div class="meta">
+        <time pubdate datetime="2015-01-08" title="2015-01-08">January 08, 2015</time>
+      </div>
+      <h1 class="title">DockerHubのAutomated Buildsをフックして最新のDockerコンテナをデプロイする</h1>
+    </header>
+    
+    <section>
+      
+
+<p><a href="http://docs.docker.com/docker-hub/builds/">DockerHubのAutomated Builds</a>は，GithubやBitbucketへの<code>git push</code>をフックしてレポジトリ内のDockerfileを元にDockerイメージをビルドする機能である．</p>
+
+<p>イメージを使う側からすれば，それがどのようなDockfileから作られているか可視化され，常に新しいイメージがあることが保証されるので安心感がある．イメージを提供する側からすればDockerfileを更新して<code>git push</code>すれば自動でビルドしてくれくれるので楽という利点がある．そのためDockerHubにイメージを上げる場合は，<code>docker push</code>を使うことはほとんどなくてこのAutomated Buildsを使うのが普通である．</p>
+
+<p>このAutomated BuildsはWeb hookを提供しており，イメージのビルドが終了したら，好きなところにHTTP POSTをぶん投げるということができる．この仕組みを使えば，<code>git push</code>したら，DockerHubで最新のイメージをビルドして，終わったらそのイメージをデプロイ！といったことが可能になる．</p>
+
+<p><a href="https://github.com/bketelsen/captainhook">bketelsen/captainhook</a>を使えば，Web Hookを受け取ってコマンドを実行ということが簡単にできる（Go製なのでデプロイも楽）．これを使って，DockerHubのAutomated BuildsをフックしてDockerコンテナのデプロイする．以下ではCoreOS以外のホストOS（シングルホスト）の場合とCoreOSの場合をそれぞれ説明する．</p>
+
+<h2 id="captainhookとは:2b9963c2b58e710040b0f9222ceb8fd6">Captainhookとは</h2>
+
+<p><a href="https://github.com/bketelsen/captainhook">bketelsen/captainhook</a>について簡単に説明する．captainhookはHTTP POSTを受け取って設定したコマンドを実行するツールである．</p>
+
+<p>まず<code>configdir</code>を作成し，その中にJSONで設定ファイルを準備する．例えば<code>endpoint.json</code>というファイルを作る．</p>
+
+<pre><code class="language-bash">$ mkdir ~/captainhook
+</code></pre>
+
+<pre><code class="language-json">{
+    &quot;scripts&quot;: [
+        {
+            &quot;command&quot;: &quot;echo&quot;,
+            &quot;args&quot;: [
+               &quot;hello&quot;
+            ]
+        }
+    ]
+}
+</code></pre>
+
+<p>以下のようにサービスを起動する．</p>
+
+<pre><code class="language-bash">$ captainhook -configdir ~/captainhook
+</code></pre>
+
+<p>あとは，以下のようにHTTP POSTを投げると，JSONで指定したコマンドが実行される．シンプルで良い．</p>
+
+<pre><code class="language-bash">$ curl -X POST http://localhost:8080/endpoint1
+</code></pre>
+
+<h2 id="coreos以外の場合:2b9963c2b58e710040b0f9222ceb8fd6">CoreOS以外の場合</h2>
+
+<p>まず，CoreOS以外のホストOS（シングルホスト）でAutomated Buildsをフックして最新のDockerコンテナをデプロイする方法について説明する．これは，<a href="http://blog.gopheracademy.com/">Gopher Academyのブログ</a>のデプロイ方法が参考になる．まさにこの方法で最新のブログ記事をデプロイしている．以下のブログに詳しく説明されている．</p>
+
+<ul>
+<li><a href="http://blog.gopheracademy.com/advent-2014/easy-deployment/">Easy Docker Deployment with Hooks and Captain Hook</a></li>
+</ul>
+
+<p>Gopher Academyのブログは<code>bketelsen/gopheracademy-web</code>とうDockerイメージとして動いている．Automated Buildsでビルドされており，<code>git push</code>される度に最新のイメージが作られる．Captainhookには以下のようなスクリプトを登録している．</p>
+
+<pre><code class="language-bash">echo &quot;Getting currently running gablog containers&quot;
+OLDPORTS=( `docker ps | grep gopheracademy-web | awk '{print $1}'` )
+
+echo &quot;pulling new version&quot;
+docker pull bketelsen/gopheracademy-web
+echo &quot;starting new containers&quot;
+for i in `seq 1 $1` ; do
+docker run -d -e VIRTUAL_HOST=blog.gopheracademy.com -p 80 bketelsen/gopheracademy-web
+done
+
+echo &quot;removing old containers&quot;
+for i in ${OLDPORTS[@]}
+do
+echo &quot;removing old container $i&quot;
+docker kill $i
+done
+</code></pre>
+
+<p>やってることは単純で，</p>
+
+<ul>
+<li><code>docker ps</code>で現在動いてるコンテナを取得する</li>
+<li><code>docker pull</code>で最新のイメージを取得する</li>
+<li><code>docker run</code>で最新のコンテナを起動する</li>
+<li><code>docker kill</code>で元々動いていたイメージを削除する</li>
+</ul>
+
+<p>を実行し，最新のコンテナに切り替えている．</p>
+
+<p>あとはcaptaihookを起動し，Automted Buildsが終了したらこのホストにPOSTを投げるように設定されている．これにより<code>git push</code>するだけでコンテナが最新のものに入れ替わるということを実現している．</p>
+
+<p>ちなみに上のスクリプトではPortマッピングに関して特別に何もしていない．これは，フロントで<code>jwilder/nginx-proxy</code>というDockerコンテナを動かしているからである．このコンテナは<code>VIRTUAL_HOST</code>環境変数を設定して起動したDockerコンテナにリクエストを振り分けるということをやってくれる．</p>
+
+<p><code>jwilder/nginx-proxy</code>は，内部で<a href="https://github.com/jwilder/docker-gen">jwilder/docker-gen</a>というツールを使って，Nginxの設定ファイルを生成している．<code>docker-gen</code>は<code>docker.sock</code>のイベントから得られる値とテンプレートを使って設定ファイルなどを生成するツールである．これのおかげで<code>VIRTUAL_HOST</code>環境変数を設定してコンテナを起動するだけで，そのコンテナにリクエストをプロキシするといったことを実現している．</p>
+
+<h2 id="coreosの場合:2b9963c2b58e710040b0f9222ceb8fd6">CoreOSの場合</h2>
+
+<p>次にAutomated BuildをフックしてCoreOSクラスタ内のDockerコンテナを最新のものに切り替える方法について説明する．CoreOSの場合は以下の2つの条件がある．</p>
+
+<ul>
+<li>Dockerコンテナはfleetによってサービスとしてデプロイする</li>
+<li>CaptainhookサービスもDockerコンテナとしてデプロイする</li>
+</ul>
+
+<p>これを満たすためには，Captaihookでfleetを実行するためのDockerコンテナを作る．</p>
+
+<h3 id="captainhookコンテナ:2b9963c2b58e710040b0f9222ceb8fd6">Captainhookコンテナ</h3>
+
+<p>以下のようなDockerfileからCaptainhookでfleetを実行するイメージを作成する．</p>
+
+<pre><code class="language-bash">FROM debian:wheezy
+MAINTAINER tcnksm &lt;nsd22843@gmail.com&gt;
+
+# Install dependencies
+RUN apt-get update &amp;&amp; apt-get install -y \
+              curl \
+              build-essential \
+              ca-certificates \
+              git \
+              mercurial \
+              bzr \
+              --no-install-recommends \
+        &amp;&amp; apt-get clean \
+        &amp;&amp; rm -rf /var/lib/apt/lists/*
+
+# Install Golang
+ENV GOVERSION 1.4
+RUN mkdir /goroot &amp;&amp; curl https://storage.googleapis.com/golang/go${GOVERSION}.linux-amd64.tar.gz | tar xvzf - -C /goroot --strip-components=1
+RUN mkdir /gopath
+
+# Set Environmental variable for golang
+ENV GOROOT /goroot
+ENV GOPATH /gopath
+ENV PATH $PATH:$GOROOT/bin:$GOPATH/bin
+
+# Install fleet
+RUN go get -d github.com/coreos/fleet/...
+RUN cd $GOPATH/src/github.com/coreos/fleet &amp;&amp; ./build &amp;&amp; cp ./bin/fleetctl /usr/local/bin/.
+
+
+# Install captainhook
+RUN go get github.com/bketelsen/captainhook
+
+# Setup captainhook
+ADD etc/captainhook/update.json /etc/captainhook/update.json
+ADD usr/local/bin/update-container.sh /usr/local/bin/update-container.sh
+
+CMD [&quot;captainhook&quot;,&quot;-listen-addr=0.0.0.0:8080&quot;,&quot;-echo&quot;,&quot;-configdir=/etc/captainhook&quot;]
+</code></pre>
+
+<p>得に複雑なことはしていない．やっているのは以下．</p>
+
+<ul>
+<li>fleetとCaptainhookのインストール</li>
+<li>Captainhookで実行したいスクリプト（<code>update-container.sh</code>）の<code>ADD</code></li>
+<li>起動コマンドへのcanptainhookの登録</li>
+</ul>
+
+<p>Captainhookでは以下のようなスクリプトを実行する．</p>
+
+<pre><code class="language-bash">PORTS=( &quot;8901&quot; &quot;8902&quot; )
+for p in &quot;${PORTS[@]}&quot;; do
+    SERVICE=&quot;my-service@${p}.service&quot;
+
+    echo &quot;Restart ${SERVICE}&quot;
+    fleetctl stop ${SERVICE} 2&gt;/dev/null
+    fleetctl start ${SERVICE} 2&gt;/dev/null
+
+    # fleet doesn't wait but starts after `launched`
+    # We need to wait for zero-downtime.
+    until [ &quot;`fleetctl list-units 2&gt;/dev/null | grep ${SERVICE} | cut -f 6`&quot; = &quot;running&quot; ]; do
+        echo &quot;Wainting for starting ${SERVICE}....&quot;
+        sleep 5s
+    done
+    echo &quot;${SERVICE} is running&quot;
+    sleep 20s
+done
+</code></pre>
+
+<p>やっているのは，最新に切り替えたいコンテナを動かしているサービスを順番に<code>fleet stop</code>，<code>fleet start</code>しているだけ．これでコンテナは最新のものに切り替わる．起動には若干時間がかかるので，fleetのステータスを監視して，<code>running</code>になるまで待つ．</p>
+
+<h3 id="captainhookサービス:2b9963c2b58e710040b0f9222ceb8fd6">Captainhookサービス</h3>
+
+<p>上記のCaptainhookコンテナを起動するためのUnitファイルは以下．</p>
+
+<pre><code class="language-bash">[Unit]
+Description=Receive web-hook to update my-service container
+
+# Requirements
+Requires=etcd.service
+Requires=docker.service
+
+# Dependency ordering
+After=etcd.service
+After=docker.service
+
+[Service]
+TimeoutStartSec=0
+KillMode=none
+EnvironmentFile=/etc/environment
+ExecStartPre=-/usr/bin/docker kill my-service-hook
+ExecStartPre=-/usr/bin/docker rm my-service-hook
+ExecStartPre=/usr/bin/docker pull tcnksm/my-service-hook:1.0
+ExecStart=/usr/bin/docker run --net=host --name my-service-hook tcnksm/my-service-hook:1.0
+ExecStop=/usr/bin/docker stop my-service-hook
+</code></pre>
+
+<p>これも特別なことはしていない．ポイントは，<code>--net=host</code>でコンテナを起動するところ，これによりDockerコンテナ内からfleetを実行できるようになる．</p>
+
+<p>あとは，このサービスを起動し，Automted Buildsが終了したらこのホストにPOSTを投げるように設定をすればよい．そうすれば<code>git push</code>するだけでコンテナが最新のものに入れ替わる．</p>
+
+<h3 id="プロキシ:2b9963c2b58e710040b0f9222ceb8fd6">プロキシ</h3>
+
+<p>CoreOS以外のホストOSでは，<code>jwilder/nginx-proxy</code>コンテナをフロントに置いて，バックのコンテナを切り替えるということをしたが，それが使えるのはシングルホストのみの場合である（<code>docker.sock</code>に依存するため）．CoreOSの場合はそれが使えない．</p>
+
+<p>CoreOSの場合は<a href="https://github.com/kelseyhightower/confd">kelseyhightower/confd</a>を使うのがよい．confdはetcdの値をwatchし，変更があれば，その値とテンプレートをもとに設定ファイルを生成し，コマンドを実行するといったことができる．これを使って，</p>
+
+<ul>
+<li>プロキシしたいコンテナのホストとポートをetcdに登録するサイドキックコンテナを立てる</li>
+<li>confdを使ってnginxの設定ファイル生成するフロントコンテナを立てる</li>
+</ul>
+
+<p>ということをすれば，サービスを立ちげる度にフロントコンテナにそれが登録され，リクエストがプロキシされるといったことが実現できる．また上述したfleetのデプロイも（ほぼ）Zero Downtimeで実行できる（厳密にBlue-Green deploymentをしたいのであればMailgunの<a href="https://github.com/mailgun/vulcand">vulcand</a>を使うのがよい）．</p>
+
+<h2 id="まとめ:2b9963c2b58e710040b0f9222ceb8fd6">まとめ</h2>
+
+<p>DockerHubのAutomated Buildsをフックして最新のDockerコンテナをデプロイする方法について説明した．CoreOS以外のホストOSの場合は，Gopher Academyのブログを見る限りは，落ちることなく運用できているらしい．CoreOSの場合も自分で簡単なサービスを動かしいるが，今のところ問題なく動いている．</p>
+
+<p>最後に鬱陶しいことを挙げておくと，DockerHubを経由すると，Pending地獄に直面してデプロイがめちゃ遅いことがある．またDockerイメージも軽いわけではないので，<code>docker pull</code>に時間がかかったりもする．このあたり，Immutableの辛いところなので，良い解法を見つけたいなと思う．</p>
+
+      <div class="social">
+  
+  
+  <a href="https://twitter.com/share" class="twitter-share-button" data-via="deeeet" data-count="none">Tweet</a>
+  
+  
+</div>
+
+    </section>
+
+    <footer>
+      <address>
+        
+        <img src="/images/bio.jpeg"/>
+        
+        <p>Written by <strong><a rel="author" href="https://twitter.com/deeeet" title="Taichi Nakashima" target="_blank">Taichi Nakashima</a></strong><br>
+          <span class="muted">A Tokyo based PaaS engineer. Please contact me via twitter.</span>
+        </p>
+      </address>
+
+    </footer>
+
+  </div>
+</article>
+
+<script type="text/javascript" src="//ajax.googleapis.com/ajax/libs/jquery/1.7.2/jquery.min.js"></script>
+<script type="text/javascript" src="/js/main.js"></script>
+
+<script>!function(d,s,id){var js,fjs=d.getElementsByTagName(s)[0],p=/^http:/.test(d.location)?'http':'https';if(!d.getElementById(id)){js=d.createElement(s);js.id=id;js.src=p+'://platform.twitter.com/widgets.js';fjs.parentNode.insertBefore(js,fjs);}}(document, 'script', 'twitter-wjs');</script>
+
+
+<script type="text/javascript">var HN=[];HN.factory=function(e){return function(){HN.push([e].concat(Array.prototype.slice.call(arguments,0)))};},HN.on=HN.factory("on"),HN.once=HN.factory("once"),HN.off=HN.factory("off"),HN.emit=HN.factory("emit"),HN.load=function(){var e="hn-button.js";if(document.getElementById(e))return;var t=document.createElement("script");t.id=e,t.src="//hn-button.herokuapp.com/hn-button.js";var n=document.getElementsByTagName("script")[0];n.parentNode.insertBefore(t,n)},HN.load();</script>
+
+
+  <script>
+  (function(i,s,o,g,r,a,m){i['GoogleAnalyticsObject']=r;i[r]=i[r]||function(){
+  (i[r].q=i[r].q||[]).push(arguments)},i[r].l=1*new Date();a=s.createElement(o),
+  m=s.getElementsByTagName(o)[0];a.async=1;a.src=g;m.parentNode.insertBefore(a,m)
+  })(window,document,'script','//www.google-analytics.com/analytics.js','ga');
+
+  ga('create', 'UA-45390253-1', 'auto');
+  ga('send', 'pageview');
+
+</script>
+
+
+
+<script>
+  $(document).ready(function() {
+  
+  $('p:has(img)').css('text-align', 'center');
+  $('iframe').css('style', 'display: block; margin: 0px auto;');
+  });
+</script>
+

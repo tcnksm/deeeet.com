@@ -1,0 +1,259 @@
+<!doctype html>
+<html>
+  <head>
+    <meta http-equiv="content-type" content="text/html; charset=utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    
+    <title>Dockerの諸問題とRocket登場の経緯 | SOTA</title>
+    
+    <link href="https://fonts.googleapis.com/css?family=Lato%3a900" rel="stylesheet" type="text/css">
+    <link rel="stylesheet" href="/css/main.css">
+    <link rel="shortcut icon" href="/favicon.png" type="image/x-icon" />
+    <link href="http://deeeet.com//index.xml" rel="alternate" type="application/rss+xml" title="" />
+    <meta name="title" content="http://deeeet.com/writing/2015/02/17/docker-bad-points/">
+    <link rel="canonical" href="http://deeeet.com/writing/2015/02/17/docker-bad-points/">
+    
+    <meta property="og:title" content="Dockerの諸問題とRocket登場の経緯"/>
+    <meta property="og:url" content="http://deeeet.com/writing/2015/02/17/docker-bad-points/"/>
+  </head>
+  
+  <body>
+    <section class="site-nav">
+      <header>
+        <nav id="navigation">
+          <ul class="menu">
+            <li><a href="https://github.com/tcnksm/talks">Talks</a></li>
+            <li><a href="https://tcnksm.exposure.co/">Photos</a></li>
+          </ul>
+
+          <a class="name" href="/">SOTA</a>
+        </nav>        
+      </header>
+    </section>
+    
+
+
+<article>
+  <div class="container">
+    <header>
+      <div class="meta">
+        <time pubdate datetime="2015-02-17" title="2015-02-17">February 17, 2015</time>
+      </div>
+      <h1 class="title">Dockerの諸問題とRocket登場の経緯</h1>
+    </header>
+    
+    <section>
+      
+
+<p>2014年の後半あたりからDocker，Docker Inc.への批判を多く見かけるようになった（もちろんもともと懸念や嫌悪を表明するひとはいた）．それを象徴する出来事としてCoreOSチームによる新しいコンテナのRuntimeである<a href="https://github.com/coreos/rocket">Rocket</a>のリリースと，オープンなアプリケーションコンテナの仕様の策定を目指した<a href="https://github.com/appc/spec">App Containerプロジェクト</a>の開始があった．</p>
+
+<ul>
+<li><a href="https://coreos.com/blog/rocket/">CoreOS is building a container runtime, Rocket</a></li>
+</ul>
+
+<p>批判は，セキュリティであったり，ドキュメントされていない謎の仕様やバグだったり，コミュニティの運営だったり，と多方面にわたる．これらは具体的にどういうことなのか？なぜRocketが必要なのか？は具体的に整理されていないと思う．これらは，今後コンテナ技術を使っていく上で，<a href="http://deeeet.com/writing/2014/12/01/docker-link-pattern/">オーケストレーション</a>とかと同じくらい重要な部分だと思うので，ここで一度まとめておきたい．</p>
+
+<p>なお僕自身は，コンテナ技術に初めて触れたのがDockerであり，かつ長い間Dockerに触れているので，Docker派的な思考が強いと思う．またセキュリティに関しても専門ではない．なので，以下の記事はなるべく引用を多くすることを意識した．また，あくまで僕の観測範囲であり，深追いしていないところもある，気になるひとは自分で掘ってみて欲しい．</p>
+
+<h2 id="セキュリティ問題:7d134b5e48e82897ad0f39bfba3c0658">セキュリティ問題</h2>
+
+<p>Dockerを使ったことがあるひとならわかると思うがDockerを使うにはルート権限が必須である．デーモンが常に動いており，それにクライアントがコマンドを発行するアーキテクチャになっているので，Dockerコンテナが動いているホストでは常にルートのプロセスが動き続けることになる．クライアントとデーモンはHTTPでやりとりするため，外部ホストからコマンドを叩くこともできてしまう．</p>
+
+<p>これは怖い．コンテナはカーネルを共有しているので，もし特権昇格の脆弱性であるコンテナがハイジャックされたら，他の全てのコンテナと<strong>ホストも</strong>攻撃されることになる（<a href="https://securityblog.redhat.com/2014/12/17/container-security-isolation-heaven-or-dependency-hell/">Container Security: Isolation Heaven or Dependency Hell | Red Hat Security</a>）．</p>
+
+<p>実際Docker 1.3.1以前のバージョンでは脆弱性も見つかっている．</p>
+
+<ul>
+<li><a href="http://web.nvd.nist.gov/view/vuln/detail?vulnId=CVE-2014-6407">CVE-2014-6407</a></li>
+<li><a href="http://web.nvd.nist.gov/view/vuln/detail?vulnId=CVE-2014-6408">CVE-2014-6408</a></li>
+</ul>
+
+<h3 id="docker-pullは安全なの:7d134b5e48e82897ad0f39bfba3c0658">docker pullは安全なの？</h3>
+
+<p>上記の脆弱性では悪意のあるイメージによる攻撃が指摘されており，攻撃を受けやすいのは<code>docker pull</code>で外部からイメージを取得/展開するところである．ではここはちゃんと安全になっているのか？答えは「No」で，あまりよろしくないモデルになっており，よく批判されるところでもある．</p>
+
+<ul>
+<li><a href="https://titanous.com/posts/docker-insecurity">Docker Image Insecurity · Jonathan Rudenberg</a></li>
+</ul>
+
+<p>これは<a href="https://flynn.io/">Flynn</a>の開発者が現在の<code>docker pull</code>の危険性を指摘したブログ記事．要約すると，Dockerは署名されたManifestなるもので公式のDockerイメージの信頼性を確認していると<a href="https://blog.docker.com/2014/10/docker-1-3-signed-images-process-injection-security-options-mac-shared-directories/">主張している</a>がそれが全く動作していない，モデルとして危ないということを言っている．具体的には，</p>
+
+<ul>
+<li>イメージの検証は，<code>[decompress] -&gt; [tarsum] -&gt; [unpack]</code>処理の後に実行されるが，そもそもここに脆弱性が入り込む余地がある</li>
+<li>キーはDockerのコードには存在しておらず，イメージをダウンロードする前に<a href="https://github.com/docker/docker/blob/0874f9ab77a7957633cd835241a76ee4406196d8/trust/trusts.go#L38">CDNからHTTPSで取得する</a>ようになっており，これは&hellip;</li>
+</ul>
+
+<p>この問題を回避する方法が以下で紹介されている．</p>
+
+<ul>
+<li><a href="https://securityblog.redhat.com/2014/12/18/before-you-initiate-a-docker-pull/">Before you initiate a &ldquo;docker pull&rdquo; | Red Hat Security</a></li>
+</ul>
+
+<p>ここで紹介されているのは<code>docker pull</code>を使わない方法．具体的には，信頼できるサイトから，イメージの<code>.tar</code>ファイルをダウンロードして，Checksumがあればそれをチエックしたうえで，<code>docker load</code>でそれを読み込むという方法．</p>
+
+<p>また，Dockerfileの<code>FROM</code>でも同様の問題が発生する．ので，ちょっとのタイポで異常なイメージがダウンロード/展開される危険がある．これを回避するためにそもそも<a href="https://registry.hub.docker.com/">index.docker.io</a>へのアクセスも禁止してしまおうという方法も紹介されている．具体的には，<code>/etc/hosts</code>を以下のようにしてしまう．</p>
+
+<pre><code>127.0.0.1 index.docker.io
+</code></pre>
+
+<h2 id="dockerfile問題:7d134b5e48e82897ad0f39bfba3c0658">Dockerfile問題</h2>
+
+<p>Dockerfileには，なんでこれができないの？やハマりどころが多い．</p>
+
+<p>なんでこれができないの？で一番有名だったのが，Dockerfileが<code>Docekerfile</code>という名前しかちゃんと使えなかった問題がある．これは現時点で最新のバージョン1.5で解決された（<a href="http://deeeet.com/writing/2015/02/11/docker-1_5/">Docker 1.5の変更点</a>）．それ以外にも，<code>INCLUDE</code>によるDockerfileの分割（<a href="https://github.com/docker/docker/issues/735">#735</a>）や，<code>FROM</code>の複数指定（<a href="https://github.com/docker/docker/issues/5726">#5726</a>）など，なんでこれできないのだろうということが多々ある．</p>
+
+<p>またDockerfileはハマりどころも多い．一番ハマるのがCacheで，どういうときにCacheされるのか全く分からない．いつCacheが無効になるか分からずにビルドし直しでうおー！となったひとは多いと思う（<a href="http://kimh.github.io/blog/en/docker/gotchas-in-writing-dockerfile-en/">Gotchas in Writing Dockerfile</a>）．他にも環境変数の挙動がおかしなときもある．</p>
+
+<p>これらはバージョンが上がるに連れて解決されていくであろう問題だとは思う．が以下に関しては慎重にならないといけない．</p>
+
+<h3 id="このdockerfileから10年後も同じdockerイメージができるの:7d134b5e48e82897ad0f39bfba3c0658">このDockerfileから10年後も同じDockerイメージができるの？</h3>
+
+<ul>
+<li><a href="http://gregoryszorc.com/blog/2014/10/13/deterministic-and-minimal-docker-images/">Gregory Szorc&rsquo;s Digital Home | Deterministic and Minimal Docker Images</a></li>
+</ul>
+
+<p>よく言われているように答えは「No」．Dockerはコンテナ内部で起動するデーモン（e.g., PostgresSQLやRedis）は特定のバージョンを使うかを固定できるが，それが依存するライブラリやパッケージに関しては何もできない．Dockerfileを書いたことがある人ならわかると思うが，必ず<code>apt-get update</code>を書くので．</p>
+
+<p>これに関しては，<code>go get</code>と同じ批判かなと思う．セキュリティ的にも最新のライブラリやパッケージが使われるにこしたことはないと思うし，またどれだけちゃんとテストするか，にもつながると思う（もちろん皆が皆それができる環境ではないからこそこういう批判が登場するのだが）</p>
+
+<p>その一方でソフトウェアのインストールや設定の知識というのは，ChefやPuppet，Ansibleのようなツールに依然として存在しているし，今後もしばらくは必須になる．DockerfileのようなDockerのみでしか使えないものに依存するのは危ない．<a href="https://www.packer.io/">Packer</a>は当初からその問題を解決しようとしている．詳しくは<a href="https://github.com/mitchellh">@mitchellh</a>氏がHNの議論で詳しく語っており，軽く翻訳したので，そちらを参考にしてほしい．</p>
+
+<ul>
+<li><a href="http://deeeet.com/writing/2014/03/03/why-building-docker-by-packer/">DockerイメージのビルドにPackerを使うべき理由</a></li>
+</ul>
+
+<h2 id="registry問題:7d134b5e48e82897ad0f39bfba3c0658">Registry問題</h2>
+
+<ul>
+<li><a href="http://rebuild.fm/79/">Rebuild: 79: Deep Learning Anime (Naoya Ito)</a></li>
+</ul>
+
+<p>Docker Registryもなかなかの嫌われものである．自分としては便利に使わせてもらっているが，不満はいくつかある．</p>
+
+<p>まず，DockerHub．上述した<code>docker pull</code>の問題のように，セキュリティ等に関しては完全にDockerHubを信用しないといけない．Automated buildは便利だけど，時にPending地獄に陥りビルドが始まらず何もできなくなるときがある．リリースがDockerHubの安定性に左右されるのはあまり良い状態ではない．Post/Preフックで簡単なスクリプトを動かすこともできない．</p>
+
+<p>では，<a href="https://github.com/docker/docker-registry">docker/docker-registry</a>を使って自分で運用するのか．これも実際に運用したひとの辛い話しか聞かない（でかいイメージpushしたら死ぬとか）．立ち上げるのは簡単だが，一番大切な認証機構を準備するのに一苦労必要だったりする．</p>
+
+<p>絶対自分で運用したくないから外部のプライベートレジストリサービス，例えば<a href="https://quay.io/">Quay.io</a>など，を見ているが，ちゃんと使おうと思うと有料の壁にぶつかる（ただQuay.ioは機能的にも面白いし，CoreOSに買収されてるので期待感はあり，現時点では良い選択かなと思っている）．</p>
+
+<h2 id="コンテナイメージの仕様問題:7d134b5e48e82897ad0f39bfba3c0658">コンテナイメージの仕様問題</h2>
+
+<p>「Dockerがホストを抽象化しDockerさえあればどこでもイメージを起動できる」というのはDockerを使うことの利点として語られることだけど，別の見方をすればDockerがないと何もできないうことになる．<a href="http://www.boycottdocker.org/">&ldquo;boycott docker&rdquo;</a>はDockerのことをまるでDockerOSだと批判し，ベンダーロックインに陥る危険性を仮想化技術との比較で語っている．</p>
+
+<p>そういうこともあり，統一的なコンテナイメージの仕様を作ろうという流れは以前からあった（つまり，誰でもコンテナのRumtimeを作れるようにしようと）．が，それに対して最近になるまでちゃんとした仕様を作るということをしていなかった．</p>
+
+<h2 id="docker-inc-の方向性問題:7d134b5e48e82897ad0f39bfba3c0658">Docker Inc.の方向性問題</h2>
+
+<ul>
+<li><a href="http://danielcompton.net/2014/12/02/modular-integrated-docker-coreos">Why Docker and CoreOS split was predictable – Daniel With Music</a></li>
+</ul>
+
+<p>僕はこの問題を追っていて，OSSだけど企業は企業なんだなあということを実感した．Dockerはもはや単にコンテナのRumtimeというコンポーネントでない．Dockerはプラットフォームを目指している．それは<a href="http://europe.dockercon.com/">DockerCon EU 2014</a>で発表された各ツール群を見れば明らかである（<a href="https://news.ycombinator.com/item?id=8699957">Announcing Docker Machine, Swarm, and Compose for Orchestrating Distributed Apps | Hacker News</a>）．これは企業としては当たり前の考え方だし，間違っているとも思わない．コミュニティの意向も間違いなくある．</p>
+
+<p>が，Dockerをコンポーネントとして見ていたCoreOSのようなチームは，何でやねんとはなる．上で紹介したようなセキュリティなど今すぐにでも解決するべき問題がたくさんあるのにも関わらず，またDockerが進もうとしている領域は既に他のツールが解決しているのにも関わらず&hellip; これがRocketという新しいRumtimeの登場につながる．</p>
+
+<h2 id="rocketとは何か:7d134b5e48e82897ad0f39bfba3c0658">Rocketとは何か</h2>
+
+<ul>
+<li><a href="https://jp.linux.com/news/linuxcom-exclusive/426261-lco2015021001">CoreOS 共同創設者 Alex Polvi が語る: コンテナ、Rocket と Docker の比較ほか</a></li>
+<li><a href="http://www.centurylinklabs.com/interviews/what-is-rocket-and-how-its-different-than-docker/">What is Rocket and How It’s Different Than Docker | Century Link Labs</a></li>
+<li><a href="http://thechangelog.com/138/">#138: Rocket, App Container Spec, and CoreOS with Alex Polvi - The Changelog</a></li>
+</ul>
+
+<p>まず，<a href="https://github.com/appc/spec">App Container</a>という標準的なコンテナの仕様が作られ始めた．これにより，コンテナイメージの仕様問題（Dockerによるベンダーロックイン問題）を解決しようとしている．DockerイメージからACIを作る，ACIからDockerイメージを作れるようなツールも作成している．</p>
+
+<p>次に<a href="https://github.com/coreos/rocket">CoreOS/Rocket</a>は，その標準的なコンテナを動かすためのRuntimeである．App ContainerとRocketのレポジトリが分かれているのは，あくまでRocketは実装の1つであることを意図していると思う．DockerとRocketの違いは，ブラウザで言うところのChromeとFirefoxの違いだと思えばよい．</p>
+
+<p>直近のRocketはDockerでも得にヤバいと言われている部分を解決した．</p>
+
+<ul>
+<li>ルート権限のデーモンとクライアントのアーキテクチャの廃止（誤解があったので追記．デーモンが動き続けていないというだけで実行そのものにはルート権限が必要です．常に動いているのとコンテナを起動しているときだけ動いているのは大きく違う）</li>
+<li>安全なイメージの配布モデルの作成</li>
+</ul>
+
+<p>内部を詳しくは見れていないが，他のCoreOSツールと同様に既にあるテクノロジーをなるべく使うように作られている（例えば内部では，<a href="http://www.freedesktop.org/software/systemd/man/systemd-nspawn.html">systemd-nspawn</a>を使っている）．少し触ってみたが，まだまだ使いやすさとは決して言えないレベル．</p>
+
+<h2 id="まとめ:7d134b5e48e82897ad0f39bfba3c0658">まとめ</h2>
+
+<p>Dockerの何がすごかったか，コンテナという技術を一般の人にも使いやすくしたところだと思う．現時点でRocketにはDockerほどの使いやすさはない．が，かといってDockerのセキュリティ問題などを無視するわけにもいかない．</p>
+
+<p>今年はKubernetesやMesosといった周辺ツールにひと盛り上がりがありそうだが，ここで書いた諸問題に関してもちゃんと注視しておきたい．</p>
+
+<h2 id="参考:7d134b5e48e82897ad0f39bfba3c0658">参考</h2>
+
+<ul>
+<li><a href="https://www.andreas-jung.com/contents/the-case-against-docker">The case against Docker - Andreas Jung</a></li>
+<li><a href="http://www.krisbuytaert.be/blog/docker-vs-reality-0-1">Docker vs Reality , 0 - 1 | Everything is a Freaking DNS problem</a></li>
+<li><a href="http://www.boycottdocker.org/">boycott docker</a></li>
+<li><a href="http://iops.io/blog/docker-hype/">Lets review.. Docker (again) | Cal Leeming Blog</a></li>
+<li><a href="http://gregoryszorc.com/blog/2014/10/13/deterministic-and-minimal-docker-images/">Gregory Szorc&rsquo;s Digital Home | Deterministic and Minimal Docker Images</a></li>
+<li><a href="https://titanous.com/posts/docker-insecurity">Docker Image Insecurity · Jonathan Rudenberg</a></li>
+<li><a href="https://securityblog.redhat.com/2014/12/18/before-you-initiate-a-docker-pull/">Before you initiate a &ldquo;docker pull&rdquo; | Red Hat Security</a></li>
+<li><a href="https://securityblog.redhat.com/2014/12/17/container-security-isolation-heaven-or-dependency-hell/">Container Security: Isolation Heaven or Dependency Hell | Red Hat Security</a></li>
+<li><a href="http://www.theregister.co.uk/2014/11/25/docker_vulnerabilities/">How secure is Docker? If you&rsquo;re not running version 1.3.2, NOT VERY • The Register</a></li>
+<li><a href="http://web.nvd.nist.gov/view/vuln/detail?vulnId=CVE-2014-6408">Vulnerability Summary for CVE-2014-6408</a></li>
+<li><a href="http://www.theregister.co.uk/2015/01/12/docker_security_immature_but_not_scary_says_gartner/">Docker&rsquo;s just a bit dodgy, but ready for rollout says Gartner • The Register</a></li>
+<li><a href="http://www.infoq.com/jp/news/2013/10/docker-container-security">Dockerとコンテナをセキュアにする</a></li>
+<li><a href="https://medium.com/@darrenrush/after-docker-unikernels-and-immutable-infrastructure-93d5a91c849e">After Docker: Unikernels and Immutable Infrastructure</a></li>
+<li><a href="http://iops.io/blog/lxc-application-containers-docker-initial-thoughts/">LXC containers are awesome, but Docker.io sucks</a></li>
+<li><a href="https://jp.linux.com/news/linuxcom-exclusive/426261-lco2015021001">CoreOS 共同創設者 Alex Polvi が語る: コンテナ、Rocket と Docker の比較ほか</a></li>
+<li><a href="http://www.centurylinklabs.com/interviews/what-is-rocket-and-how-its-different-than-docker/">What is Rocket and How It’s Different Than Docker | Century Link Labs</a></li>
+<li><a href="http://www.slideshare.net/Yuryu/dockeros-tech-girl">Docker向けOSとか</a></li>
+<li><a href="http://qiita.com/mopemope/items/9f163e4715a8bb5846e9">CoreOS - はじめてのRocket - Qiita</a></li>
+</ul>
+
+      <div class="social">
+  
+  
+  <a href="https://twitter.com/share" class="twitter-share-button" data-via="deeeet" data-count="none">Tweet</a>
+  
+  
+</div>
+
+    </section>
+
+    <footer>
+      <address>
+        
+        <img src="/images/bio.jpeg"/>
+        
+        <p>Written by <strong><a rel="author" href="https://twitter.com/deeeet" title="Taichi Nakashima" target="_blank">Taichi Nakashima</a></strong><br>
+          <span class="muted">A Tokyo based PaaS engineer. Please contact me via twitter.</span>
+        </p>
+      </address>
+
+    </footer>
+
+  </div>
+</article>
+
+<script type="text/javascript" src="//ajax.googleapis.com/ajax/libs/jquery/1.7.2/jquery.min.js"></script>
+<script type="text/javascript" src="/js/main.js"></script>
+
+<script>!function(d,s,id){var js,fjs=d.getElementsByTagName(s)[0],p=/^http:/.test(d.location)?'http':'https';if(!d.getElementById(id)){js=d.createElement(s);js.id=id;js.src=p+'://platform.twitter.com/widgets.js';fjs.parentNode.insertBefore(js,fjs);}}(document, 'script', 'twitter-wjs');</script>
+
+
+<script type="text/javascript">var HN=[];HN.factory=function(e){return function(){HN.push([e].concat(Array.prototype.slice.call(arguments,0)))};},HN.on=HN.factory("on"),HN.once=HN.factory("once"),HN.off=HN.factory("off"),HN.emit=HN.factory("emit"),HN.load=function(){var e="hn-button.js";if(document.getElementById(e))return;var t=document.createElement("script");t.id=e,t.src="//hn-button.herokuapp.com/hn-button.js";var n=document.getElementsByTagName("script")[0];n.parentNode.insertBefore(t,n)},HN.load();</script>
+
+
+  <script>
+  (function(i,s,o,g,r,a,m){i['GoogleAnalyticsObject']=r;i[r]=i[r]||function(){
+  (i[r].q=i[r].q||[]).push(arguments)},i[r].l=1*new Date();a=s.createElement(o),
+  m=s.getElementsByTagName(o)[0];a.async=1;a.src=g;m.parentNode.insertBefore(a,m)
+  })(window,document,'script','//www.google-analytics.com/analytics.js','ga');
+
+  ga('create', 'UA-45390253-1', 'auto');
+  ga('send', 'pageview');
+
+</script>
+
+
+
+<script>
+  $(document).ready(function() {
+  
+  $('p:has(img)').css('text-align', 'center');
+  $('iframe').css('style', 'display: block; margin: 0px auto;');
+  });
+</script>
+

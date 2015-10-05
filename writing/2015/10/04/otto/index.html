@@ -1,0 +1,298 @@
+<!doctype html>
+<html>
+  <head>
+    <meta http-equiv="content-type" content="text/html; charset=utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    
+    <title>Hashicorp Ottoを読む | SOTA</title>
+    
+    <link href="https://fonts.googleapis.com/css?family=Lato%3a900" rel="stylesheet" type="text/css">
+    <link rel="stylesheet" href="/css/main.css">
+    <link rel="shortcut icon" href="/favicon.png" type="image/x-icon" />
+    <link href="http://deeeet.com//index.xml" rel="alternate" type="application/rss+xml" title="" />
+    <meta name="title" content="http://deeeet.com/writing/2015/10/04/otto/">
+    <link rel="canonical" href="http://deeeet.com/writing/2015/10/04/otto/">
+    
+    <meta property="og:title" content="Hashicorp Ottoを読む"/>
+    <meta property="og:url" content="http://deeeet.com/writing/2015/10/04/otto/"/>
+  </head>
+  
+  <body>
+    <section class="site-nav">
+      <header>
+        <nav id="navigation">
+          <ul class="menu">
+            <li><a href="https://github.com/tcnksm/talks">Talks</a></li>
+            <li><a href="https://tcnksm.exposure.co/">Photos</a></li>
+          </ul>
+
+          <a class="name" href="/">SOTA</a>
+        </nav>        
+      </header>
+    </section>
+    
+
+
+<div class="container">
+  <div class="article-cover">
+    <div>
+      <img src="/images/otto.png" class="image">
+    </div>
+  </div>
+</div>
+
+<article>
+  <div class="container">
+    <header>
+      <div class="meta">
+        <time pubdate datetime="2015-10-04" title="2015-10-04">October 04, 2015</time>
+      </div>
+      <h1 class="title">Hashicorp Ottoを読む</h1>
+    </header>
+    
+    <section>
+      
+
+<p>Hashicorpから2015年秋の新作が2つ登場した．</p>
+
+<ul>
+<li><a href="https://hashicorp.com/blog/otto.html">Otto - HashiCorp</a></li>
+<li><a href="https://hashicorp.com/blog/nomad.html">Nomad - HashiCorp</a></li>
+</ul>
+
+<p>Ottoがなかなか面白そうなのでコードを追いつつ，Ottoとは何か? なぜ必要になったのか? どのように動作するのか? を簡単にまとめてみる．</p>
+
+<p>バージョンは <em>0.1.0</em> を対象にしている（イニシャルインプレッションである）</p>
+
+<h2 id="ottoとは何か:2c2a263eaafeca2332734dbece1fe9cd">Ottoとは何か?</h2>
+
+<p>公式はVagrantの後継と表現されている．が，それはローカル開発環境の構築<strong>も</strong>担っているという意味で後継であり，自分なりの言葉で表現してみると「OttoはHashicorpの各ツールを抽象化し開発環境の構築からインフラの整備，デプロイまでを一手に担うツール」である．ちなみにOttoという名前の由来は<a href="https://twitter.com/zembutsu/status/648956697034096641">Automationと語感が似ているからかつ元々そういう名前のbotがいた</a>からとのこと．</p>
+
+<h2 id="なぜottoか:2c2a263eaafeca2332734dbece1fe9cd">なぜOttoか?</h2>
+
+<p>なぜVagrantでは不十分であったのか? なぜOttoが必要だったのか? 理由をまとめると以下の5つである．</p>
+
+<ul>
+<li>設定ファイルは似通ったものになる</li>
+<li>設定ファイルは化石化する</li>
+<li>ローカル開発環境と同じものをデプロイしたい</li>
+<li>microservicesしたい</li>
+<li>パフォーマンスを改善したい </li>
+</ul>
+
+<p>まず各言語/フレームワークの<code>Vagrantfile</code>は似通ったものになる．<code>Vagrantfile</code>は毎回似たようなものを書く，もしくはコピペしていると思う．それならツール側が最も適したものを生成したほうがよい．Ottoは各言語のベストプラクティスな設定ファイルを持っておりそれを生成する．</p>
+
+<p>そして<code>Vagrantfile</code>は時代とともに古くなる，つまり化石化する．秘伝のソースとして残る．Ottoは生成する設定ファイルを常に最新のものに保つ．つまり今Ottoが生成する設定ファイルは5年後に生成される設定ファイルとは異なるものになる（cf. <a href="http://blog.bennycornelissen.nl/otto-a-modern-developers-new-best-friend/">&ldquo;Otto: a modern developer&rsquo;s new best friend&rdquo;</a>）</p>
+
+<p>そしてローカル開発環境と同じものを本番に構築したい（Environmental parityを担保したい）．現在のVagrantでも<code>provider</code>の仕組みを使えばIaaSサービスに環境を構築することはできる．が本番に適した形でそれを構築できるとは言い難い．Ottoは開発環境の構築だけではなく，デプロイ環境の構築も担う．</p>
+
+<p>時代はmicroservicesである．Vagrantは単一アプリ/サービスの構築には強いが複数には弱い．Ottoは依存サービスを記述する仕組みをもつ（<code>Appfile</code>）．それによりmicroserviceな環境を簡単に構築することができる．</p>
+
+<p>そしてパフォーマンス．最近のVagrantはどんどん遅くなっている．例えば立ち上げているVMの状態を確認するだけの<code>status</code>コマンドは2秒もかかる．Ottoはパフォーマンスの改善も目的にしている．</p>
+
+<h2 id="ottoは何をするのか:2c2a263eaafeca2332734dbece1fe9cd">Ottoは何をするのか?</h2>
+
+<p>Ottoが行うことは以下の2つに集約できる．</p>
+
+<ul>
+<li>Hashicorpツールの設定ファイルとスクリプトを生成する</li>
+<li>Hashicorpツールのインストール/実行をする</li>
+</ul>
+
+<p>Ottoの各コマンドと合わせてみてみると以下のようになる．</p>
+
+<ul>
+<li><code>compile</code> - アプリケーションのコンテキスト（e.g., 言語やフレームワーク）の判定と専用の設定ファイルである<code>Appfile</code>をもとにHashicorpツールの設定ファイル（<code>Vagrantfile</code>やTerraformの<code>.tf</code>ファイル，Packerのマシンテンプレート<code>.json</code>）と各種インストールのためのシェルスクリプトを生成する</li>
+<li><code>dev</code> - 開発環境を構築する．Vagrantを実行する</li>
+<li><code>infra</code> - アプリをデプロイするためのインフラを整備する．例えばAWSならVPCやサブネット，ゲートウェイなどを設定する．<a href="https://terraform.io/">Terraform</a>を実行する</li>
+<li><code>build</code> - アプリをデプロイ可能なイメージに固める．例えばAMIやDocker Imageなど．<a href="https://www.packer.io/">Packer</a>を実行する</li>
+<li><code>deploy</code> - 作成したイメージを事前に構築したインフラにデプロイする．Terraformを実行する（OttoのデプロイはImmutable Infrastructureを嗜好する）</li>
+</ul>
+
+<h2 id="ottoがつくるインフラの基礎:2c2a263eaafeca2332734dbece1fe9cd">Ottoがつくるインフラの基礎</h2>
+
+<p>Ottoには<a href="https://ottoproject.io/docs/concepts/foundations.html">Foundation</a>という概念がある（<code>foundation</code>という言葉は生成される設定ファイルやディレクトリ名に登場する）．これはOttoが構築するインフラの基礎，本番環境にアプリケーションをデプロイするために重要となるレイヤーを示す．このFoundationの例としては，以下のようなものが挙げられる．</p>
+
+<ul>
+<li><a href="https://www.consul.io/">Consul</a>によるサービスディスカバリー</li>
+<li><a href="https://vaultproject.io/">Vault</a>によるパスワード管理 (Future)</li>
+<li><a href="https://nomadproject.io/">Nomad</a>によるスケジューリング (Future)</li>
+</ul>
+
+<p>このレイヤーはモダンなアーキテクチャーではBest Practiceとされつつも構築はなかなか難しい．OttoはVagrantでローカル開発環境を構築するとき，本番環境のインフラを整備するときにこのレイヤーの整備も一緒に行う．</p>
+
+<h2 id="ottoの設定ファイル:2c2a263eaafeca2332734dbece1fe9cd">Ottoの設定ファイル</h2>
+
+<p>単純なことをするならばOttoには設定ファイルは<strong>必要ない</strong>．プロジェクトのルートディレクトリで<code>compile</code>を実行すれば言語/フレームワークを判定し，それにあった<code>Vagrantfile</code>とインフラを整備するためのTerraformの<code>.tf</code>ファイルなどを生成してくれる．</p>
+
+<p>より複雑なことをしたければ不十分である．Ottoは専用の<code>Appfile</code>という設定ファイルでカスタマイズを行うことができる．<code>Appfile</code>は<a href="https://github.com/hashicorp/hcl">HCL</a>で記述する．例えば，以下のように依存するサービスを記述することができる</p>
+
+<pre><code class="language-ruby">application {
+    dependency {
+        source = &quot;github.com/tcnksm-sample/golang-web&quot;
+    }
+}
+</code></pre>
+
+<p>他にも，言語のバージョンを指定したり，デプロイするIaaSサービスやその<code>flavar</code>（e.g., AWSだと現在<code>simple</code>と<code>vpc-public-private</code>がある．<code>simple</code>は最小限のリソースを使うのみでScalabilityや耐障害性などは犠牲にする．<code>vpc-public-private</code>だとprivateネットワークやNATなども準備する）を設定することができる．</p>
+
+<p>基本は適切なデフォルト値と自動で判別される値が存在する．<code>Appfile</code>はそれを上書きするものである．公式の説明の仕方を借りると<code>Appfile</code>は「どのようにマシンを設定するのかを記述するのではなく，アプリケーションが何であるかを記述する」ものである．</p>
+
+<h2 id="ottoを読む:2c2a263eaafeca2332734dbece1fe9cd">Ottoを読む</h2>
+
+<p>自分が気になった部分のソースコードを軽く読んでみる．</p>
+
+<h3 id="概要:2c2a263eaafeca2332734dbece1fe9cd">概要</h3>
+
+<p>上述したように，Ottoは各Hashicorpツールのバイナリを実行しているだけある．大まかには以下のようになる．</p>
+
+<ul>
+<li><code>compile</code>
+
+<ul>
+<li>依存サービスがある場合はそれらを全て<code>.otto</code>以下のディレクトリにfetchする（依存先も<code>Appfile</code>と<code>.ottoid</code>を持っている必要がある）</li>
+<li>各<code>Appfile</code>と言語/フレームワークを判別結果をマージして<code>.otto</code>ディレクトリ以下に各種設定ファイルを生成する</li>
+</ul></li>
+<li>コマンドごとに<code>otto/compiled</code>以下の決められたディレクトリ内の設定ファイルをもとにバイナリを実行する
+
+<ul>
+<li>e.g., <code>build</code>を実行するとPackerのマシンテンプレートである<code>.otto/compiled/app/build/template.json</code>が使われる</li>
+</ul></li>
+</ul>
+
+<h3 id="コア:2c2a263eaafeca2332734dbece1fe9cd">コア</h3>
+
+<p>Ottoのコアは<a href="https://github.com/hashicorp/otto/blob/v0.1.1/otto/core.go">https://github.com/hashicorp/otto/blob/v0.1.1/otto/core.go</a>にある．基本的にどのコマンドもここに到達する．やっていることは単純でコンテキストをもとに実行するべき設定ファイルを決めてそれを元にバイナリを実行するだけ．</p>
+
+<p>以下をみると各バイナリをどのように実行しているかをみることができる．</p>
+
+<ul>
+<li><a href="https://github.com/hashicorp/otto/tree/v0.1.1/helper/vagrant">https://github.com/hashicorp/otto/tree/v0.1.1/helper/vagrant</a></li>
+<li><a href="https://github.com/hashicorp/otto/tree/v0.1.1/helper/terraform">https://github.com/hashicorp/otto/tree/v0.1.1/helper/terraform</a></li>
+<li><a href="https://github.com/hashicorp/otto/tree/v0.1.1/helper/packer">https://github.com/hashicorp/otto/tree/v0.1.1/helper/packer</a></li>
+</ul>
+
+<h3 id="インストーラー:2c2a263eaafeca2332734dbece1fe9cd">インストーラー</h3>
+
+<p>バイナリがインストールされていなければコマンド実行直後にインストールが実行される．<a href="https://github.com/hashicorp/otto/tree/v0.1.1/helper/hashitools">https://github.com/hashicorp/otto/tree/v0.1.1/helper/hashitools</a>にインストーラーが書かれている．以下の<a href="bintray.com">bintray.com</a>のURLからzipをダウンロードして展開しているだけ．</p>
+
+<pre><code class="language-golang">url := fmt.Sprintf(
+    &quot;https://dl.bintray.com/mitchellh/%s/%s_%s_%s_%s.zip&quot;,
+    i.Name, i.Name, vsn, runtime.GOOS, runtime.GOARCH)
+</code></pre>
+
+<p>（なんでmitchellhアカウントなのだろう&hellip;）</p>
+
+<h3 id="言語-フレームワークの判定:2c2a263eaafeca2332734dbece1fe9cd">言語/フレームワークの判定</h3>
+
+<p>まず<code>compile</code>のときにアプリケーションの言語/フレームワークの判定する方法．これはHerokuのBuildpackに似たことをする．アプリケーションに特有なファイル，例えばRubyならば<code>Gemfile</code>，が存在するかをチェックする．判定のルールは以下のような<code>struct</code>で保持する．</p>
+
+<pre><code class="language-golang">detectors := []*detect.Detector{
+    &amp;detect.Detector{
+        Type: &quot;go&quot;,
+        File: []string{&quot;*.go&quot;},
+    },
+    ....    
+</code></pre>
+
+<p>そして以下で判別する．単純．</p>
+
+<pre><code class="language-golang">func (d *Detector) Detect(dir string) (bool, error) {
+    for _, pattern := range d.File {
+        matches, err := filepath.Glob(filepath.Join(dir, pattern))
+        if err != nil {
+            return false, err
+        }
+        if len(matches) &gt; 0 {
+            return true, nil
+        }
+    }
+}
+</code></pre>
+
+<p><code>.hcl</code>ファイルで<code>Detector</code>を書いて<code>~/.otto.d/detect</code>以下に置い読み込むというロジックを見かけたので自分で好きな判定ロジックを定義できるかもしれない．</p>
+
+<h3 id="設定ファイル-インストールスクリプトはどこにあるのか:2c2a263eaafeca2332734dbece1fe9cd">設定ファイル/インストールスクリプトはどこにあるのか?</h3>
+
+<p><a href="https://twitter.com/kenjiskywalker/status/648884208572600323">&ldquo;ハシコープは人類を含む全ての概念をバイナリにして配布した&rdquo;</a></p>
+
+<p><a href="https://github.com/hashicorp/otto/tree/v0.1.1/builtin/app">https://github.com/hashicorp/otto/tree/v0.1.1/builtin/app</a>以下に各言語の<code>Vagrantfile</code>やpackerのマシンテンプレート，それらが呼び出すインストールスクリプトが存在する．そしてOttoはそれらを<a href="https://github.com/jteeuwen/go-bindata">go-bindata</a>を使ってバイナリとして埋め込んでいる．<code>app.go</code>の先頭をみるとそのための<code>go generate</code>文が見える．</p>
+
+<pre><code class="language-golang">//go:generate go-bindata -pkg=goapp -nomemcopy -nometadata ./data/...
+</code></pre>
+
+<h3 id="時代はシェルスクリプト:2c2a263eaafeca2332734dbece1fe9cd">時代はシェルスクリプト</h3>
+
+<p><code>Vagrantfile</code>のインストールスクリプト，Packerのマシンテンプレートが呼び出す<code>provisioner</code>のスクリプト，など全てがゴリゴリのシェルスクリプトで書かれている．<code>Dockerfile</code>以後，時代はシェルスクリプトになっている気がする．大変そう．</p>
+
+<p>ちなみにデーモンの管理は<code>upstart</code>が使われている（cf. <a href="https://github.com/hashicorp/otto/blob/v0.1.1/builtin/foundation/consul/data/common/app-build/upstart.conf.tpl">https://github.com/hashicorp/otto/blob/v0.1.1/builtin/foundation/consul/data/common/app-build/upstart.conf.tpl</a>）．</p>
+
+<h2 id="まとめ:2c2a263eaafeca2332734dbece1fe9cd">まとめ</h2>
+
+<p>とりあえず何か始めたいと思うときは便利であるし，期待感はある．が，最後にこれはどうなるんだろうと思ったことをまとめておく．</p>
+
+<p>設定ファイルをバイナリに含めたら変更が辛くなるのではないか? もし設定ファイルに不備があったらそれを修正して新しくバイナリをリリースしないといけなくなる．利用者は開発者なので問題はなさそうだけど，一度ダウンロードしたものをすぐにアップグレードしてくれるだろうか（一応利用しているバイナリが最新であるかそうでないかを判定し，古い場合には警告を出す<a href="https://github.com/hashicorp/go-checkpoint">仕組み</a>はある）．Atlasを使ってファイルをホストする方式ではだめだったのか? boxを使うのはダメだったのか?（重いかな..）．</p>
+
+<p>今のところ<code>compile</code>するたびに<code>.otto</code>ディレクトリは作り直される．同じ環境であることは担保するのは<code>.ottoid</code>ファイルしかない．これはどこまで非互換な変更を対処してくれるのか．ローカル開発環境は良いが，デプロイがぶっ壊れることはないだろうか.. （が，これはottoというよりはTerraformの問題な気もする）．</p>
+
+<h2 id="参考:2c2a263eaafeca2332734dbece1fe9cd">参考</h2>
+
+<ul>
+<li><a href="http://pocketstudio.jp/log3/2015/10/01/joined-hashiconf-2015-at-portland/">HashiConf 2015 参加してきました＆KeyNoteまとめ</a></li>
+</ul>
+
+      <div class="social">
+  
+  
+  <a href="https://twitter.com/share" class="twitter-share-button" data-via="deeeet" data-count="none">Tweet</a>
+  
+  
+</div>
+
+    </section>
+
+    <footer>
+      <address>
+        
+        <img src="/images/bio.jpeg"/>
+        
+        <p>Written by <strong><a rel="author" href="https://twitter.com/deeeet" title="Taichi Nakashima" target="_blank">Taichi Nakashima</a></strong><br>
+          <span class="muted">A Tokyo based PaaS engineer. Please contact me via twitter.</span>
+        </p>
+      </address>
+
+    </footer>
+
+  </div>
+</article>
+
+<script type="text/javascript" src="//ajax.googleapis.com/ajax/libs/jquery/1.7.2/jquery.min.js"></script>
+<script type="text/javascript" src="/js/main.js"></script>
+
+<script>!function(d,s,id){var js,fjs=d.getElementsByTagName(s)[0],p=/^http:/.test(d.location)?'http':'https';if(!d.getElementById(id)){js=d.createElement(s);js.id=id;js.src=p+'://platform.twitter.com/widgets.js';fjs.parentNode.insertBefore(js,fjs);}}(document, 'script', 'twitter-wjs');</script>
+
+
+<script type="text/javascript">var HN=[];HN.factory=function(e){return function(){HN.push([e].concat(Array.prototype.slice.call(arguments,0)))};},HN.on=HN.factory("on"),HN.once=HN.factory("once"),HN.off=HN.factory("off"),HN.emit=HN.factory("emit"),HN.load=function(){var e="hn-button.js";if(document.getElementById(e))return;var t=document.createElement("script");t.id=e,t.src="//hn-button.herokuapp.com/hn-button.js";var n=document.getElementsByTagName("script")[0];n.parentNode.insertBefore(t,n)},HN.load();</script>
+
+
+  <script>
+  (function(i,s,o,g,r,a,m){i['GoogleAnalyticsObject']=r;i[r]=i[r]||function(){
+  (i[r].q=i[r].q||[]).push(arguments)},i[r].l=1*new Date();a=s.createElement(o),
+  m=s.getElementsByTagName(o)[0];a.async=1;a.src=g;m.parentNode.insertBefore(a,m)
+  })(window,document,'script','//www.google-analytics.com/analytics.js','ga');
+
+  ga('create', 'UA-45390253-1', 'auto');
+  ga('send', 'pageview');
+
+</script>
+
+
+
+<script>
+  $(document).ready(function() {
+  
+  $('p:has(img)').css('text-align', 'center');
+  $('iframe').css('style', 'display: block; margin: 0px auto;');
+  });
+</script>
+

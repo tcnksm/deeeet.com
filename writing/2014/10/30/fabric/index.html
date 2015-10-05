@@ -1,0 +1,209 @@
+<!doctype html>
+<html>
+  <head>
+    <meta http-equiv="content-type" content="text/html; charset=utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    
+    <title>複数プロジェクトを抱えるチームでのデプロイ自動化 | SOTA</title>
+    
+    <link href="https://fonts.googleapis.com/css?family=Lato%3a900" rel="stylesheet" type="text/css">
+    <link rel="stylesheet" href="/css/main.css">
+    <link rel="shortcut icon" href="/favicon.png" type="image/x-icon" />
+    <link href="http://deeeet.com//index.xml" rel="alternate" type="application/rss+xml" title="" />
+    <meta name="title" content="http://deeeet.com/writing/2014/10/30/fabric/">
+    <link rel="canonical" href="http://deeeet.com/writing/2014/10/30/fabric/">
+    
+    <meta property="og:title" content="複数プロジェクトを抱えるチームでのデプロイ自動化"/>
+    <meta property="og:url" content="http://deeeet.com/writing/2014/10/30/fabric/"/>
+  </head>
+  
+  <body>
+    <section class="site-nav">
+      <header>
+        <nav id="navigation">
+          <ul class="menu">
+            <li><a href="https://github.com/tcnksm/talks">Talks</a></li>
+            <li><a href="https://tcnksm.exposure.co/">Photos</a></li>
+          </ul>
+
+          <a class="name" href="/">SOTA</a>
+        </nav>        
+      </header>
+    </section>
+    
+
+
+<article>
+  <div class="container">
+    <header>
+      <div class="meta">
+        <time pubdate datetime="2014-10-30" title="2014-10-30">October 30, 2014</time>
+      </div>
+      <h1 class="title">複数プロジェクトを抱えるチームでのデプロイ自動化</h1>
+    </header>
+    
+    <section>
+      
+
+<p>1つのチームで，10以上のプロジェクト，コードベースを抱える場合にどのようにデプロイの自動化を進めたか，工夫したこと，考慮したことなどをまとめておく．</p>
+
+<p>デプロイツールには，Python製の<a href="http://www.fabfile.org/en/latest/">fabric</a>を採用しているが，他のツールでも同様のことはできそう．なお，fabricの基本的な使い方などは既にインターネット上に良い記事がたくさんあるので書かない（最後の参考の項を見てください）．</p>
+
+<h2 id="fabricの選択:b12f3ac73bdb3169631f13d7af723714">fabricの選択</h2>
+
+<p>シェルスクリプトとCapistranoを考慮した．</p>
+
+<p>まず，シェルスクリプトは人によって書き方が違うため，統一が難しくメンテナンスコストも高い．また共通化も難しい．</p>
+
+<p>次に，Capistranoは，裏でやってくれることが多く，学習コストも高い．プロジェクトによってはかなり特殊な環境へのデプロイも抱えているため，Capistranoの前提から外れることがあった．また，自分独りなら問題ないが，チームの負担が大きくなると感じた．</p>
+
+<p>fabricは全てを自分で記述する必要がある．それは欠点である一方利点でもある．例えば，特殊な要件であっても柔軟に対応することができる．また，最初に自分が頑張れば，既述の統一や共通化により最小のフレームをつくり，チームメンバーへの負担も少なくできると感じた．</p>
+
+<p>このような理由からfabricを採用した．</p>
+
+<h2 id="戦略:b12f3ac73bdb3169631f13d7af723714">戦略</h2>
+
+<p>デプロイスクリプト（ここでは<code>fabfile.py</code>）は以下のように1つの専用のレポジトリ内にプロジェクトごとに作成した．理由としては，プロジェクトの数が多い場合，コードベースごとにデプロイスクリプトを抱えるのは，自動化の推進の弊害になるため．デプロイスクリプトをバラバラに管理すると，プロジェクトごとに独自文化が生まれ，統一を失うと感じたため．また，後述する共通化が困難になるため．</p>
+
+<pre><code class="language-bash">.
+├── README.md
+├── projectA
+│   ├── README.md
+│   └── fabfile.py
+├── projectB
+│   ├── README.md
+│   └── fabfile.py
+├── projectC
+│   ├── README.md
+│   └── fabfile.py
+.
+.
+</code></pre>
+
+<p>デプロイは開発者の手元からではなく，デプロイサーバから行う．これによりワークフローもシンプルになる．デプロイ時には専用のサーバにログインし，プロジェクトのディレクトリに移動して，<code>fab</code>コマンドを叩けば良い．またそのプロジェクトに入っていないひとでもデプロイを行うこともできる（ChatOpsの実現も容易）．</p>
+
+<p><code>README.md</code>も重要である．プロジェクトごとに考慮するべきことは全て<code>README.md</code>を見れば良いようにした（参考，<a href="http://deeeet.com/writing/2014/07/31/readme/">&ldquo;わかりやすいREADME.mdを書く&rdquo;</a>）．</p>
+
+<h2 id="共通化:b12f3ac73bdb3169631f13d7af723714">共通化</h2>
+
+<p>プロジェクトは違っても，例えば，チャットツールへの通知やコードのチェックアウト，ビルドは共通化できる．共通化しておくことで，新しいプロジェクトの自動化の展開が容易になる．そのプロジェクト特有なものだけ既述して，あとは共通化したものを呼び出すだけでよくなる．</p>
+
+<p>以下のように，レポジトリのトップレベルに<code>common</code>ディレクトリを作成し，共通作業をまとめるようにする．</p>
+
+<pre><code class="language-bash">common
+├── __init__
+├── git.py
+├── hipchat.py
+├── build.py
+.
+.
+</code></pre>
+
+<p>使うときは，各プロジェクトの<code>fabfile.py</code>からそれを呼び出すようにする．</p>
+
+<pre><code class="language-python">sys.path.append(os.pardir)
+from common import git,hipchat,java
+</code></pre>
+
+<h2 id="用語の統一:b12f3ac73bdb3169631f13d7af723714">用語の統一</h2>
+
+<p>複数のプロジェクトを扱う場合，用語の統一は，属人性を廃して複数の開発者がどのプロジェクトでもデプロイできるようにするために非常に重要である．用語とは，例えば，<code>fab</code>コマンドと共に叩く関数名のことである．せっかく自動化しても，プロジェクトごとに様々なコマンドが存在したり，叩くべきコマンドが複雑になっては意味がない．</p>
+
+<p>例えば，リリースは全て以下のように統一している（<code>stg</code>環境に<code>feature/ABC</code>ブランチをデプロイするという意味）．</p>
+
+<pre><code class="language-bash">$ fab stg release:feature/ABC
+</code></pre>
+
+<p>用語の統一は大変で，ドキュメント等でチームに周知し，コードレビューをしっかりやるしかない（できれば簡単なlintツールとかを作りたい）．</p>
+
+<h2 id="優しさ:b12f3ac73bdb3169631f13d7af723714">優しさ</h2>
+
+<p><a href="http://hitode909.hatenablog.com/entry/2014/02/01/154226">失敗する前提でデプロイする - hitode909の日記</a></p>
+
+<p>この記事がとても好きで，同じようなことを実践している．不測の自体や失敗は必ず起きる．そう言った場合に「次はこうすればよいですよ！」と指示を具体的なコマンドとともに表示するようにしている．用語は統一していても，特に初心者がいる場合にこういった優しさは大切になる．</p>
+
+<h2 id="まとめ:b12f3ac73bdb3169631f13d7af723714">まとめ</h2>
+
+<p>俺が通り過ぎた後には自動化されたシステムしか残らない．</p>
+
+<h2 id="参考:b12f3ac73bdb3169631f13d7af723714">参考</h2>
+
+<h3 id="fabricについて:b12f3ac73bdb3169631f13d7af723714">fabricについて</h3>
+
+<ul>
+<li><a href="http://www.slideshare.net/mumumu/fabric-essentials-28142569">Fabric Essentials</a></li>
+<li><a href="http://shiumachi.hatenablog.com/entry/20130414/1365920515">今日からすぐに使えるデプロイ・システム管理ツール Fabric 入門 - 科学と非科学の迷宮</a></li>
+<li><a href="http://ameblo.jp/principia-ca/entry-11925739692.html">俺達のFabric 〜余計な仕事はFabricに任せよう〜｜サイバーエージェント 公式エンジニアブログ</a></li>
+<li><a href="http://dekokun.github.io/posts/2013-04-07.html">Python製デプロイツール Fabricを初めて使う際に役立つTips</a></li>
+<li><a href="http://hozumi.github.io/2013/03/chef-fabric-ja.html">Chefに挫折したあなたへ．Fabricのすすめ</a></li>
+<li><a href="http://www.ianlewis.org/jp/fabric-pythonic">Fabric デプロイツールのPythonicな書き方 - Ian Lewis</a></li>
+</ul>
+
+<h3 id="自動化や開発フローについて:b12f3ac73bdb3169631f13d7af723714">自動化や開発フローについて</h3>
+
+<ul>
+<li><a href="https://speakerdeck.com/shibayu36/hatenaburogutimufalsekai-fa-hurotogithub">はてなブログチームの開発フローとGitHub // Speaker Deck</a></li>
+<li><a href="https://speakerdeck.com/naoya/sukerusurukai-fa-zu-zhi-falsezuo-rifang-number-jawsug">スケールする開発組織の作り方 #jawsug // Speaker Deck</a></li>
+<li><a href="https://speakerdeck.com/kaiseh/smartnewsniokerukai-fa-falsekao-ekata">SmartNewsにおける開発の考えかた // Speaker Deck</a></li>
+<li><a href="http://developer.cybozu.co.jp/tech/?p=7021">kintoneを支えるKAIZENの技術 | Cybozu Inside Out | サイボウズエンジニアのブログ</a></li>
+<li><a href="https://speakerdeck.com/mirakui/cookpads-deployment-and-auto-scaling">Cookpad&rsquo;s deployment and auto scaling // Speaker Deck</a></li>
+<li><a href="http://www.slideshare.net/Ryuzee/devsumia">ワンクリックデプロイ 〜いつまで手でデプロイしてるんですか〜 #devsumiA</a></li>
+<li><a href="https://speakerdeck.com/jnewland/chatops-at-github">ChatOps at GitHub // Speaker Deck</a></li>
+<li><a href="http://rebuild.fm/47/">Rebuild: 47: Live From GitHub Kaigi (Naoya Ito)</a></li>
+</ul>
+
+      <div class="social">
+  
+  
+  <a href="https://twitter.com/share" class="twitter-share-button" data-via="deeeet" data-count="none">Tweet</a>
+  
+  
+</div>
+
+    </section>
+
+    <footer>
+      <address>
+        
+        <img src="/images/bio.jpeg"/>
+        
+        <p>Written by <strong><a rel="author" href="https://twitter.com/deeeet" title="Taichi Nakashima" target="_blank">Taichi Nakashima</a></strong><br>
+          <span class="muted">A Tokyo based PaaS engineer. Please contact me via twitter.</span>
+        </p>
+      </address>
+
+    </footer>
+
+  </div>
+</article>
+
+<script type="text/javascript" src="//ajax.googleapis.com/ajax/libs/jquery/1.7.2/jquery.min.js"></script>
+<script type="text/javascript" src="/js/main.js"></script>
+
+<script>!function(d,s,id){var js,fjs=d.getElementsByTagName(s)[0],p=/^http:/.test(d.location)?'http':'https';if(!d.getElementById(id)){js=d.createElement(s);js.id=id;js.src=p+'://platform.twitter.com/widgets.js';fjs.parentNode.insertBefore(js,fjs);}}(document, 'script', 'twitter-wjs');</script>
+
+
+<script type="text/javascript">var HN=[];HN.factory=function(e){return function(){HN.push([e].concat(Array.prototype.slice.call(arguments,0)))};},HN.on=HN.factory("on"),HN.once=HN.factory("once"),HN.off=HN.factory("off"),HN.emit=HN.factory("emit"),HN.load=function(){var e="hn-button.js";if(document.getElementById(e))return;var t=document.createElement("script");t.id=e,t.src="//hn-button.herokuapp.com/hn-button.js";var n=document.getElementsByTagName("script")[0];n.parentNode.insertBefore(t,n)},HN.load();</script>
+
+
+  <script>
+  (function(i,s,o,g,r,a,m){i['GoogleAnalyticsObject']=r;i[r]=i[r]||function(){
+  (i[r].q=i[r].q||[]).push(arguments)},i[r].l=1*new Date();a=s.createElement(o),
+  m=s.getElementsByTagName(o)[0];a.async=1;a.src=g;m.parentNode.insertBefore(a,m)
+  })(window,document,'script','//www.google-analytics.com/analytics.js','ga');
+
+  ga('create', 'UA-45390253-1', 'auto');
+  ga('send', 'pageview');
+
+</script>
+
+
+
+<script>
+  $(document).ready(function() {
+  
+  $('p:has(img)').css('text-align', 'center');
+  $('iframe').css('style', 'display: block; margin: 0px auto;');
+  });
+</script>
+

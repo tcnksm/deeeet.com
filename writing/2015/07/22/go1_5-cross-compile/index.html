@@ -1,0 +1,175 @@
+<!doctype html>
+<html>
+  <head>
+    <meta http-equiv="content-type" content="text/html; charset=utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    
+    <title>Go1.5はクロスコンパイルがより簡単 | SOTA</title>
+    
+    <link href="https://fonts.googleapis.com/css?family=Lato%3a900" rel="stylesheet" type="text/css">
+    <link rel="stylesheet" href="/css/main.css">
+    <link rel="shortcut icon" href="/favicon.png" type="image/x-icon" />
+    <link href="http://deeeet.com//index.xml" rel="alternate" type="application/rss+xml" title="" />
+    <meta name="title" content="http://deeeet.com/writing/2015/07/22/go1_5-cross-compile/">
+    <link rel="canonical" href="http://deeeet.com/writing/2015/07/22/go1_5-cross-compile/">
+    
+    <meta property="og:title" content="Go1.5はクロスコンパイルがより簡単"/>
+    <meta property="og:url" content="http://deeeet.com/writing/2015/07/22/go1_5-cross-compile/"/>
+  </head>
+  
+  <body>
+    <section class="site-nav">
+      <header>
+        <nav id="navigation">
+          <ul class="menu">
+            <li><a href="https://github.com/tcnksm/talks">Talks</a></li>
+            <li><a href="https://tcnksm.exposure.co/">Photos</a></li>
+          </ul>
+
+          <a class="name" href="/">SOTA</a>
+        </nav>        
+      </header>
+    </section>
+    
+
+
+<article>
+  <div class="container">
+    <header>
+      <div class="meta">
+        <time pubdate datetime="2015-07-22" title="2015-07-22">July 22, 2015</time>
+      </div>
+      <h1 class="title">Go1.5はクロスコンパイルがより簡単</h1>
+    </header>
+    
+    <section>
+      
+
+<ul>
+<li><a href="http://dave.cheney.net/2015/03/03/cross-compilation-just-got-a-whole-lot-better-in-go-1-5">Cross compilation just got a whole lot better in Go 1.5 | Dave Cheney</a></li>
+<li><a href="https://medium.com/@rakyll/go-1-5-cross-compilation-488092ba44ec">Go 1.5: Cross compilation — Medium</a></li>
+</ul>
+
+<p>Go言語の良さの一つにあらゆるOS/Archに対するクロスコンパイルがとても簡単に行えることが挙げられる．今まで（Go1.4以前）も十分に便利だったが<a href="http://tip.golang.org/doc/go1.5">Go 1.5</a>ではさらに良くなる．</p>
+
+<p>今までの問題を敢えて挙げるとターゲットとするプラットフォーム向けのビルドtool-chain準備する必要があるのが煩雑であった（cf. <a href="http://qiita.com/Jxck_/items/02185f51162e92759ebe">Go のクロスコンパイル環境構築 - Qiita</a>）</p>
+
+<pre><code class="language-bash">$ cd $(go env GOROOT)/src
+$ GOOS=${TARGET_OS} GOARCH=${TARGET_ARCH} ./make.bash --no-clean 
+</code></pre>
+
+<pre><code class="language-bash">$ gox -build-toolchain 
+</code></pre>
+
+<p>この作業は1つの環境で一度だけ行えばよいのでそれほど煩雑ではない．しかし，例えばDockerなどでクロスコンパイル環境を提供すると（e.g., <a href="https://github.com/tcnksm/dockerfile-gox">tcnksm/dockerfile-gox</a>），ビルドに時間がかかったりイメージが無駄に重くなったりという問題がおこる．初めてクロスコンパイルをしようとするひとにとってもつまづいてしまうポイントだったと思う．</p>
+
+<p>Go1.5ではコンパイラがGoで書き直された（cf. <a href="http://talks.golang.org/2015/gogo.slide#1">Go in Go</a>）ため，この準備作業が不要になる．<code>go</code>はコンパイル前に必要な標準パッケージを検出しそれらをターゲットのプラットフォーム向けにビルドしてくれる．</p>
+
+<h2 id="使ってみる:dcb6fe83a3ea3825d24f294d3c92e899">使ってみる</h2>
+
+<p>Go1.5を準備する．Go1.5のビルドにはGo1.4が必要．</p>
+
+<pre><code class="language-bash">$ git clone https://go.googlesource.com/go $HOME/go1.5
+$ cd $HOME/go1.5 &amp;&amp; git checkout -b 1.5 refs/tags/go1.5beta2
+$ cd $HOME/go1.5/src &amp;&amp; GOROOT_BOOTSTRAP=$HOME/go1.4/ ./make.bash
+</code></pre>
+
+<pre><code class="language-bash">$ export PATH=$HOME/go1.5/bin:$PATH
+</code></pre>
+
+<p><a href="https://github.com/mitchellh/gox">mitchellh/gox</a>を使ってみる．toolchainの準備なしにすぐに使える．</p>
+
+<pre><code class="language-bash">$ go get github.com/mitchellh/gox
+</code></pre>
+
+<pre><code class="language-bash">$ cd $GOPATH/src/github.com/tcnksm/hello
+$ gox
+Number of parallel builds: 4
+
+--&gt;       linux/arm: github.com/tcnksm/hello
+--&gt;      darwin/386: github.com/tcnksm/hello
+--&gt;       linux/386: github.com/tcnksm/hello
+--&gt;       plan9/386: github.com/tcnksm/hello
+--&gt;     freebsd/386: github.com/tcnksm/hello
+--&gt;   freebsd/amd64: github.com/tcnksm/hello
+--&gt;     openbsd/386: github.com/tcnksm/hello
+--&gt;   openbsd/amd64: github.com/tcnksm/hello
+--&gt;     windows/386: github.com/tcnksm/hello
+--&gt;   windows/amd64: github.com/tcnksm/hello
+--&gt;     freebsd/arm: github.com/tcnksm/hello
+--&gt;      netbsd/386: github.com/tcnksm/hello
+--&gt;    netbsd/amd64: github.com/tcnksm/hello
+--&gt;      netbsd/arm: github.com/tcnksm/hello
+--&gt;     linux/amd64: github.com/tcnksm/hello
+--&gt;    darwin/amd64: github.com/tcnksm/hello
+</code></pre>
+
+<p>ちなみに上の例はcgoが必要ない場合，cgoが必要な場合は<code>CC</code>と<code>CXX</code>環境変数でCとC++のコンパイラを指定することができる（cf. <a href="https://medium.com/@rakyll/go-1-5-cross-compilation-488092ba44ec">Go 1.5: Cross compilation</a>）．</p>
+
+<pre><code class="language-bash">$ CGO_ENABLED=1 CC=android-armeabi-gcc CXX=android-armeabi-g++ GOOS=android GOARCH=arm GOARM=7 go build .
+</code></pre>
+
+<h2 id="留意事項:dcb6fe83a3ea3825d24f294d3c92e899">留意事項</h2>
+
+<p>(2015年8月7日追記)</p>
+
+<p><code>-v</code> オプションをつけてクロスコンパイルをするとわかるが毎回ターゲットプラットホーム向けに標準ライブラリをビルドするためコンパイル時間は長くなる（cf <a href="https://twitter.com/upthecyberpunks/status/629092265391095809">&ldquo;https://twitter.com/upthecyberpunks/status/629092265391095809&rdquo;</a>）．同じ環境で使い回すならば今まで通り標準パッケージを事前にビルドしておくと良い．</p>
+
+<pre><code class="language-bash">$ env GOOS=linux GOARCH=amd64 go install std
+</code></pre>
+
+      <div class="social">
+  
+  
+  <a href="https://twitter.com/share" class="twitter-share-button" data-via="deeeet" data-count="none">Tweet</a>
+  
+  
+</div>
+
+    </section>
+
+    <footer>
+      <address>
+        
+        <img src="/images/bio.jpeg"/>
+        
+        <p>Written by <strong><a rel="author" href="https://twitter.com/deeeet" title="Taichi Nakashima" target="_blank">Taichi Nakashima</a></strong><br>
+          <span class="muted">A Tokyo based PaaS engineer. Please contact me via twitter.</span>
+        </p>
+      </address>
+
+    </footer>
+
+  </div>
+</article>
+
+<script type="text/javascript" src="//ajax.googleapis.com/ajax/libs/jquery/1.7.2/jquery.min.js"></script>
+<script type="text/javascript" src="/js/main.js"></script>
+
+<script>!function(d,s,id){var js,fjs=d.getElementsByTagName(s)[0],p=/^http:/.test(d.location)?'http':'https';if(!d.getElementById(id)){js=d.createElement(s);js.id=id;js.src=p+'://platform.twitter.com/widgets.js';fjs.parentNode.insertBefore(js,fjs);}}(document, 'script', 'twitter-wjs');</script>
+
+
+<script type="text/javascript">var HN=[];HN.factory=function(e){return function(){HN.push([e].concat(Array.prototype.slice.call(arguments,0)))};},HN.on=HN.factory("on"),HN.once=HN.factory("once"),HN.off=HN.factory("off"),HN.emit=HN.factory("emit"),HN.load=function(){var e="hn-button.js";if(document.getElementById(e))return;var t=document.createElement("script");t.id=e,t.src="//hn-button.herokuapp.com/hn-button.js";var n=document.getElementsByTagName("script")[0];n.parentNode.insertBefore(t,n)},HN.load();</script>
+
+
+  <script>
+  (function(i,s,o,g,r,a,m){i['GoogleAnalyticsObject']=r;i[r]=i[r]||function(){
+  (i[r].q=i[r].q||[]).push(arguments)},i[r].l=1*new Date();a=s.createElement(o),
+  m=s.getElementsByTagName(o)[0];a.async=1;a.src=g;m.parentNode.insertBefore(a,m)
+  })(window,document,'script','//www.google-analytics.com/analytics.js','ga');
+
+  ga('create', 'UA-45390253-1', 'auto');
+  ga('send', 'pageview');
+
+</script>
+
+
+
+<script>
+  $(document).ready(function() {
+  
+  $('p:has(img)').css('text-align', 'center');
+  $('iframe').css('style', 'display: block; margin: 0px auto;');
+  });
+</script>
+

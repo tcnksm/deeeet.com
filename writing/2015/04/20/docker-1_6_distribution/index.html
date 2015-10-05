@@ -1,0 +1,262 @@
+<!doctype html>
+<html>
+  <head>
+    <meta http-equiv="content-type" content="text/html; charset=utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    
+    <title>Content Addressable DockerイメージとRegistry2.0 | SOTA</title>
+    
+    <link href="https://fonts.googleapis.com/css?family=Lato%3a900" rel="stylesheet" type="text/css">
+    <link rel="stylesheet" href="/css/main.css">
+    <link rel="shortcut icon" href="/favicon.png" type="image/x-icon" />
+    <link href="http://deeeet.com//index.xml" rel="alternate" type="application/rss+xml" title="" />
+    <meta name="title" content="http://deeeet.com/writing/2015/04/20/docker-1_6_distribution/">
+    <link rel="canonical" href="http://deeeet.com/writing/2015/04/20/docker-1_6_distribution/">
+    
+    <meta property="og:title" content="Content Addressable DockerイメージとRegistry2.0"/>
+    <meta property="og:url" content="http://deeeet.com/writing/2015/04/20/docker-1_6_distribution/"/>
+  </head>
+  
+  <body>
+    <section class="site-nav">
+      <header>
+        <nav id="navigation">
+          <ul class="menu">
+            <li><a href="https://github.com/tcnksm/talks">Talks</a></li>
+            <li><a href="https://tcnksm.exposure.co/">Photos</a></li>
+          </ul>
+
+          <a class="name" href="/">SOTA</a>
+        </nav>        
+      </header>
+    </section>
+    
+
+
+<article>
+  <div class="container">
+    <header>
+      <div class="meta">
+        <time pubdate datetime="2015-04-20" title="2015-04-20">April 20, 2015</time>
+      </div>
+      <h1 class="title">Content Addressable DockerイメージとRegistry2.0</h1>
+    </header>
+    
+    <section>
+      
+
+<p><a href="http://blog.docker.com/2015/04/docker-release-1-6/">Docker 1.6: Engine &amp; Orchestration Updates, Registry 2.0, &amp; Windows Client Preview | Docker Blog</a></p>
+
+<p>Docker1.6が出た．コンテナやイメージのラベリング（RancherOSの<a href="http://rancher.com/docker-labels/">&ldquo;Adding Label Support to Docker 1.6&rdquo;</a>がわかりやすい）や，Logging Driversといった新機能が追加された．今回のリリースで自分的に嬉しいのはDockerイメージがContent-addressableになったこと（<a href="https://github.com/docker/docker/pull/11109">#11109</a>）．</p>
+
+<p>今までDocker Regitryを介したイメージのやりとりはイメージの名前とタグ（e.g., <code>tcnksm/golang:1.2</code>）しか使うことができなかった．タグはイメージの作成者によって付与されるのもであり，同じタグであっても必ず同じイメージが利用できるという保証はなかった（Gitでいうとコミットハッシュが使えず，タグのみしか使えないという状況）．</p>
+
+<p>Docker1.6と同時に発表されたRegistry2.0（<a href="https://github.com/docker/distribution">docker/distribution</a>）によりイメージにユニークなID（<code>digest</code>）が付与されるようになり，確実に同じイメージを参照することができるようになった（immutable image references）．</p>
+
+<h2 id="使ってみる:29f4c419ea694f51a0d54715dacf08d5">使ってみる</h2>
+
+<p>DockerHubはすでにRegistry2.0になっているのですぐにこの機能は使える．が，今回は自分でPrivate Registryを立ててこの機能を試してみる（環境はboot2docker on OSX）．</p>
+
+<p>まずはRegistryを立てる．v1と同じようにDockerイメージが提供されている．</p>
+
+<pre><code class="language-bash">$ docker run -p 5000:5000 registry:2.0
+</code></pre>
+
+<p>簡単な<code>Dockerfile</code>を準備して<code>tcnksm/test-digest</code>イメージをビルドする．</p>
+
+<pre><code class="language-bash">FROM busybox
+</code></pre>
+
+<pre><code class="language-bash">$ docker build -t $(boot2docker ip):5000/tcnksm/test-digest:latest .
+</code></pre>
+
+<p><code>images</code>コマンドで確認する．<code>--digests</code>オプションをつけると<code>digest</code>が表示されるようになる．Gitと同じように考えると直感とズレるかもしれないが<code>build</code>するだけでは<code>digest</code>は生成されない．</p>
+
+<pre><code class="language-bash">$ docker images --digests
+REPOSITORY                               TAG                 DIGEST              IMAGE ID            CREATED             VIRTUAL SIZE
+192.168.59.103:5000/tcnksm/test-digest   latest              &lt;none&gt;              8c2e06607696        3 days ago          2.433 MB
+</code></pre>
+
+<p>Registryに<code>push</code>してみる．<code>push</code>すると<code>digest</code>が生成される．</p>
+
+<pre><code class="language-bash">$ docker push $(boot2docker ip):5000/tcnksm/test-digest:latest
+...
+Digest: sha256:e4c425e28a3cfe41efdfceda7ccce6be4efd6fc775b24d5ae26477c96fb5eaa4
+</code></pre>
+
+<p>生成したイメージを削除し<code>digest</code>を使ってイメージを<code>pull</code>してみる．<code>NAME:TAG</code>ではなく<code>NAME@DIGEST</code>という形式で指定する．</p>
+
+<pre><code class="language-bash">$ docker rmi $(boot2docker ip):5000/tcnksm/test-digest:latest
+</code></pre>
+
+<pre><code class="language-bash">$ docker pull $(boot2docker ip):5000/tcnksm/test-digest@sha256:e4c425e28a3cfe41efdfceda7ccce6be4efd6fc775b24d5ae26477c96fb5eaa4
+</code></pre>
+
+<p><code>images</code>コマンドで確認する．今回は<code>digest</code>が表示されているのが確認できる．</p>
+
+<pre><code class="language-bash">$ docker images --digests
+REPOSITORY                               TAG                 DIGEST                                                                    IMAGE ID            CREATED             VIRTUAL SIZE
+192.168.59.103:5000/tcnksm/test-digest   &lt;none&gt;              sha256:e4c425e28a3cfe41efdfceda7ccce6be4efd6fc775b24d5ae26477c96fb5eaa4   8c2e06607696        3 days ago          2.433 MB
+</code></pre>
+
+<h3 id="dockerfile:29f4c419ea694f51a0d54715dacf08d5">Dockerfile</h3>
+
+<p><code>Dockerfile</code>の<code>FROM</code>でのイメージ名の指定にも<code>digest</code>は使える．気がついたら元のイメージ更新されていて完成イメージが意図しないものになっていたということが避けられる．</p>
+
+<pre><code class="language-bash">FROM 192.168.59.103:5000/tcnksm/test-digest@sha256:e4c425e28a3cfe41efdfceda7ccce6be4efd6fc775b24d5ae26477c96fb5eaa4
+</code></pre>
+
+<pre><code class="language-bash">$ docker build .
+Step 0 : FROM 192.168.59.103:5000/tcnksm/test-digest@sha256:e4c425e28a3cfe41efdfceda7ccce6be4efd6fc775b24d5ae26477c96fb5eaa4
+---&gt; 8c2e06607696
+Successfully built 8c2e06607696
+</code></pre>
+
+<h3 id="イメージの更新:29f4c419ea694f51a0d54715dacf08d5">イメージの更新</h3>
+
+<p><code>Dockerfile</code>を編集して新しいイメージを<code>build</code>する．</p>
+
+<pre><code class="language-bash">FROM busybox
+MAINTAINER tcnksm
+</code></pre>
+
+<pre><code class="language-bash">$ docker build -t $(boot2docker ip):5000/tcnksm/test-digest:latest .
+</code></pre>
+
+<p>Registryに<code>push</code>する．すると今度は異なる<code>digest</code>が生成される．</p>
+
+<pre><code class="language-bash">$ docker push $(boot2docker ip):5000/tcnksm/test-digest:latest
+...
+Digest: sha256:4675f7a9d45932e3043058ef032680d76e8aacccda94b74374efe156e2940ee5
+</code></pre>
+
+<h2 id="仕組み:29f4c419ea694f51a0d54715dacf08d5">仕組み</h2>
+
+<p>簡単に仕組みを説明する．<code>digest</code>は手元で生成されるわけではない．<code>push</code>してRegistry側で生成される．</p>
+
+<p>まずclientはイメージと共にImage ManifestをRegistryに送る（署名する）．Image ManifestはそのDocker Imageの内容をJSONで定義したもの．Golangのstructでいうと以下のようなものでイメージの名前やタグ，FSレイヤーといった情報が書かれる（Manifestは<a href="https://github.com/docker/distribution/blob/master/docs/spec/manifest-v2-1.md">ここ</a>に定義されている）．</p>
+
+<pre><code class="language-golang">type ManifestData struct {
+    Name          string             `json:&quot;name&quot;`
+    Tag           string             `json:&quot;tag&quot;`
+    Architecture  string             `json:&quot;architecture&quot;`
+    FSLayers      []*FSLayer         `json:&quot;fsLayers&quot;`
+    History       []*ManifestHistory `json:&quot;history&quot;`
+    SchemaVersion int                `json:&quot;schemaVersion&quot;`
+}
+</code></pre>
+
+<p>APIを叩くとManifestの中身を見ることができる．</p>
+
+<pre><code class="language-bash">$ curl $(boot2docker ip):5000/v2/tcnksm/test-digest/manifests/latest
+</code></pre>
+
+<p>そしてRegistryは以下の関数内でリクエストされたManifestを元に<code>digest</code>を生成する（<a href="https://github.com/docker/distribution/blob/master/registry/handlers/images.go">registry/handlers/images.go</a>）．</p>
+
+<pre><code class="language-golang">// PutImageManifest validates and stores and image in the registry.
+func (imh *imageManifestHandler) PutImageManifest(w http.ResponseWriter, r *http.Request) 
+</code></pre>
+
+<p><code>Docker-Content-Digest</code>ヘッダでそれをclientに送る（<a href="https://github.com/docker/distribution/blob/master/docs/spec/api.md#put-manifest">API doc</a>）</p>
+
+<pre><code>202 Accepted
+Location: &lt;url&gt;
+Content-Length: 0
+Docker-Content-Digest: &lt;digest&gt;
+</code></pre>
+
+<h3 id="regitryが異なったら:29f4c419ea694f51a0d54715dacf08d5">Regitryが異なったら&hellip;?</h3>
+
+<p>送るManifestは同じなのでRegistryが違っても同じ<code>digest</code>が付与される．<code>digest</code>はRegistryをまたがってユニークになる．</p>
+
+<p>上で作成したイメージをDockerHubに<code>push</code>してみる．同じ<code>digest</code>が付与される．</p>
+
+<pre><code class="language-bash">$ docker build -t tcnksm/test-digest:latest .
+</code></pre>
+
+<pre><code class="language-bash">$ docker push tcnksm/test-digest:latest
+...
+Digest: sha256:e4c425e28a3cfe41efdfceda7ccce6be4efd6fc775b24d5ae26477c96fb5eaa4
+</code></pre>
+
+<h2 id="registry2-0:29f4c419ea694f51a0d54715dacf08d5">Registry2.0</h2>
+
+<p><a href="http://blog.docker.com/2015/04/faster-and-better-image-distribution-with-registry-2-0-and-engine-1-6/">Faster and Better Image Distribution with Registry 2.0 and Engine 1.6 | Docker Blog</a></p>
+
+<p><a href="https://github.com/docker/distribution">docker/distribution</a>は新しいRegistryの実装で，APIやセキュリティなど今までのRegistryの問題を解決しようとしている．今まではPythonで実装されていたがGo言語で再実装されている．</p>
+
+<p>特徴的なのは，</p>
+
+<ul>
+<li>イメージManifestの再定義（<a href="https://github.com/docker/distribution/blob/master/docs/spec/manifest-v2-1.md">Image Manifest Version 2, Schema 1</a>） - <a href="https://github.com/docker/docker/issues/8093">#8093</a>を参照．セキュリティの改善が主な目的．</li>
+<li>APIの刷新（<a href="https://github.com/docker/distribution/blob/master/docs/spec/api.md">Docker Registry HTTP API V2</a>, <a href="https://github.com/docker/distribution/blob/master/docs/spec/api.md#detail">#Detail</a>）- URIの改善，Manifest V2を利用できるようにする，Push/Pullが途中で死んでも終わったところから再開できるようにする，などなど（詳しく見てないけどclientはGo言語のinterfaceとして定義されていたので自分で独自のものをつくれる&hellip;?）</li>
+<li>バックエンドのストレージをPluggable化（<a href="https://github.com/docker/distribution/blob/master/docs/storagedrivers.md">Docker-Registry Storage Driver</a>）- 現在は，インメモリ，ファイルシステム，S3，Azure Blob Storageが選択できる．Go言語のinterfaceとして定義されてるので自分で実装することもできる．</li>
+<li>Webhookの実装（<a href="https://github.com/docker/distribution/blob/master/docs/notifications.md">Notifications</a>）- Push/Pullといったイベントが発生するごとに設定したendopointにリクエストを送ることができる．</li>
+</ul>
+
+<p>あとまだスケルトンしかないが<code>dist</code>コマンドというものを作ろうとしている（<a href="https://github.com/docker/distribution/tree/master/cmd/dist">dist</a>）．これはDockerデーモンなしでDockerイメージのpull/pushを行うコマンド．Dockerの少し嫌な部分としてrumtimeとイメージのダウンロードが分かれていないというのがあったが，それをここで解決しようとしているっぽい．</p>
+
+<h2 id="references:29f4c419ea694f51a0d54715dacf08d5">References</h2>
+
+<ul>
+<li><a href="https://docs.docker.com/registry/overview/">Docker Registry 2.0</a></li>
+<li><a href="https://github.com/docker/distribution/blob/master/docs/spec/auth/token.md">Docker Registry v2 authentication via central service</a></li>
+<li><a href="https://github.com/docker/distribution/blob/master/docs/deploying.md">Deploying a registry service</a></li>
+<li><a href="https://github.com/kelseyhightower/docker-registry-osx-setup-guide">kelseyhightower/docker-registry-osx-setup-guide</a></li>
+</ul>
+
+      <div class="social">
+  
+  
+  <a href="https://twitter.com/share" class="twitter-share-button" data-via="deeeet" data-count="none">Tweet</a>
+  
+  
+</div>
+
+    </section>
+
+    <footer>
+      <address>
+        
+        <img src="/images/bio.jpeg"/>
+        
+        <p>Written by <strong><a rel="author" href="https://twitter.com/deeeet" title="Taichi Nakashima" target="_blank">Taichi Nakashima</a></strong><br>
+          <span class="muted">A Tokyo based PaaS engineer. Please contact me via twitter.</span>
+        </p>
+      </address>
+
+    </footer>
+
+  </div>
+</article>
+
+<script type="text/javascript" src="//ajax.googleapis.com/ajax/libs/jquery/1.7.2/jquery.min.js"></script>
+<script type="text/javascript" src="/js/main.js"></script>
+
+<script>!function(d,s,id){var js,fjs=d.getElementsByTagName(s)[0],p=/^http:/.test(d.location)?'http':'https';if(!d.getElementById(id)){js=d.createElement(s);js.id=id;js.src=p+'://platform.twitter.com/widgets.js';fjs.parentNode.insertBefore(js,fjs);}}(document, 'script', 'twitter-wjs');</script>
+
+
+<script type="text/javascript">var HN=[];HN.factory=function(e){return function(){HN.push([e].concat(Array.prototype.slice.call(arguments,0)))};},HN.on=HN.factory("on"),HN.once=HN.factory("once"),HN.off=HN.factory("off"),HN.emit=HN.factory("emit"),HN.load=function(){var e="hn-button.js";if(document.getElementById(e))return;var t=document.createElement("script");t.id=e,t.src="//hn-button.herokuapp.com/hn-button.js";var n=document.getElementsByTagName("script")[0];n.parentNode.insertBefore(t,n)},HN.load();</script>
+
+
+  <script>
+  (function(i,s,o,g,r,a,m){i['GoogleAnalyticsObject']=r;i[r]=i[r]||function(){
+  (i[r].q=i[r].q||[]).push(arguments)},i[r].l=1*new Date();a=s.createElement(o),
+  m=s.getElementsByTagName(o)[0];a.async=1;a.src=g;m.parentNode.insertBefore(a,m)
+  })(window,document,'script','//www.google-analytics.com/analytics.js','ga');
+
+  ga('create', 'UA-45390253-1', 'auto');
+  ga('send', 'pageview');
+
+</script>
+
+
+
+<script>
+  $(document).ready(function() {
+  
+  $('p:has(img)').css('text-align', 'center');
+  $('iframe').css('style', 'display: block; margin: 0px auto;');
+  });
+</script>
+

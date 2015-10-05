@@ -1,0 +1,273 @@
+<!doctype html>
+<html>
+  <head>
+    <meta http-equiv="content-type" content="text/html; charset=utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    
+    <title>Martini(&#43;Ginkgo)をWerckerでCIしてHerokuにデプロイ | SOTA</title>
+    
+    <link href="https://fonts.googleapis.com/css?family=Lato%3a900" rel="stylesheet" type="text/css">
+    <link rel="stylesheet" href="/css/main.css">
+    <link rel="shortcut icon" href="/favicon.png" type="image/x-icon" />
+    <link href="http://deeeet.com//index.xml" rel="alternate" type="application/rss+xml" title="" />
+    <meta name="title" content="http://deeeet.com/writing/2014/04/23/martini/">
+    <link rel="canonical" href="http://deeeet.com/writing/2014/04/23/martini/">
+    
+    <meta property="og:title" content="Martini(&#43;Ginkgo)をWerckerでCIしてHerokuにデプロイ"/>
+    <meta property="og:url" content="http://deeeet.com/writing/2014/04/23/martini/"/>
+  </head>
+  
+  <body>
+    <section class="site-nav">
+      <header>
+        <nav id="navigation">
+          <ul class="menu">
+            <li><a href="https://github.com/tcnksm/talks">Talks</a></li>
+            <li><a href="https://tcnksm.exposure.co/">Photos</a></li>
+          </ul>
+
+          <a class="name" href="/">SOTA</a>
+        </nav>        
+      </header>
+    </section>
+    
+
+
+<article>
+  <div class="container">
+    <header>
+      <div class="meta">
+        <time pubdate datetime="2014-04-23" title="2014-04-23">April 23, 2014</time>
+      </div>
+      <h1 class="title">Martini(&#43;Ginkgo)をWerckerでCIしてHerokuにデプロイ</h1>
+    </header>
+    
+    <section>
+      
+
+<p><div class="vc"><iframe src="http://player.vimeo.com/video/79487342" width="500" height="270" frameborder="0" webkitallowfullscreen mozallowfullscreen allowfullscreen></iframe></div> <p><a href="http://vimeo.com/79487342">Martini Demo</a> from <a href="http://vimeo.com/user22705255">Martini</a> on <a href="https://vimeo.com">Vimeo</a>.</p></p>
+
+<p><a href="http://thechangelog.com/117/">#117: Go, Martini and Gophercasts with Jeremy Saenz - The Changelog</a></p>
+
+<p>を聴いていて，Sinatra風のGoの軽量Webフレームワークである<a href="http://martini.codegangsta.io/">Martini</a>というのを知った．上に貼ったデモを見るとほとんどSinatraで良い感じ．Goはしばらく触ってなかったし，最近のGo事情を知るためにMartiniを触りつついろいろ試してみた．</p>
+
+<p>あとCIサービスの<a href="http://wercker.com/">Wercker</a>も良さそうだなと思いつつ触ってなかったので，この機会に使ってみた．</p>
+
+<p>やってみたのは，</p>
+
+<ul>
+<li>[Martini]()で簡単なGo Web Applicationの作成</li>
+<li><a href="http://onsi.github.io/ginkgo/">Ginkgo</a>を使ってBDDテスト</li>
+<li>[Wercker]()でCI</li>
+<li><a href="https://github.com/kr/heroku-buildpack-go">Go Heroku buildpack</a>でHerokuにデプロイ</li>
+</ul>
+
+<p>今回のソースコードは全て以下にある</p>
+
+<p><a href="https://github.com/tcnksm/sample-martini">tcnksm/sample-martini</a></p>
+
+<h2 id="martini:d72a986c282cfb53d1fee286c30866b4">Martini</h2>
+
+<p>パッケージをインストールしておく</p>
+
+<pre><code class="language-bash">$ go get github.com/go-martini/martini
+</code></pre>
+
+<p>例えば，以下のように書ける．ものすごくシンプル．</p>
+
+<pre><code class="language-go">// server.go
+package main
+
+import &quot;github.com/go-martini/martini&quot;
+
+func main() {
+    m := martini.Classic()
+    m.Get(&quot;/&quot;, top)
+    m.Run()
+}
+
+func top(params martini.Params) (int, string) {
+    return 200, &quot;Hello!&quot;
+}
+
+</code></pre>
+
+<p>以下で起動する．</p>
+
+<pre><code class="language-bash">$ go run server.go
+$ curl http://localhost:3000
+Hello !
+</code></pre>
+
+<p><a href="https://github.com/codegangsta/gin">codegangsta/gin</a>を使うと更新の度に自動でビルドしなおしてくれるため，ブラウザを更新するだけでよくなる．</p>
+
+<pre><code class="language-bash">$ go get github.com/codegangsta/gin
+$ gin run server.go
+</code></pre>
+
+<p>RackのMiddleware的な書き方もできる．OAuthやセッション機能などのMiddlewareは<a href="https://github.com/martini-contrib">Martini Contrib</a>で別パッケージとして管理されている．</p>
+
+<h2 id="go-heroku-buildpack:d72a986c282cfb53d1fee286c30866b4">Go Heroku Buildpack</h2>
+
+<p>Go用のHerokuのBuildpackは既にある．</p>
+
+<p><a href="https://github.com/kr/heroku-buildpack-go">kr/heroku-buildpack-go</a></p>
+
+<p>Herokuアプリを作成する際にこれを指定する．</p>
+
+<pre><code class="language-bash">$ heroku create -b https://github.com/kr/heroku-buildpack-go.git
+</code></pre>
+
+<p>HerokuでGo Web Applicationを動かすには，<code>Procfile</code>と依存パッケージの管理が必要になる．</p>
+
+<h3 id="procfile:d72a986c282cfb53d1fee286c30866b4">Procfile</h3>
+
+<p>Herokuに<code>web</code>プロセスがどのコマンドを叩くかを知らせるために<code>Procfile</code>を準備する必要がある．</p>
+
+<pre><code class="language-bash">$ echo &quot;web: $(basename `pwd`)&quot; &gt; Procfile
+</code></pre>
+
+<h3 id="godep:d72a986c282cfb53d1fee286c30866b4">Godep</h3>
+
+<p><a href="https://github.com/tools/godep">tools/godep</a>を使うとパッケージの依存関係を管理できる．</p>
+
+<pre><code class="language-bash">$ go get github.com/kr/godep
+$ godep save
+</code></pre>
+
+<p>これで依存関係のリストが<code>Godeps/Godeps.json</code>に書き込まれ，<code>Godeps/_workspace</code>以下にソースコードがぶっ込まれる．</p>
+
+<h3 id="デプロイ:d72a986c282cfb53d1fee286c30866b4">デプロイ</h3>
+
+<p>あとはいつも通りにデプロイするだけ．</p>
+
+<pre><code class="language-bash">$ git push heroku master
+</code></pre>
+
+<p>HeokuへのGo Web Applicationのデプロイは<a href="http://mmcgrana.github.io/2012/09/getting-started-with-go-on-heroku.html">&ldquo;Getting Started with Go on Heroku&rdquo;</a>が詳しい．</p>
+
+<h2 id="ginkgo:d72a986c282cfb53d1fee286c30866b4">Ginkgo</h2>
+
+<p><a href="http://onsi.github.io/ginkgo/">Ginkgo</a>は，Go用のBDD Testingフレームワーク．Matcherライブラリには<a href="http://onsi.github.io/gomega/">Gomega</a>を使う．</p>
+
+<pre><code class="language-bash">$ go get github.com/onsi/ginkgo/ginkgo
+$ go get github.com/onsi/gomega
+</code></pre>
+
+<p>初期化する．</p>
+
+<pre><code class="language-bash">$ ginkgo bootstrap
+</code></pre>
+
+<p>例えば，上のMartiniのテストは以下のように書ける．</p>
+
+<pre><code class="language-go">package main
+
+import (
+    . &quot;github.com/onsi/ginkgo&quot;
+    . &quot;github.com/onsi/gomega&quot;
+)
+
+var _ = Describe(&quot;Sample&quot;, func() {
+    Context(&quot;top()&quot;, func() {
+        It(&quot;return 200 Status&quot;, func() {
+            RequestToRoot(&quot;GET&quot;, top)
+            Expect(recorder.Code).To(Equal(200))
+            Expect(recorder.Body).To(ContainSubstring(&quot;Hello&quot;))
+         })
+     })
+})
+</code></pre>
+
+<p>ほとんどRSpecのように書ける．RSpecほどではないが，Matcherも基本的なものは揃っている．</p>
+
+<p>MartiniとGinkgoとの連携は<a href="http://blog.wercker.com/2014/02/06/RethinkDB-Gingko-Martini-Golang.html">&ldquo;Getting started with RethinkDB, Ginkgo and Martini on wercker&rdquo;</a>が詳しい．</p>
+
+<h2 id="wercker:d72a986c282cfb53d1fee286c30866b4">Wercker</h2>
+
+<p>Werckerの使い方は，<a href="http://blog.mah-lab.com/2014/01/08/rails-wercker-heroku-deploy/">&ldquo;Githubのプライベートリポジトリでも無料で使えるCI，Werckerを使ってrails newからHerokuのデプロイまでやってみる&rdquo;</a>が詳しい．基本はこの通りにやれば連携可能．</p>
+
+<p><code>wercker.yml</code>はレポジトリを登録すると，自動でGo専用のものが生成され，そのまま使える．</p>
+
+<p>テストが通ったらHerokuにデプロイするようにするには，HerokuのApp keyとApplicationを登録し，以下を<code>wercker.yml</code>に追記するだけ．</p>
+
+<pre><code class="language-ruby">...
+deploy:
+  steps:
+      - heroku-deploy
+</code></pre>
+
+<p>ものすごく簡単．</p>
+
+<h2 id="まとめ:d72a986c282cfb53d1fee286c30866b4">まとめ</h2>
+
+<p>とりあえず，ざっとやりたいことをやってみた．いろいろな言語にあるツールがどんどんGoに移植されてるなーと感じた．また，あらゆる言語のバックグラウンドをもった開発者がGoを触っていて，各言語の良い部分が集約されそうで期待が高まってきた．</p>
+
+<p>さっとつくるときはSinatra使うだろうけど，MartiniでWeb Applicationを書いてみるのは楽しかった．Martiniの作者も話してたけど，バグレポートの際にいろいろ言われつつも良いコメントをもらってるみたいで，多分そういうことなんだろうと思う．</p>
+
+<p>DockerやSerfとかを触っていると，やっぱコードレベルで中身を理解したいので，これを機にもっとGoを書いていこうと思う．</p>
+
+<h3 id="参考:d72a986c282cfb53d1fee286c30866b4">参考</h3>
+
+<ul>
+<li><a href="http://thechangelog.com/117/">#117: Go, Martini and Gophercasts with Jeremy Saenz - The Changelog</a></li>
+<li><a href="http://pivotallabs.com/announcing-ginkgo-and-gomega-bdd-style-testing-for-golang/">Announcing Ginkgo and Gomega: BDD-Style Testing for Golang - Pivotal Labs</a></li>
+<li><a href="http://blog.wercker.com/2014/02/06/RethinkDB-Gingko-Martini-Golang.html">Getting started with RethinkDB, Ginkgo and Martini on wercker</a></li>
+<li><a href="http://blog.mah-lab.com/2014/01/08/rails-wercker-heroku-deploy/">Githubのプライベートリポジトリでも無料で使えるCI，Werckerを使ってrails newからHerokuのデプロイまでやってみる | mah365</a></li>
+</ul>
+
+      <div class="social">
+  
+  
+  <a href="https://twitter.com/share" class="twitter-share-button" data-via="deeeet" data-count="none">Tweet</a>
+  
+  
+</div>
+
+    </section>
+
+    <footer>
+      <address>
+        
+        <img src="/images/bio.jpeg"/>
+        
+        <p>Written by <strong><a rel="author" href="https://twitter.com/deeeet" title="Taichi Nakashima" target="_blank">Taichi Nakashima</a></strong><br>
+          <span class="muted">A Tokyo based PaaS engineer. Please contact me via twitter.</span>
+        </p>
+      </address>
+
+    </footer>
+
+  </div>
+</article>
+
+<script type="text/javascript" src="//ajax.googleapis.com/ajax/libs/jquery/1.7.2/jquery.min.js"></script>
+<script type="text/javascript" src="/js/main.js"></script>
+
+<script>!function(d,s,id){var js,fjs=d.getElementsByTagName(s)[0],p=/^http:/.test(d.location)?'http':'https';if(!d.getElementById(id)){js=d.createElement(s);js.id=id;js.src=p+'://platform.twitter.com/widgets.js';fjs.parentNode.insertBefore(js,fjs);}}(document, 'script', 'twitter-wjs');</script>
+
+
+<script type="text/javascript">var HN=[];HN.factory=function(e){return function(){HN.push([e].concat(Array.prototype.slice.call(arguments,0)))};},HN.on=HN.factory("on"),HN.once=HN.factory("once"),HN.off=HN.factory("off"),HN.emit=HN.factory("emit"),HN.load=function(){var e="hn-button.js";if(document.getElementById(e))return;var t=document.createElement("script");t.id=e,t.src="//hn-button.herokuapp.com/hn-button.js";var n=document.getElementsByTagName("script")[0];n.parentNode.insertBefore(t,n)},HN.load();</script>
+
+
+  <script>
+  (function(i,s,o,g,r,a,m){i['GoogleAnalyticsObject']=r;i[r]=i[r]||function(){
+  (i[r].q=i[r].q||[]).push(arguments)},i[r].l=1*new Date();a=s.createElement(o),
+  m=s.getElementsByTagName(o)[0];a.async=1;a.src=g;m.parentNode.insertBefore(a,m)
+  })(window,document,'script','//www.google-analytics.com/analytics.js','ga');
+
+  ga('create', 'UA-45390253-1', 'auto');
+  ga('send', 'pageview');
+
+</script>
+
+
+
+<script>
+  $(document).ready(function() {
+  
+  $('p:has(img)').css('text-align', 'center');
+  $('iframe').css('style', 'display: block; margin: 0px auto;');
+  });
+</script>
+

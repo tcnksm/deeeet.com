@@ -1,0 +1,64 @@
+<?xml version="1.0" encoding="utf-8" standalone="yes" ?>
+<rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom">
+  <channel>
+    <title>Yo on SOTA</title>
+    <link>http://deeeet.com/categories/yo/</link>
+    <description>Recent content in Yo on SOTA</description>
+    <generator>Hugo -- gohugo.io</generator>
+    <language>ja-jp</language>
+    <copyright>Copyright (C) 2013-2015 Taichi Nakashima All Right Reserved.</copyright>
+    <lastBuildDate>Fri, 27 Jun 2014 00:00:00 +0000</lastBuildDate>
+    <atom:link href="http://deeeet.com/categories/yo/index.xml" rel="self" type="application/rss+xml" />
+    
+    <item>
+      <title>ブログにYoボタンを設置した</title>
+      <link>http://deeeet.com/writing/2014/06/27/yo/</link>
+      <pubDate>Fri, 27 Jun 2014 00:00:00 +0000</pubDate>
+      
+      <guid>http://deeeet.com/writing/2014/06/27/yo/</guid>
+      <description>
+
+&lt;p&gt;最近はほとんどのコミュニケーションが&lt;strong&gt;Yo&lt;/strong&gt;で完結している．得に日本はハイコンテキスト文化なので助かる．だいたい伝わってると思う．最近だと&lt;a href=&#34;http://mizchi.hatenablog.com/entry/2014/06/24/210317&#34;&gt;Yoに人生を救われた&lt;/a&gt;ひともいるくらいだ．&lt;/p&gt;
+
+&lt;p&gt;さて，ブログを書いたあとにわざわざ「ブログ書いたので読んでください」などと言うのは，粋じゃない．さらっと&lt;strong&gt;Yo&lt;/strong&gt;するのが現代のスタイルだ．&lt;/p&gt;
+
+&lt;p&gt;ということで，&lt;strong&gt;Yo&lt;/strong&gt;ボタンをブログに設置した．&lt;/p&gt;
+
+&lt;p&gt;&lt;div id=&#34;yo-button&#34;&gt;&lt;/div&gt;&lt;br&gt;&lt;/p&gt;
+
+&lt;p&gt;YoがインストールされたデバイスでこのYoボタンを押すと&amp;rdquo;SOTABLOG&amp;rdquo;というアカウントがYoのリストに登録される（PCとかだと手動で..）．すると，ブログ記事が更新される度に&amp;rdquo;SOTABLOG&amp;rdquo;から&lt;strong&gt;Yo&lt;/strong&gt;されるようになる．&lt;/p&gt;
+
+&lt;h2 id=&#34;仕組み:fc5f4bb8bbdbc4735b7a344ac9cb2396&#34;&gt;仕組み&lt;/h2&gt;
+
+&lt;p&gt;といっても自分の個人アカウントが&amp;rdquo;SOTABLOG&amp;rdquo;で一人一人に手動で&lt;strong&gt;Yo&lt;/strong&gt;するわけではない．&lt;a href=&#34;https://medium.com/@YoAppStatus/yo-developers-api-e7f2f0ec5c3c&#34;&gt;Yo Developers API&lt;/a&gt;を利用している．やり方は以下．&lt;/p&gt;
+
+&lt;ol&gt;
+&lt;li&gt;&lt;a href=&#34;http://yoapi.justyo.co/&#34;&gt;http://yoapi.justyo.co/&lt;/a&gt;から専用アカウントでAPIの登録する．しばらくするとメールで専用のAPI Tokenが送られてくる．&lt;/li&gt;
+&lt;li&gt;&lt;a href=&#34;http://button.justyo.co/&#34;&gt;http://button.justyo.co/&lt;/a&gt;で&lt;strong&gt;Yo&lt;/strong&gt;ボタンを作成して，サイトに貼付ける．&lt;/li&gt;
+&lt;/ol&gt;
+
+&lt;p&gt;あとは，以下のようにAPIを叩くと購読者全員に対して&lt;strong&gt;Yo&lt;/strong&gt;される．&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-bash&#34;&gt;$ curl http://api.justyo.co/yoall/ -X POST -d &amp;quot;api_token=XXXXXX&amp;quot;
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;例えば，当ブログの場合は，Octopressを使っているので，&lt;code&gt;rake gen_deploy&lt;/code&gt;の度にこのAPIを叩くようにしている．&lt;/p&gt;
+
+&lt;p&gt;他の事例としては，&lt;a href=&#34;https://github.com/YoApp/NFL&#34;&gt;YoApp/NFL&lt;/a&gt;がある．これはNFLの49erに対して，試合開始とともに&lt;strong&gt;Yo&lt;/strong&gt;するスクリプト．他にも&lt;a href=&#34;http://yoequipedefrance.fr/&#34;&gt;サッカーのフランス代表チーム&lt;/a&gt;も使っているっぽい．&lt;/p&gt;
+
+&lt;p&gt;これからもっといろいろな使われ方が出現しそう．&lt;/p&gt;
+
+&lt;h3 id=&#34;参考:fc5f4bb8bbdbc4735b7a344ac9cb2396&#34;&gt;参考&lt;/h3&gt;
+
+&lt;ul&gt;
+&lt;li&gt;&lt;a href=&#34;http://www.justyo.co/&#34;&gt;Yo - It&amp;rsquo;s that simple.&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a href=&#34;http://techcrunch.com/2014/06/18/yo-yo/&#34;&gt;Yo | TechCrunch&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a href=&#34;http://www.ibtimes.com/yo-app-world-cup-feature-alerts-users-when-goals-are-scored-1608964&#34;&gt;Yo App World Cup Feature Alerts Users When Goals Are Scored&lt;/a&gt;&lt;/li&gt;
+&lt;/ul&gt;
+
+&lt;p&gt;俺は何をしてんだ&amp;hellip;&lt;/p&gt;
+</description>
+    </item>
+    
+  </channel>
+</rss>

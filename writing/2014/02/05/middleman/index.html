@@ -1,0 +1,158 @@
+<!doctype html>
+<html>
+  <head>
+    <meta http-equiv="content-type" content="text/html; charset=utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    
+    <title>Middlemanを使ってみた | SOTA</title>
+    
+    <link href="https://fonts.googleapis.com/css?family=Lato%3a900" rel="stylesheet" type="text/css">
+    <link rel="stylesheet" href="/css/main.css">
+    <link rel="shortcut icon" href="/favicon.png" type="image/x-icon" />
+    <link href="http://deeeet.com//index.xml" rel="alternate" type="application/rss+xml" title="" />
+    <meta name="title" content="http://deeeet.com/writing/2014/02/05/middleman/">
+    <link rel="canonical" href="http://deeeet.com/writing/2014/02/05/middleman/">
+    
+    <meta property="og:title" content="Middlemanを使ってみた"/>
+    <meta property="og:url" content="http://deeeet.com/writing/2014/02/05/middleman/"/>
+  </head>
+  
+  <body>
+    <section class="site-nav">
+      <header>
+        <nav id="navigation">
+          <ul class="menu">
+            <li><a href="https://github.com/tcnksm/talks">Talks</a></li>
+            <li><a href="https://tcnksm.exposure.co/">Photos</a></li>
+          </ul>
+
+          <a class="name" href="/">SOTA</a>
+        </nav>        
+      </header>
+    </section>
+    
+
+
+<article>
+  <div class="container">
+    <header>
+      <div class="meta">
+        <time pubdate datetime="2014-02-05" title="2014-02-05">February 05, 2014</time>
+      </div>
+      <h1 class="title">Middlemanを使ってみた</h1>
+    </header>
+    
+    <section>
+      <p><a href="http://deeeet.com/">deeeet.com</a></p>
+
+<p><a href="http://middlemanapp.com/">Middleman</a>は，<a href="http://haml.info/">Haml</a>と<a href="http://sass-lang.com/">Sass</a>, <a href="http://compass-style.org/">Compass</a>がデフォルトで使えるため，簡単にいい感じのサイトをつくることができる．例えば，<a href="http://www.packer.io/">Packerの公式サイト</a>などMiddlemanで作られていてとてもいい感じだ（Githubのレポジトリみるかぎり，Mitchellさんデザインも自分でやっている&hellip;?）．他にも個人のBlogをMiddlemanで作ってるひともいる．今後，簡単なサイト立てるときはまた使いそうなので，まとめておく．</p>
+
+<p>HamlやSassを使うために特別に設定を書く必要はない．ただ拡張子を，Hamlの場合は，<code>.html.haml</code>（laytoutファイルは<code>.haml</code>）に，Sassの場合は，<code>.scss</code>にしておけばよい．buildの際は，HamlはhtmlにSassはcssとして生成される．Sassは<code>:css_dir</code>のアンダースコアで始まらないファイルがcssとして吐き出される（つまり<code>@import</code>されるpartialなどは無視される）．</p>
+
+<p>設定ファイルである<code>config.rb</code>では，Liveloadを有効にしておくと，ソースを更新する度に，ブラウザで再読み込みをしてくれるので便利．</p>
+
+<pre><code class="language-ruby">activate :livereload
+</code></pre>
+
+<p>デプロイなどはOctopressと同じように以下のようなRakeタスクを作っておくと楽になる．</p>
+
+<pre><code class="language-ruby">ssh_user       = &quot;&quot;
+ssh_port       = &quot;&quot;
+document_root  = &quot;~/www/&quot;
+rsync_args     = &quot;&quot;
+source         = &quot;build&quot;
+
+desc &quot;Build middleman&quot;
+task :build do
+    system(&quot;middleman build&quot;)
+end
+
+desc &quot;Deploy website via rsync&quot;
+task :deploy do
+    puts &quot;## Deploying website via Rsync&quot;
+    system(&quot;rsync -avze 'ssh -p #{ssh_port}' #{exclude} #{rsync_args} #{&quot;--delete&quot; unless rsync_delete == false} #{source}/ #{ssh_user}:#{document_root}&quot;)
+end
+
+desc &quot;Build &amp; deploy&quot;
+task :gen_deploy do
+    Rake::Task[&quot;build&quot;].invoke
+    Rake::Task[&quot;deploy&quot;].invoke
+end
+</code></pre>
+
+<p>Compassは初めて使ったがとても便利だった．例えば，hoverしたときの色の変化にtransition効果（時間変化）をつけたいとする．この場合は，CompassのCSS3モジュールにmixinが準備されているので，以下のように呼び出してすぐに使える．</p>
+
+<pre><code class="language-css">@import &quot;compass/css3/transition&quot;;
+a:hover{
+    color: $color-hover;
+    @include transition-duration(1s);
+}
+</code></pre>
+
+<p>他にも<a href="http://compass-style.org/reference/compass/">公式のReference</a>のサンプル等を参考にすれば，複雑なCSSの知識なしにいろいろできる．</p>
+
+<p><a href="http://fortawesome.github.io/Font-Awesome/">Font Awesome</a>も簡単に使える．middleman用のライブラリ<a href="https://github.com/cristianferrarig/font-awesome-middleman">cristianferrarig/font-awesome-middleman</a>をインストールして，<code>:fonts_dir</code>に公式からダウンロードしたFontを配置するだけ．</p>
+
+<p>今回作成したサイトのソースは<a href="https://github.com/tcnksm/deeeet.com/blob/master/source/stylesheets/parts/_header.scss">tcnksm/deeeet.com</a>にある．</p>
+
+<p>参考</p>
+
+<ul>
+<li><a href="http://liginc.co.jp/designer/archives/11623">CSSの常識が変わる！「Compass」、基礎から応用まで！ | 株式会社LIG</a></li>
+</ul>
+
+      <div class="social">
+  
+  
+  <a href="https://twitter.com/share" class="twitter-share-button" data-via="deeeet" data-count="none">Tweet</a>
+  
+  
+</div>
+
+    </section>
+
+    <footer>
+      <address>
+        
+        <img src="/images/bio.jpeg"/>
+        
+        <p>Written by <strong><a rel="author" href="https://twitter.com/deeeet" title="Taichi Nakashima" target="_blank">Taichi Nakashima</a></strong><br>
+          <span class="muted">A Tokyo based PaaS engineer. Please contact me via twitter.</span>
+        </p>
+      </address>
+
+    </footer>
+
+  </div>
+</article>
+
+<script type="text/javascript" src="//ajax.googleapis.com/ajax/libs/jquery/1.7.2/jquery.min.js"></script>
+<script type="text/javascript" src="/js/main.js"></script>
+
+<script>!function(d,s,id){var js,fjs=d.getElementsByTagName(s)[0],p=/^http:/.test(d.location)?'http':'https';if(!d.getElementById(id)){js=d.createElement(s);js.id=id;js.src=p+'://platform.twitter.com/widgets.js';fjs.parentNode.insertBefore(js,fjs);}}(document, 'script', 'twitter-wjs');</script>
+
+
+<script type="text/javascript">var HN=[];HN.factory=function(e){return function(){HN.push([e].concat(Array.prototype.slice.call(arguments,0)))};},HN.on=HN.factory("on"),HN.once=HN.factory("once"),HN.off=HN.factory("off"),HN.emit=HN.factory("emit"),HN.load=function(){var e="hn-button.js";if(document.getElementById(e))return;var t=document.createElement("script");t.id=e,t.src="//hn-button.herokuapp.com/hn-button.js";var n=document.getElementsByTagName("script")[0];n.parentNode.insertBefore(t,n)},HN.load();</script>
+
+
+  <script>
+  (function(i,s,o,g,r,a,m){i['GoogleAnalyticsObject']=r;i[r]=i[r]||function(){
+  (i[r].q=i[r].q||[]).push(arguments)},i[r].l=1*new Date();a=s.createElement(o),
+  m=s.getElementsByTagName(o)[0];a.async=1;a.src=g;m.parentNode.insertBefore(a,m)
+  })(window,document,'script','//www.google-analytics.com/analytics.js','ga');
+
+  ga('create', 'UA-45390253-1', 'auto');
+  ga('send', 'pageview');
+
+</script>
+
+
+
+<script>
+  $(document).ready(function() {
+  
+  $('p:has(img)').css('text-align', 'center');
+  $('iframe').css('style', 'display: block; margin: 0px auto;');
+  });
+</script>
+

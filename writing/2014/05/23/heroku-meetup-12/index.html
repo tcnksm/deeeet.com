@@ -1,0 +1,186 @@
+<!doctype html>
+<html>
+  <head>
+    <meta http-equiv="content-type" content="text/html; charset=utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    
+    <title>Heroku Meetup #12でLTしてきた&#43;Heroku on Docker | SOTA</title>
+    
+    <link href="https://fonts.googleapis.com/css?family=Lato%3a900" rel="stylesheet" type="text/css">
+    <link rel="stylesheet" href="/css/main.css">
+    <link rel="shortcut icon" href="/favicon.png" type="image/x-icon" />
+    <link href="http://deeeet.com//index.xml" rel="alternate" type="application/rss+xml" title="" />
+    <meta name="title" content="http://deeeet.com/writing/2014/05/23/heroku-meetup-12/">
+    <link rel="canonical" href="http://deeeet.com/writing/2014/05/23/heroku-meetup-12/">
+    
+    <meta property="og:title" content="Heroku Meetup #12でLTしてきた&#43;Heroku on Docker"/>
+    <meta property="og:url" content="http://deeeet.com/writing/2014/05/23/heroku-meetup-12/"/>
+  </head>
+  
+  <body>
+    <section class="site-nav">
+      <header>
+        <nav id="navigation">
+          <ul class="menu">
+            <li><a href="https://github.com/tcnksm/talks">Talks</a></li>
+            <li><a href="https://tcnksm.exposure.co/">Photos</a></li>
+          </ul>
+
+          <a class="name" href="/">SOTA</a>
+        </nav>        
+      </header>
+    </section>
+    
+
+
+<article>
+  <div class="container">
+    <header>
+      <div class="meta">
+        <time pubdate datetime="2014-05-23" title="2014-05-23">May 23, 2014</time>
+      </div>
+      <h1 class="title">Heroku Meetup #12でLTしてきた&#43;Heroku on Docker</h1>
+    </header>
+    
+    <section>
+      
+
+<script async class="speakerdeck-embed" data-id="8c6ce790c3cf0131b3ad163a5c5b95ea" data-ratio="1.33333333333333" src="http://speakerdeck.com/assets/embed.js"></script>
+
+<p><a href="https://speakerdeck.com/tcnksm/go-web-applicationwoherokunidepuroi-plus-heroku-on-docker-number-herokujp">&ldquo;Go Web ApplicationをHerokuにデプロイ + Heroku on Docker #herokujp&rdquo;</a></p>
+
+<p><a href="http://herokujp.doorkeeper.jp/events/10902">Heroku Meetup #12</a>でLTをしてきた．<a href="http://martini.codegangsta.io/">Martini</a>をつかったGo Web ApplicationをHerokuにぶっ込んでみたという内容で，基本は<a href="http://deeeet.com/writing/2014/04/23/martini/">&ldquo;Martini(+Ginkgo)をWerckerでCIしてHerokuにデプロイ&rdquo;</a>が基になっている．</p>
+
+<p>せっかく最近Dockerを使っているので，HerokuとDockerを絡めた話がしたいなと思い，<a href="https://github.com/CenturyLinkLabs/building">&ldquo;building&rdquo;</a>を使ってDocker Container上にHerokuと同じ環境を作るという話を追加した．以下はその補足．</p>
+
+<h2 id="heroku-on-docker:f7e02036545f2bcb1834bf6fdb943d2d">Heroku on Docker</h2>
+
+<p><a href="http://www.centurylinklabs.com/heroku-on-docker/">Heroku on Docker | CenturyLink Labs</a></p>
+
+<p>CenturyLink Labsが開発した<a href="https://github.com/CenturyLinkLabs/buildin">&ldquo;building&rdquo;</a>というツールを使えば，Herokuのbuildpackを使うアプケーション用のコンテナを簡単に立ち上げることができる．つまり，ローカルで気軽にHerokuと同様の環境をつくることができる．</p>
+
+<p>似たようなツールに<a href="https://github.com/progrium/dokku">&ldquo;dokku&rdquo;</a>というツールがある．dokkuはbuildpackとDockerを使ってmini Herokuを作ることができるツール．dokkuを立てたサーバに対してアプリケーションを<code>git push</code>すると，新しくDockerコンテナが起動し，アプリケーションのビルドが行われる（<a href="http://banyan.me/slides/20140116/slides.html">&ldquo;Inside Dokku in 5 minutes&rdquo;</a>が詳しい）．</p>
+
+<p>buildingは，dokkuをシンプルにしたツール．カレントディレクトリのアプリケーションをdokkuのbuildstepというスクリプトを使ってビルドしたDockerイメージをつくり，それを使ってコンテナを立ち上げるということをやってくれる．dokkuのようにサーバを立ててssh鍵を通すといった設定なしで使える．</p>
+
+<p>buildingはdokkuをカジュアルに使えるようにしたツールであると言える．</p>
+
+<h3 id="buildingの使いどころ:f7e02036545f2bcb1834bf6fdb943d2d">buildingの使いどころ</h3>
+
+<p>以下のような場合に使える．</p>
+
+<ul>
+<li>ローカルにHerokuと同じ環境をつくりたい</li>
+<li>Cleanな環境でHerokuアプリケーションをビルドしたい</li>
+<li>buildpackのテストをしたい</li>
+</ul>
+
+<p>buildingはHeroku同様にThird partyのbuildpackの追加も可能なので，それがちゃんと動作するかをテストすることもできる．</p>
+
+<h3 id="buildingを動かす:f7e02036545f2bcb1834bf6fdb943d2d">buildingを動かす</h3>
+
+<p>まず，インストール．Rubygemsとして配布されている．</p>
+
+<pre><code class="language-bash">$ gem install building
+</code></pre>
+
+<p>あとは，動かしたHerokuアプリケーション（Rails，Node，HHVM，WordPress，Go）のディレクトリ内で以下を実行するだけ．</p>
+
+<pre><code class="language-bash">$ building -p 3000 tcnksm/app
+</code></pre>
+
+<p><code>-p</code>で解放したいポート番号を指定する．<code>tcnksm/app</code>は作成したいDockerイメージ名．</p>
+
+<p>これだけで，</p>
+
+<ul>
+<li>専用の<code>Dockerfile</code>の作成</li>
+<li>イメージのビルド</li>
+<li>コンテナの起動</li>
+</ul>
+
+<p>をやってくれ，ローカルにHerokuと同じ環境でアプリケーションが立ち上がる．</p>
+
+<h3 id="buildingの動作:f7e02036545f2bcb1834bf6fdb943d2d">buildingの動作</h3>
+
+<p>buildingがつくる<code>Dockerfile</code>は以下のような感じ．</p>
+
+<pre><code class="language-bash">FROM ctlc/buildstep:ubuntu13.10
+
+ADD . /app
+RUN /build/builder
+CMD /start web
+</code></pre>
+
+<p>たいしたことはしていない．カレントディレクトリのアプリケーションを<code>ADD</code>してそれに対して，<code>builder</code>というコマンドを実行しているだけ．</p>
+
+<p>builderは<code>ctlc/buildstep:ubuntu13.10</code>イメージに含まれており，dokkuの<a href="https://github.com/progrium/buildstep">buildstep</a>というスクリプトの一部．これがアプリケーションの言語を判断し，その言語のBuildpackを使ってアプリケーションのビルドを行う．</p>
+
+<h2 id="まとめ:f7e02036545f2bcb1834bf6fdb943d2d">まとめ</h2>
+
+<p><code>ctlc/buildstep:ubuntu13.10</code>という肝となるDockerイメージがあり，それの立ち上げ等を支援するというbuildingは新しいアプリケーションの形であるなあと思った．</p>
+
+<p>最後に，Heroku Meetupで発表する機会を与えてくださった<a href="https://twitter.com/ayumin">@ayumin</a>さん，ありがとうございました．がちゃぴん先生のLXCの話もとても面白く勉強になりました．</p>
+
+<h3 id="参考:f7e02036545f2bcb1834bf6fdb943d2d">参考</h3>
+
+<ul>
+<li><a href="https://speakerdeck.com/udzura/docker">Introduce of building/Docker // Speaker Deck</a></li>
+<li><a href="http://qiita.com/futoase/items/21167e9d064b0e336e8f">【個人メモ】buildingを使って気軽にDocker containerをつくろう - Qiita</a></li>
+</ul>
+
+      <div class="social">
+  
+  
+  <a href="https://twitter.com/share" class="twitter-share-button" data-via="deeeet" data-count="none">Tweet</a>
+  
+  
+</div>
+
+    </section>
+
+    <footer>
+      <address>
+        
+        <img src="/images/bio.jpeg"/>
+        
+        <p>Written by <strong><a rel="author" href="https://twitter.com/deeeet" title="Taichi Nakashima" target="_blank">Taichi Nakashima</a></strong><br>
+          <span class="muted">A Tokyo based PaaS engineer. Please contact me via twitter.</span>
+        </p>
+      </address>
+
+    </footer>
+
+  </div>
+</article>
+
+<script type="text/javascript" src="//ajax.googleapis.com/ajax/libs/jquery/1.7.2/jquery.min.js"></script>
+<script type="text/javascript" src="/js/main.js"></script>
+
+<script>!function(d,s,id){var js,fjs=d.getElementsByTagName(s)[0],p=/^http:/.test(d.location)?'http':'https';if(!d.getElementById(id)){js=d.createElement(s);js.id=id;js.src=p+'://platform.twitter.com/widgets.js';fjs.parentNode.insertBefore(js,fjs);}}(document, 'script', 'twitter-wjs');</script>
+
+
+<script type="text/javascript">var HN=[];HN.factory=function(e){return function(){HN.push([e].concat(Array.prototype.slice.call(arguments,0)))};},HN.on=HN.factory("on"),HN.once=HN.factory("once"),HN.off=HN.factory("off"),HN.emit=HN.factory("emit"),HN.load=function(){var e="hn-button.js";if(document.getElementById(e))return;var t=document.createElement("script");t.id=e,t.src="//hn-button.herokuapp.com/hn-button.js";var n=document.getElementsByTagName("script")[0];n.parentNode.insertBefore(t,n)},HN.load();</script>
+
+
+  <script>
+  (function(i,s,o,g,r,a,m){i['GoogleAnalyticsObject']=r;i[r]=i[r]||function(){
+  (i[r].q=i[r].q||[]).push(arguments)},i[r].l=1*new Date();a=s.createElement(o),
+  m=s.getElementsByTagName(o)[0];a.async=1;a.src=g;m.parentNode.insertBefore(a,m)
+  })(window,document,'script','//www.google-analytics.com/analytics.js','ga');
+
+  ga('create', 'UA-45390253-1', 'auto');
+  ga('send', 'pageview');
+
+</script>
+
+
+
+<script>
+  $(document).ready(function() {
+  
+  $('p:has(img)').css('text-align', 'center');
+  $('iframe').css('style', 'display: block; margin: 0px auto;');
+  });
+</script>
+

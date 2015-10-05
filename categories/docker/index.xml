@@ -1,0 +1,2031 @@
+<?xml version="1.0" encoding="utf-8" standalone="yes" ?>
+<rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom">
+  <channel>
+    <title>Docker on SOTA</title>
+    <link>http://deeeet.com/categories/docker/</link>
+    <description>Recent content in Docker on SOTA</description>
+    <generator>Hugo -- gohugo.io</generator>
+    <language>ja-jp</language>
+    <copyright>Copyright (C) 2013-2015 Taichi Nakashima All Right Reserved.</copyright>
+    <lastBuildDate>Mon, 01 Dec 2014 00:00:00 +0000</lastBuildDate>
+    <atom:link href="http://deeeet.com/categories/docker/index.xml" rel="self" type="application/rss+xml" />
+    
+    <item>
+      <title>Dockerコンテナ接続パターン (2014年冬)</title>
+      <link>http://deeeet.com/writing/2014/12/01/docker-link-pattern/</link>
+      <pubDate>Mon, 01 Dec 2014 00:00:00 +0000</pubDate>
+      
+      <guid>http://deeeet.com/writing/2014/12/01/docker-link-pattern/</guid>
+      <description>
+
+&lt;p&gt;本記事は&lt;a href=&#34;http://qiita.com/advent-calendar/2014/docker&#34;&gt;Docker Advent Calendar 2014&lt;/a&gt;の1日目の記事です．&lt;/p&gt;
+
+&lt;p&gt;Dockerによるコンテナ化はリソース隔離として素晴らしい技術である．しかし，通常は1つのコンテナに全ての機能を詰め込むようなことはしない．マイクロサービス的にコンテナごとに役割を分け，それらを接続し，協調させ，全体として1つのサービスを作り上げるのが通常の使い方になっている．&lt;/p&gt;
+
+&lt;p&gt;コンテナ同士の接続と言っても，シングルホスト内ではどうするのか，マルチホストになったときにどうするのかなど様々なパターンが考えられる．Dockerが注目された2014年だけでも，とても多くの手法や考え方が登場している．&lt;/p&gt;
+
+&lt;p&gt;僕の観測範囲で全てを追いきれているかは分からないが，現状見られるDockerコンテナの接続パターンを実例と共にまとめておく．&lt;/p&gt;
+
+&lt;p&gt;なお今回利用するコードは全て以下のレポジトリをcloneして自分で試せるようになっている．&lt;/p&gt;
+
+&lt;ul&gt;
+&lt;li&gt;&lt;a href=&#34;https://github.com/tcnksm/docker-link-pattern&#34;&gt;tcnksm/docker-link-pattern&lt;/a&gt;&lt;/li&gt;
+&lt;/ul&gt;
+
+&lt;h2 id=&#34;概要:dd1899745c6eab0d377eaa9661f859e7&#34;&gt;概要&lt;/h2&gt;
+
+&lt;p&gt;本記事では以下について説明する．&lt;/p&gt;
+
+&lt;ul&gt;
+&lt;li&gt;link機能（シングルホスト）&lt;/li&gt;
+&lt;li&gt;fig（シングルホスト）&lt;/li&gt;
+&lt;li&gt;Ambassadorパターン（マルチホスト）&lt;/li&gt;
+&lt;li&gt;動的Ambassadorパターン（マルチホスト）&lt;/li&gt;
+&lt;li&gt;weaveによる独自ネットワークの構築（マルチホスト）&lt;/li&gt;
+&lt;li&gt;Kubernetes（マルチホスト）&lt;/li&gt;
+&lt;/ul&gt;
+
+&lt;h2 id=&#34;事前知識:dd1899745c6eab0d377eaa9661f859e7&#34;&gt;事前知識&lt;/h2&gt;
+
+&lt;p&gt;事前知識として，Dockerがそのネットワークをどのように制御しているかを知っていると良い．それに関しては以下で書いた．&lt;/p&gt;
+
+&lt;ul&gt;
+&lt;li&gt;&lt;a href=&#34;http://deeeet.com/writing/2014/05/11/docker-network/&#34;&gt;Dockerのネットワークの基礎 | SOTA&lt;/a&gt;&lt;/li&gt;
+&lt;/ul&gt;
+
+&lt;h2 id=&#34;利用する状況:dd1899745c6eab0d377eaa9661f859e7&#34;&gt;利用する状況&lt;/h2&gt;
+
+&lt;p&gt;以下ではすべてのパターンを，同じ状況で説明する．redisコンテナ（&lt;code&gt;crosbymichael/redis&lt;/code&gt;）を立て．それにresdis-cliコンテナ（&lt;code&gt;relateiq/redis-cli&lt;/code&gt;）で接続するという状況を考える．&lt;/p&gt;
+
+&lt;h2 id=&#34;link機能-シングルホスト:dd1899745c6eab0d377eaa9661f859e7&#34;&gt;link機能（シングルホスト）&lt;/h2&gt;
+
+&lt;p&gt;まず，基礎．DockerはLinksというコンテナ同士の連携を簡単に行う仕組みを標準でもっている．これは，&lt;code&gt;--link &amp;lt;連携したいコンテナ名&amp;gt;:&amp;lt;エイリアス名&amp;gt;&lt;/code&gt;オプションで新しいコンテナを起動すると，そのコンテナ内で連携したいコンテナのポート番号やIPを環境変数として利用できるという機能である．&lt;/p&gt;
+
+&lt;p&gt;今回の例でいうと，まず，&lt;code&gt;redis&lt;/code&gt;という名前でredisコンテナを立てておく．&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-bash&#34;&gt;$ docker run -d --name redis crosbymichael/redis
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;これに接続するには，以下のようにする．&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-bash&#34;&gt;$ docker run -it --rm --link redis:redis relateiq/redis-cli
+redis 172.17.0.42:6379&amp;gt; ping
+PONG
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;&lt;code&gt;relateiq/redis-cli&lt;/code&gt;コンテナの起動スクリプトは以下のようになっている．&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-bash&#34;&gt;# !/bin/bash
+
+if [ $# -eq 0 ]; then
+/redis/src/redis-cli -h $REDIS_PORT_6379_TCP_ADDR -p $REDIS_PORT_6379_TCP_PORT
+else
+/redis/src/redis-cli &amp;quot;$@&amp;quot;
+fi
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;引数なしで起動すると，&lt;code&gt;relateiq/redis-cli&lt;/code&gt;は環境変数，&lt;code&gt; $REDIS_PORT_6379_TCP_ADDR&lt;/code&gt;に接続しようとする．&lt;code&gt;--link redis:redis&lt;/code&gt;でこれを起動することで，この環境変数が設定され，接続できる．&lt;/p&gt;
+
+&lt;p&gt;link機能については以下に詳しく書いた．&lt;/p&gt;
+
+&lt;ul&gt;
+&lt;li&gt;&lt;a href=&#34;http://deeeet.com/writing/2014/03/20/docker-link-container/&#34;&gt;Dockerコンテナ間のlink，database.ymlの書き方&lt;/a&gt;&lt;/li&gt;
+&lt;/ul&gt;
+
+&lt;h2 id=&#34;fig-シングルホスト:dd1899745c6eab0d377eaa9661f859e7&#34;&gt;fig（シングルホスト）&lt;/h2&gt;
+
+&lt;p&gt;link機能は便利だが，利用するコンテナが多くなったときに毎回それらのコマンドを叩くのは億劫になる．それを解決するのが，Docker社に買収されたOrchard社の&lt;a href=&#34;http://www.fig.sh/&#34;&gt;fig&lt;/a&gt;である．&lt;/p&gt;
+
+&lt;p&gt;figは，シングルホスト向けのコンテナ管理ツールである．&lt;code&gt;fig.yml&lt;/code&gt;という1つのyamlファイルに利用するコンテナや，その起動コマンド，linkしたいコンテナ，解放しておきたいportなどを定義し，&lt;code&gt;fig up&lt;/code&gt;というコマンドを叩くだけで全てのコンテナを一気に立ち上がり，接続などをよしなにやってくれる．&lt;/p&gt;
+
+&lt;p&gt;例えば，今回の例だと，以下のような&lt;code&gt;fig.yml&lt;/code&gt;を準備する．&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-yaml&#34;&gt;cli:
+  image: relateiq/redis-cli
+  links:
+    - redis
+redis:
+  image: crosbymichael/redis
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;あとは，以下のコマンドを叩くだけ（&lt;code&gt;run&lt;/code&gt;はone-offコマンドを実行する）．&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-bash&#34;&gt;$ fig run --rm cli
+redis 172.17.0.42:6379&amp;gt; ping
+PONG
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;figを使ってプロダクション運用をしている例は既にある．ローカルでプロダクションと全く同じ状況を一瞬で作れるのが気に入られている．&lt;/p&gt;
+
+&lt;ul&gt;
+&lt;li&gt;&lt;a href=&#34;http://davidmburke.com/2014/09/26/docker-in-dev-and-in-production-a-complete-and-diy-guide/&#34;&gt;Docker in dev and in production – a complete and DIY guide | Technology Against You&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a href=&#34;https://www.youtube.com/watch?v=bYfwFkeeUL4&#34;&gt;Docker Global Hack Day: Fig Demo&amp;rsquo;d by Daniel Nephin of Yelp&lt;/a&gt;&lt;/li&gt;
+&lt;/ul&gt;
+
+&lt;p&gt;ちなみに，今年のDocker GlobalHackDayの優勝はfigのマルチホスト対応だった（まだPRはマージされてないっぽいが…）．&lt;/p&gt;
+
+&lt;ul&gt;
+&lt;li&gt;&lt;a href=&#34;https://www.youtube.com/watch?v=D3-tvQRRKBc&#34;&gt;Enable Fig to deploy to different docker servers in one time&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a href=&#34;https://github.com/docker/fig/pull/607&#34;&gt;Enable services to use different Docker Hosts #607&lt;/a&gt;&lt;/li&gt;
+&lt;/ul&gt;
+
+&lt;h3 id=&#34;参考:dd1899745c6eab0d377eaa9661f859e7&#34;&gt;参考&lt;/h3&gt;
+
+&lt;ul&gt;
+&lt;li&gt;&lt;a href=&#34;http://blog.docker.com/2014/08/orchestrating-docker-containers-in-production-using-fig/&#34;&gt;Orchestrating Docker containers in production using Fig | Docker Blog&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a href=&#34;http://qiita.com/toritori0318/items/190fd2dad2bf3ce38b88&#34;&gt;Docker1.3版 boot2docker+fig入門 - Qiita&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a href=&#34;http://blog.kenjiskywalker.org/blog/2014/10/25/osx-fig-docker-access-container/&#34;&gt;OS Xでfigを利用してDockerのコンテナを操作する&lt;/a&gt;&lt;/li&gt;
+&lt;/ul&gt;
+
+&lt;h2 id=&#34;ambassadorパターン-マルチホスト:dd1899745c6eab0d377eaa9661f859e7&#34;&gt;Ambassadorパターン（マルチホスト）&lt;/h2&gt;
+
+&lt;p&gt;シングルホストで全てのコンテナを運用するというのは大規模になるときつい．普通はホストを分散させる．Dockerはシングルホストでは強いが，マルチホストになると，とたんに難易度が上がる．実際，今年はDockerに関していろいろツールが出たが，マルチホストでいかにDockerコンテナをオーケストレーションするかを解決するツールが多かったように思える．&lt;/p&gt;
+
+&lt;p&gt;その中でも一番シンプルな方法として，Dockerの公式ドキュメントでも紹介されているのが，&lt;a href=&#34;http://docs.docker.com/articles/ambassador_pattern_linking/&#34;&gt;Ambassadorパターン&lt;/a&gt;である．これはトラフィックを別ホストへforwardすることに特化したコンテナ（&lt;code&gt;svendowideit/ambassador&lt;/code&gt;）を立てる方法である．今回の例でいうと以下のように接続する．&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-bash&#34;&gt;(redis-cli) --&amp;gt; (ambassador) ---network---&amp;gt; (ambassador) --&amp;gt; (redis)
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;redis-cliコンテナとambassadorコンテナ，redisコンテナとambassadorコンテナはdockerのlink機能で接続し，ambassadorコンテナはトラフィックをネットワーク越しにフォワードする．&lt;/p&gt;
+
+&lt;p&gt;まず，redisコンテナを動かすホスト（IPは&lt;code&gt;192.168.1.52&lt;/code&gt;とする）では，以下の2つのコンテナを立てる．&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-bash&#34;&gt;$ docker run -d --name redis crosbymichael/redis
+$ docker run -d --link redis:redis --name redis_ambassador -p 6379:6379 svendowideit/ambassador
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;そして別ホストから以下を実行し，そのRedisコンテナに接続する．&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-bash&#34;&gt;$ docker run -d --name redis_ambassador --expose 6379 -e REDIS_PORT_6379_TCP=tcp://192.168.1.52:6379 svendowideit/ambassador
+$ sudo docker run -i -t --rm --link redis_ambassador:redis relateiq/redis-cli
+redis 172.17.0.160:6379&amp;gt; ping
+PONG
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;これはシンプルだが，Redisコンテナを再起動したら，Ambassadorも起動して..など，運用を考えるとしんどそう．また，結局redisコンテナがどのホストで動いているかを意識する必要があり，ホストの数が膨大になったときにしんどくなる未来が見える．&lt;/p&gt;
+
+&lt;h2 id=&#34;動的ambassadorパターン-マルチホスト:dd1899745c6eab0d377eaa9661f859e7&#34;&gt;動的Ambassadorパターン（マルチホスト）&lt;/h2&gt;
+
+&lt;p&gt;では，ホストの数が膨大になり，接続したいコンテナがどのホストで動いているかを意識しなくても良くするにはどうしたら良いか．&lt;/p&gt;
+
+&lt;p&gt;その1つの解法としては，&lt;code&gt;etcd&lt;/code&gt;のような分散Key-Valueストアを利用し，動的なAmbassadorパターンを作り上げる方法がある．つまり以下のようなことをする．&lt;/p&gt;
+
+&lt;ul&gt;
+&lt;li&gt;接続される側は接続情報をetcdに書き込み続けるコンテナを立てる&lt;/li&gt;
+&lt;li&gt;接続する側はその情報を読み込み続ける動的なambassadorコンテナを立てる&lt;/li&gt;
+&lt;/ul&gt;
+
+&lt;p&gt;これにより，ホストの変更や増減を意識する必要がなくなる．今回の例を図にすると以下のようになる．&lt;/p&gt;
+
+&lt;p&gt;&lt;img src=&#34;https://coreos.com/assets/images/media/etcd-ambassador-flow.png&#34; alt=&#34;https://coreos.com/assets/images/media/etcd-ambassador-flow.png&#34; /&gt;
+&lt;/p&gt;
+
+&lt;p&gt;&lt;a href=&#34;https://coreos.com/assets/images/media/etcd-ambassador-flow.png&#34;&gt;https://coreos.com/assets/images/media/etcd-ambassador-flow.png&lt;/a&gt;&lt;/p&gt;
+
+&lt;p&gt;これは少し複雑なので別で記事を書いた．&lt;/p&gt;
+
+&lt;ul&gt;
+&lt;li&gt;&lt;a href=&#34;http://deeeet.com/writing/2014/11/26/coreos-etcd-docker-link/&#34;&gt;CoreOSクラスタ内のDockerコンテナの動的リンク | SOTA&lt;/a&gt;&lt;/li&gt;
+&lt;/ul&gt;
+
+&lt;p&gt;CoreOSを使っているのは標準でetcdが使えること，fleetによるコンテナの管理が楽であるからだが，&lt;code&gt;etcd&lt;/code&gt;のような分散Key-Valueストアが使えればどんなプラットフォームでも実現可能な話である．&lt;/p&gt;
+
+&lt;p&gt;Dokkuの作者である&lt;a href=&#34;https://twitter.com/progrium&#34;&gt;Jeff Lindsay&lt;/a&gt;氏が，&lt;a href=&#34;https://github.com/progrium/ambassadord&#34;&gt;progrium/ambassadord&lt;/a&gt;とういうツールを作っている．これはetcd+ConsulでDNSベースでこの動的Ambassadorを実現する手法であり，これも良さそう．&lt;/p&gt;
+
+&lt;h2 id=&#34;weave-マルチホスト:dd1899745c6eab0d377eaa9661f859e7&#34;&gt;weave（マルチホスト）&lt;/h2&gt;
+
+&lt;p&gt;一方で，Docker専用の仮想ネットワーク（オーバーレイネットワーク）を構築してしまおうという流れもある．あらゆるコンテナを同一ネットワーク上に存在しているかように扱えるようにし，portマッピングやlinkなどを考慮しなくてもよくする．&lt;/p&gt;
+
+&lt;p&gt;その中で有名なのが&lt;a href=&#34;https://github.com/zettio/weave&#34;&gt;zettio/weave&lt;/a&gt;である．weaveは，&lt;/p&gt;
+
+&lt;ul&gt;
+&lt;li&gt;&lt;code&gt;weave&lt;/code&gt;コンテナというルータ用のコンテナを立てる&lt;/li&gt;
+&lt;li&gt;専用の仮想ブリッチを作成する&lt;/li&gt;
+&lt;li&gt;全てのDockerコンテナに専用のvethインターフェースを作成する&lt;/li&gt;
+&lt;/ul&gt;
+
+&lt;p&gt;ということをして，専用のネットワークを構築する．&lt;/p&gt;
+
+&lt;p&gt;&lt;img src=&#34;https://github.com/zettio/weave/raw/master/docs/deployment.png?raw=true&#34; alt=&#34;https://github.com/zettio/weave/raw/master/docs/deployment.png?raw=true&#34; /&gt;
+&lt;/p&gt;
+
+&lt;p&gt;&lt;a href=&#34;https://github.com/zettio/weave/raw/master/docs/deployment.png?raw=true&#34;&gt;https://github.com/zettio/weave/raw/master/docs/deployment.png&lt;/a&gt;&lt;/p&gt;
+
+&lt;p&gt;実際に使ってみる．まず，weaveネットワークを構築する．あるホスト（IPは&lt;code&gt;192.20.20.11&lt;/code&gt;とする）で以下を実行する．&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-bash&#34;&gt;$ sudo weave launch
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;次に別のホストから上のホストを指定してweaveネットワークを立てる．&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-bash&#34;&gt;$ sudo weave launch 192.20.20.11 
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;これでweaveルータが立ち上がり，ネットワークは構築できた．あとは，CIDER形式でサブネットワークを指定してコンテナを立てればよい．&lt;/p&gt;
+
+&lt;p&gt;まず，以下のようにredisコンテナを立てる．&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-bash&#34;&gt;$ sudo weave run 10.0.1.1/24 -d crosbymichael/redis
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;次に別のホストからは以下のようにredis-cliコンテナを立てて接続する．&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-bash&#34;&gt;$ C=$(sudo weave run 10.0.1.2/24 -i -t relateiq/redis-cli -h 10.0.1.1)
+$ docker attach $C
+redis 10.0.1.1:6379&amp;gt; ping
+PONG
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;ただ上の例のように直接redisコンテナやredis-cliコンテナを立てるような使い方は違っていて，Ambassadorコンテナを挟むのが良い使いかたかなと思う．&lt;/p&gt;
+
+&lt;h3 id=&#34;参考-1:dd1899745c6eab0d377eaa9661f859e7&#34;&gt;参考&lt;/h3&gt;
+
+&lt;ul&gt;
+&lt;li&gt;&lt;a href=&#34;http://www.slideshare.net/jacopen/weave-40871981&#34;&gt;Weaveを試してみた - SlideShare&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a href=&#34;http://knowledge.sakura.ad.jp/tech/2522/&#34;&gt;複数のDockerサーバで独自ネットワークを構築する「Weave」を試す！ - さくらのナレッジ&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a href=&#34;http://www.infoq.com/jp/news/2014/09/zettio_releases_weave&#34;&gt;ZettioがDocker用ネットワークシステムのWeaveをリリース&lt;/a&gt;&lt;/li&gt;
+&lt;/ul&gt;
+
+&lt;h2 id=&#34;kubernetes-マルチホスト:dd1899745c6eab0d377eaa9661f859e7&#34;&gt;Kubernetes (マルチホスト)&lt;/h2&gt;
+
+&lt;p&gt;Dockerコンテナの管理として最も注目を浴びているのが&lt;a href=&#34;https://github.com/GoogleCloudPlatform/kubernetes&#34;&gt;GoogleCloudPlatform/kubernetes&lt;/a&gt;である．コンテナの接続という視点でみると，Kubernetesは，Serviceというコンポーネントがコンテナへのアクセスを可能にする．Kubertetesは複数のコンテナをPodという単位でまとめて管理するが，それらへのラウンドロビンや環境変数による他Podからの接続を担うのがServiceである．&lt;/p&gt;
+
+&lt;p&gt;&lt;img src=&#34;https://github.com/GoogleCloudPlatform/kubernetes/raw/master/docs/services_detail.png&#34; alt=&#34;&#34; /&gt;
+&lt;/p&gt;
+
+&lt;p&gt;&lt;a href=&#34;https://github.com/GoogleCloudPlatform/kubernetes/raw/master/docs/services_detail.png&#34;&gt;https://github.com/GoogleCloudPlatform/kubernetes/raw/master/docs/services_detail.png&lt;/a&gt;&lt;/p&gt;
+
+&lt;p&gt;Serviceを実現するため，Kubernetesはweaveと似たようなことをしている．つまり，ホストごとにサブネットワークをアサインし（例えば，ホストAには10.0.1.0/24を，ホストBには10.0.2.0/24）ことで，ポートマッピングの複雑さを低減している．&lt;/p&gt;
+
+&lt;p&gt;で，これはGCEでしか使えなかったが，このネットワークモデルを他のプラットフォームでも使えるようにしたのが，&lt;a href=&#34;https://github.com/coreos/flannel&#34;&gt;coreos/flannel&lt;/a&gt;である．これを以下のようなモデルで実現している．&lt;/p&gt;
+
+&lt;p&gt;&lt;img src=&#34;https://github.com/coreos/flannel/raw/master/packet-01.png&#34; alt=&#34;https://github.com/coreos/flannel/raw/master/packet-01.png&#34; /&gt;
+&lt;/p&gt;
+
+&lt;p&gt;&lt;a href=&#34;https://github.com/coreos/flannel/raw/master/packet-01.png&#34;&gt;https://github.com/coreos/flannel/raw/master/packet-01.png&lt;/a&gt;&lt;/p&gt;
+
+&lt;p&gt;flannelでは，まずそれぞれのホストにどのようなレンジでIPをアサインするかを設定する．例えば，10.100.0.0/16を使い，それぞれの/24のサブネットをアサインする．するとホストAは10.100.5.0/24，ホストBは10.100.18.0/24といったネットワークがアサインされる．flannelはこれらの情報をetcdに保存しており，実際のIPとのマッピングを管理する．&lt;/p&gt;
+
+&lt;p&gt;.. ただKubernetesはまだまだ絶賛試し中なので，また別の記事を書きたいなと思う．&lt;/p&gt;
+
+&lt;h3 id=&#34;参考-2:dd1899745c6eab0d377eaa9661f859e7&#34;&gt;参考&lt;/h3&gt;
+
+&lt;ul&gt;
+&lt;li&gt;&lt;a href=&#34;https://coreos.com/blog/introducing-rudder/&#34;&gt;Introducing flannel: An etcd backed overlay network for containers&lt;/a&gt;&lt;/li&gt;
+&lt;/ul&gt;
+
+&lt;h2 id=&#34;まとめ:dd1899745c6eab0d377eaa9661f859e7&#34;&gt;まとめ&lt;/h2&gt;
+
+&lt;p&gt;ざっとここ1年のトレンドを紹介した．まとめると，現状で一番良いモデルは，複数ホストになっても，それらの存在を意識せず，つまり，Datacentar as a computer的にコンテナの接続，デプロイができるのが良い．&lt;/p&gt;
+
+&lt;p&gt;なので，KubernetesとCoreOSであるなーと思う．他にもいろいろツールは出てるが，ガチで使うならこの2つに任せた！って感じだ．&lt;/p&gt;
+</description>
+    </item>
+    
+    <item>
+      <title>DockerHub公式の言語StackをCentOSに移植した</title>
+      <link>http://deeeet.com/writing/2014/11/04/dockerfile-centos/</link>
+      <pubDate>Tue, 04 Nov 2014 00:00:00 +0000</pubDate>
+      
+      <guid>http://deeeet.com/writing/2014/11/04/dockerfile-centos/</guid>
+      <description>&lt;p&gt;&lt;a href=&#34;http://deeeet.com/writing/2014/09/25/dockerhub-official-language-stacks/&#34;&gt;DockerHub公式の言語Stack&lt;/a&gt;が出て非常に便利になった．が，これらは全てdebianベースである．やんごとなき理由でCentOSを使わざるを得ないこともあるので，公式言語Stackの一部をCentOSに移植した．&lt;/p&gt;
+
+&lt;p&gt;とりあえず，&lt;a href=&#34;https://github.com/tcnksm/dockerfile-centos-ruby&#34;&gt;ruby&lt;/a&gt;，&lt;a href=&#34;https://github.com/tcnksm/dockerfile-centos-rails&#34;&gt;rails&lt;/a&gt;，&lt;a href=&#34;https://github.com/tcnksm/dockerfile-centos-perl&#34;&gt;perl&lt;/a&gt;，&lt;a href=&#34;https://github.com/tcnksm/dockerfile-centos-node&#34;&gt;node&lt;/a&gt;，&lt;a href=&#34;https://github.com/tcnksm/dockerfile-centos-java&#34;&gt;java&lt;/a&gt;を作成した．すべて公式の言語Stackをフォークして作成しているので，公式と同様の使い方ができる．また全て&lt;a href=&#34;https://docs.docker.com/docker-hub/builds/&#34;&gt;Automated Build&lt;/a&gt;しているので，DockerHubからインストールしてすぐに使える．&lt;/p&gt;
+
+&lt;p&gt;上の全てのイメージは，&lt;a href=&#34;https://github.com/heroku/stack-images/blob/master/bin/cedar.sh&#34;&gt;HerokuのStack&lt;/a&gt;的なイメージである&lt;a href=&#34;https://github.com/tcnksm/dockerfile-centos-buildpack-deps&#34;&gt;tcnksm/dockerfile-centos-buildpack-deps&lt;/a&gt;をベースにしている．もし他の言語のイメージを作成したい場合も，これをベースにすることができる．&lt;/p&gt;
+
+&lt;p&gt;ただ，どうしもイメージの容量は大きくなってしまった．その辺は注意してください&amp;hellip; またCentOSは慣れてないのでおかしなところがあればIssueかtwitterで指摘してください．&lt;/p&gt;
+</description>
+    </item>
+    
+    <item>
+      <title>boot2dockerでのVolume問題が解決しそう</title>
+      <link>http://deeeet.com/writing/2014/10/08/boot2docker-guest-additions/</link>
+      <pubDate>Wed, 08 Oct 2014 00:00:00 +0000</pubDate>
+      
+      <guid>http://deeeet.com/writing/2014/10/08/boot2docker-guest-additions/</guid>
+      <description>
+
+&lt;p&gt;（追記）Docker 1.3がリリースされた．boot2dockerはデフォルトでVirtualBox Guest Additionsをサポートし，boot2docker-cliは&lt;code&gt;init&lt;/code&gt;のときにホストのディレクトリを&lt;code&gt;boot2docker-vm&lt;/code&gt;上にマウントするようになった（&lt;a href=&#34;https://blog.docker.com/2014/10/docker-1-3-signed-images-process-injection-security-options-mac-shared-directories/&#34;&gt;Docker 1.3: signed images, process injection, security options, Mac shared directories | Docker Blog&lt;/a&gt;）．&lt;/p&gt;
+
+&lt;h2 id=&#34;tl-dr:2c676e1635ff74062223008773201cad&#34;&gt;TL;DR&lt;/h2&gt;
+
+&lt;p&gt;OSXやWindowsでboot2dockerを使う場合に特別な操作をしなくても&lt;code&gt;-v&lt;/code&gt;オプション（Volume）が使えるようになる．&lt;/p&gt;
+
+&lt;h2 id=&#34;背景:2c676e1635ff74062223008773201cad&#34;&gt;背景&lt;/h2&gt;
+
+&lt;p&gt;OSXやWindowsでboot2dockerを使うひとが最も不満に感じるのは&lt;code&gt;-v&lt;/code&gt;オプション（Volume）が使えないことだと思う．例えば，以下のようにカレントディレクトリをマウントし，そのファイルを参照しようとしてもファイルはないなどと言われる．&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-bash&#34;&gt;$ echo &#39;hello from OSX&#39; &amp;gt; hello
+$ docker run -v &amp;quot;$(pwd)&amp;quot;:/osx busybox cat /osx/hello
+cat: can&#39;t open &#39;/osx/hello&#39;: No such file or directory
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;boot2dockerを使う場合，Dockerデーモンはboot2docker-vm上で動き，OSXやWindowsから叩くdockerコマンドはそれに対するリモートクライアントとして動作する．Dockerはリモートクライアントからのvolumeをまだサポートしていないため，上記のコマンドはboot2docker-vm内のディレクトリをマウントする．よって，ローカルにあるファイルは発見されない．&lt;/p&gt;
+
+&lt;p&gt;現時点でそれを解決するには，OSXやwindowsのディレクトリをboot2docker内にマウントするしかない．しかし，boot2dockerはVirtualBox Guest Additionsをサポートしていないため，独自スクリプトでisoイメージを1から作るか，他人がつくった非公式のisoを使うしかなかった（誰もが一度はググっていろいろ回った結果&lt;a href=&#34;https://github.com/boot2docker/boot2docker/pull/284&#34;&gt;VBox guest additions #284&lt;/a&gt;にたどりついては面倒くせえと思っていたと思う）．&lt;/p&gt;
+
+&lt;p&gt;VirtualBox Guest Additionsをサポートが進まなかったのは，boot2dockerのシンプルさが失われること，またパフォーマンスへの危惧が大きい．&lt;/p&gt;
+
+&lt;h2 id=&#34;どうなるのか:2c676e1635ff74062223008773201cad&#34;&gt;どうなるのか&lt;/h2&gt;
+
+&lt;p&gt;まず，そもそもDocker自体がリモートクライアントからのvolumeに対応しようとしている（FUSEが検討されている）．が，まだ議論が進んでいる．&lt;/p&gt;
+
+&lt;ul&gt;
+&lt;li&gt;&lt;a href=&#34;https://github.com/docker/docker/issues/7249&#34;&gt;Proposal: Remote Shared Volumes #7249&lt;/a&gt;&lt;/li&gt;
+&lt;/ul&gt;
+
+&lt;p&gt;その間の&lt;strong&gt;穴埋め&lt;/strong&gt;をboot2dockerがすることになった．理由として，OSXやWindowsでDockerを使う場合には公式的にboot2dockerを使うことになっている以上，&lt;code&gt;-v&lt;/code&gt;オプション（Volume）を使えないのはユーザビリティに影響があるため．&lt;/p&gt;
+
+&lt;ul&gt;
+&lt;li&gt;&lt;a href=&#34;https://github.com/boot2docker/boot2docker/pull/534&#34;&gt;VirtualBox Guest Additions #534&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a href=&#34;https://github.com/boot2docker/boot2docker-cli/pull/258&#34;&gt;Add VirtualBox shared folders creation #258&lt;/a&gt;&lt;/li&gt;
+&lt;/ul&gt;
+
+&lt;p&gt;上記のPull Requestにより，boot2docker-vmにはVirtualbox Guest Additionsがデフォルトでインストールされるようになった．かつ，boot2docker-cliは&lt;code&gt;init&lt;/code&gt;の際に，OSXの場合は&lt;code&gt;/Users&lt;/code&gt;をWindowsの場合は，&lt;code&gt;/c/Users&lt;/code&gt;を自動でマウントするようになった（オプションで無効にすることもできる）．&lt;/p&gt;
+
+&lt;p&gt;要するに，何も考えずにOSX，WindowsでVolumeが使えるようになる．&lt;/p&gt;
+
+&lt;p&gt;boot2dockerはDockerのバージョンアップに合わせてリリースされているので，1.2.1もしくは1.3としてリリースされそう．&lt;/p&gt;
+
+&lt;h2 id=&#34;試したい:2c676e1635ff74062223008773201cad&#34;&gt;試したい&lt;/h2&gt;
+
+&lt;p&gt;2014年10月現在，Virtualbox Guest Additionsがインストールされたboot2docker-vmイメージまだ配布されていない．待ちきれないひとは最新boot2dockerのビルド，boot2docker-cliのインストールが必要になる．&lt;/p&gt;
+
+&lt;h3 id=&#34;boot2docker-vmのビルド:2c676e1635ff74062223008773201cad&#34;&gt;boot2docker-vmのビルド&lt;/h3&gt;
+
+&lt;p&gt;イメージのビルドはDockerコンテナ内で行われるのでdockerの環境さえあればよい．&lt;/p&gt;
+
+&lt;p&gt;まず，Dockerfileを取得する．&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-bash&#34;&gt;$ git clone https://github.com/boot2docker/boot2docker
+$ cd boot2docker
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;Dockerfileをもとにイメージをビルドする．これには多少時間かかる．&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-bash&#34;&gt;$ docker build -t user/boot2docker .
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;これで&lt;code&gt;user/boot2docker&lt;/code&gt;イメージ内にboot2docker-vmが生成されているので，コンテナを起動して取り出す．&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-bash&#34;&gt;$ docker run -i -t --rm user/boot2docker /bin/bash
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-bash&#34;&gt;$ docker cp &amp;lt;Container-ID&amp;gt;:boot2docker.iso image
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;あとは，現在のboot2docker-vmと入れ替えるだけ（バックアップなどをしておくこと）．&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-bash&#34;&gt;$ mv image/boot2docker.iso /.boot2docker/boot2docker.iso
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;h3 id=&#34;boot2docker-cliのインストール:2c676e1635ff74062223008773201cad&#34;&gt;boot2docker-cliのインストール&lt;/h3&gt;
+
+&lt;p&gt;boot2docker-cliはGoで書かれているので，ソースを取得してクロスコンパイルする．&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-bash&#34;&gt;$ go get github.com/boot2docker/boot2docker-cli
+$ cd $GOPATH/src/github.com/boot2docker/boot2docker-cli
+$ make darwin
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;こちらはバイナリも既に配布されている，&lt;a href=&#34;https://github.com/boot2docker/boot2docker-cli/releases/tag/v1.2.0&#34;&gt;https://github.com/boot2docker/boot2docker-cli/releases/tag/v1.2.0&lt;/a&gt;．&lt;/p&gt;
+
+&lt;p&gt;あとは，いつものようにboot2dockerを起動するだけで自動でマウントが実行される．&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-bash&#34;&gt;$ ./boot2docker-v1.2.0-darwin-amd64 init
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;今は最初のコマンドもしっかり動作するはず．&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-bash&#34;&gt;$ echo &#39;hello from OSX&#39; &amp;gt; hello
+$ docker run -v &amp;quot;$(pwd)&amp;quot;:/osx busybox cat /osx/hello
+hello from OSX
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;h2 id=&#34;まとめ:2c676e1635ff74062223008773201cad&#34;&gt;まとめ&lt;/h2&gt;
+
+&lt;p&gt;実感として，Virtualbox Guest Additions版は以前のものより遅く感じた．が，Volumeが簡単に使えることを考えれば，全然許せるレベル．ローカル開発環境を整えやすくなりそう．&lt;a href=&#34;https://github.com/docker/fig&#34;&gt;docker/fig&lt;/a&gt;の利用も簡単になりそう．&lt;/p&gt;
+</description>
+    </item>
+    
+    <item>
+      <title>認証付きのDocker Private registryを立てる</title>
+      <link>http://deeeet.com/writing/2014/10/02/docker-private-registry-auth/</link>
+      <pubDate>Thu, 02 Oct 2014 00:00:00 +0000</pubDate>
+      
+      <guid>http://deeeet.com/writing/2014/10/02/docker-private-registry-auth/</guid>
+      <description>
+
+&lt;p&gt;DockerHub（Public registry）を使えない場合は，Private Registryを立てる必要がある．DockerはPrivate registry用のDockerイメージを提供しているため，コンテナを立てるだけですぐに使い始めることができる．&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-bash&#34;&gt;$ docker run -p 5000:5000 registry
+$ docker push docker-private.com:5000/test-image:latest
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;ただ，これだとURLを知っていれば誰でも好きにイメージをpushできてしまうので，認証を行う必要がある．認証には，Dockerクライアント（&lt;code&gt;docker login&lt;/code&gt;）が対応しているBasic認証を利用する．Docker registryには認証機構がないため，nginxやApacheをリバースプロキシとして配置して，Basic認証を行う．&lt;/p&gt;
+
+&lt;p&gt;このとき，（当たり前だが）以下の2つの制限がある．&lt;/p&gt;
+
+&lt;ul&gt;
+&lt;li&gt;DockerクライアントのBasic認証はSSLが必須である&lt;/li&gt;
+&lt;li&gt;Dockerクライアントは証明書の正当性をちゃんとチェックする（無視できない）&lt;/li&gt;
+&lt;/ul&gt;
+
+&lt;p&gt;気軽さを求めて自己署名証明書を使うと，いくつか面倒な部分があるのでまとめておく．環境としては，サーバーをUbuntu，リバースプロキシをnginx，クライアントをOSX+boot2dockerとする．&lt;/p&gt;
+
+&lt;h2 id=&#34;サーバー側の設定:23b93e5fedb906dfc9e57c4ea62f7803&#34;&gt;サーバー側の設定&lt;/h2&gt;
+
+&lt;p&gt;サーバー側では以下の3つの設定を行う．&lt;/p&gt;
+
+&lt;ul&gt;
+&lt;li&gt;nginxの設定&lt;/li&gt;
+&lt;li&gt;認証するユーザのパスワードの設定&lt;/li&gt;
+&lt;li&gt;自己署名証明書の作成&lt;/li&gt;
+&lt;/ul&gt;
+
+&lt;h3 id=&#34;nginxの設定:23b93e5fedb906dfc9e57c4ea62f7803&#34;&gt;nginxの設定&lt;/h3&gt;
+
+&lt;p&gt;リバースプロキシにはnginxを用いる．Docker registryはBasic認証を行うためのnginxの設定例を提供している（&lt;a href=&#34;https://github.com/docker/docker-registry/tree/master/contrib/nginx&#34;&gt;docker-registry/contrib/nginx&lt;/a&gt;）ので，それをそのまま利用する．&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-bash&#34;&gt;$ git clone https://github.com/docker/docker-registry
+$ cp docker-registry/contrib/nginx/nginx_1-3-9.conf /etc/nginx/conf.d/.
+$ cp docker-registry/contrib/nginx/docker-registry.conf /etc/nginx/.
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;h3 id=&#34;パスワードの設定:23b93e5fedb906dfc9e57c4ea62f7803&#34;&gt;パスワードの設定&lt;/h3&gt;
+
+&lt;p&gt;Docker Registryを利用するユーザの設定を行う（&lt;code&gt;apache2-utils&lt;/code&gt;パッケージを利用する）．&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-bash&#34;&gt;$ htpasswd -bc /etc/nginx/docker-registry.htpasswd USERNAME PASSWORD
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;h3 id=&#34;自己署名証明書の作成:23b93e5fedb906dfc9e57c4ea62f7803&#34;&gt;自己署名証明書の作成&lt;/h3&gt;
+
+&lt;p&gt;自己署名（オレオレ）証明書を作る．まず，CAの秘密鍵と公開鍵を作成しておく．&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-bash&#34;&gt;$ echo 01 &amp;gt; ca.srl
+$ openssl genrsa -des3 -out ca-key.pem 2048
+$ openssl req -new -x509 -days 365 -key ca-key.pem -out ca.pem
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;次に，このCAを使ってサーバーの秘密鍵と証明書（CRT）を作成する．&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-bash&#34;&gt;$ openssl genrsa -des3 -out server-key.pem 2048
+$ openssl req -subj &#39;/CN=&amp;lt;Your Hostname Here&amp;gt;&#39; -new -key server-key.pem -out server.csr
+$ openssl x509 -req -days 365 -in server.csr -CA ca.pem -CAkey ca-key.pem -out server-cert.pem
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;パスフレーズは削除しておく．&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-bash&#34;&gt;$ openssl rsa -in server-key.pem -out server-key.pem
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;最後にこれらをしかるべき配置しておく．&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-bash&#34;&gt;$ cp server-cert.pem /etc/ssl/certs/docker-registry
+$ cp server-key.pem /etc/ssl/private/docker-registry
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;h2 id=&#34;クライアント側の設定:23b93e5fedb906dfc9e57c4ea62f7803&#34;&gt;クライアント側の設定&lt;/h2&gt;
+
+&lt;p&gt;クライアント側では，サーバーの自己署名証明書を受け入れる設定をする．無視できるようにしようという流れはあるが，実現はしていない，というかなさそう（2014年10月現在）（&lt;a href=&#34;https://github.com/docker/docker/pull/2687&#34;&gt;#2687&lt;/a&gt;，&lt;a href=&#34;https://github.com/docker/docker/pull/5817&#34;&gt;#5817&lt;/a&gt;）．&lt;/p&gt;
+
+&lt;p&gt;OSX上でboot2dockerを使っている場合は，&lt;strong&gt;OSXで設定するのではなくboot2docker-vmに設定する必要がある&lt;/strong&gt;．上でサーバーの自己署名証明書の作成したCAの公開鍵（&lt;code&gt;ca.pem&lt;/code&gt;）を使う（&lt;a href=&#34;https://github.com/boot2docker/boot2docker/issues/347&#34;&gt;#347&lt;/a&gt;）&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-bash&#34;&gt;$ boot2docker ssh
+$ cat ca.pem &amp;gt;&amp;gt; /etc/ssl/certs/ca-certificates.crt
+$ /etc/init.d/docker restart
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;以上．あとはログインすればDockerHubのように利用できる．&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-bash&#34;&gt;$ docker login https://docker-private.com
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;h2 id=&#34;まとめ:23b93e5fedb906dfc9e57c4ea62f7803&#34;&gt;まとめ&lt;/h2&gt;
+
+&lt;p&gt;自己署名証明は初めてであまり自信ないので，おかしい部分があれば教えてください．次にまた必要になれば自動化する．&lt;/p&gt;
+
+&lt;h3 id=&#34;参考:23b93e5fedb906dfc9e57c4ea62f7803&#34;&gt;参考&lt;/h3&gt;
+
+&lt;ul&gt;
+&lt;li&gt;&lt;a href=&#34;http://docs.docker.com/articles/https/&#34;&gt;Running Docker with https&lt;/a&gt; - Docker deamonとDocker client間もSSLで通信することができる．deamonがリモートで，clientがローカルという構成では必要になるかもしれない．&lt;/li&gt;
+&lt;li&gt;&lt;a href=&#34;http://www.activestate.com/blog/2014/01/deploying-your-own-private-docker-registry&#34;&gt;Deploying your own Private Docker Registry | ActiveState&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a href=&#34;http://d.hatena.ne.jp/ozuma/20130511/1368284304&#34;&gt;オレオレ証明書をopensslで作る - ろば電子が詰まっている&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a href=&#34;http://shibayu36.hatenablog.com/entry/2013/12/24/194134&#34;&gt;社内用Docker Registryを立てる - $shibayu36-&amp;gt;blog;&lt;/a&gt;&lt;/li&gt;
+&lt;/ul&gt;
+</description>
+    </item>
+    
+    <item>
+      <title>DockerHub公式の言語Stack</title>
+      <link>http://deeeet.com/writing/2014/09/25/dockerhub-official-language-stacks/</link>
+      <pubDate>Thu, 25 Sep 2014 00:00:00 +0000</pubDate>
+      
+      <guid>http://deeeet.com/writing/2014/09/25/dockerhub-official-language-stacks/</guid>
+      <description>
+
+&lt;p&gt;&lt;a href=&#34;https://blog.docker.com/2014/09/docker-hub-official-repos-announcing-language-stacks/&#34;&gt;DockerHub Official Repos: Announcing Language Stacks | Docker Blog&lt;/a&gt;&lt;/p&gt;
+
+&lt;p&gt;DockerHubには&lt;a href=&#34;https://registry.hub.docker.com/search?q=library&amp;amp;f=official&#34;&gt;公式のレポジトリ&lt;/a&gt;がある．そこにはUbuntuやCentos，MySQLやPostgres，MongoといったDockerイメージがコミュニティーベースで，つまりより汎用的に使える形で開発され集められており，ベースイメージとして簡単に使えるようになっている．&lt;/p&gt;
+
+&lt;p&gt;今までは，OSのディストリビューションや，Webサーバ，DBなどがメインだったが，公式として各種プログラミング言語のベースイメージも公開された．現状（2014年9月時点）では，&lt;a href=&#34;https://registry.hub.docker.com/_/gcc/&#34;&gt;c/c++(gcc)&lt;/a&gt;，&lt;a href=&#34;https://registry.hub.docker.com/_/clojure/&#34;&gt;clojure&lt;/a&gt;，&lt;a href=&#34;https://registry.hub.docker.com/_/golang/&#34;&gt;golang&lt;/a&gt;，&lt;a href=&#34;https://registry.hub.docker.com/_/hylang/&#34;&gt;hylang&lt;/a&gt;，&lt;a href=&#34;https://registry.hub.docker.com/_/java/&#34;&gt;java&lt;/a&gt;，&lt;a href=&#34;https://registry.hub.docker.com/_/node/&#34;&gt;node&lt;/a&gt;，&lt;a href=&#34;https://registry.hub.docker.com/_/perl/&#34;&gt;perl&lt;/a&gt;，&lt;a href=&#34;https://registry.hub.docker.com/_/php/&#34;&gt;PHP&lt;/a&gt;，&lt;a href=&#34;https://registry.hub.docker.com/_/python/&#34;&gt;python&lt;/a&gt;，&lt;a href=&#34;https://registry.hub.docker.com/_/rails/&#34;&gt;rails&lt;/a&gt;，&lt;a href=&#34;https://registry.hub.docker.com/_/ruby/&#34;&gt;ruby&lt;/a&gt;がある．&lt;/p&gt;
+
+&lt;h2 id=&#34;特徴:a43e5633ef9ac367236908013de3f376&#34;&gt;特徴&lt;/h2&gt;
+
+&lt;p&gt;この公式の言語stackには以下の3つの特徴がある．&lt;/p&gt;
+
+&lt;ul&gt;
+&lt;li&gt;&lt;a href=&#34;https://registry.hub.docker.com/_/buildpack-deps/&#34;&gt;buildpack-depsイメージ&lt;/a&gt;をベースにしている&lt;/li&gt;
+&lt;li&gt;各Versionをサポートしている&lt;/li&gt;
+&lt;li&gt;&lt;a href=&#34;http://docs.docker.com/reference/builder/#onbuild&#34;&gt;ONBUILD&lt;/a&gt;をイメージもサポートしている&lt;/li&gt;
+&lt;/ul&gt;
+
+&lt;p&gt;これらを簡単に説明する．&lt;/p&gt;
+
+&lt;h3 id=&#34;buildpack-deps:a43e5633ef9ac367236908013de3f376&#34;&gt;Buildpack-deps&lt;/h3&gt;
+
+&lt;p&gt;&lt;a href=&#34;https://registry.hub.docker.com/_/buildpack-deps/&#34;&gt;buildpack-depsイメージ&lt;/a&gt;というのは，&lt;a href=&#34;https://github.com/heroku/stack-images/blob/master/bin/cedar.sh&#34;&gt;HerokuのStack&lt;/a&gt;のようなイメージで，各言語を動かすために必要な基本的な依存関係等がインストールされている．&lt;/p&gt;
+
+&lt;p&gt;Dockerfileは以下．&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-bash&#34;&gt;FROM debian:wheezy
+
+RUN apt-get update &amp;amp;&amp;amp; apt-get install -y \
+    autoconf \
+    build-essential \
+    imagemagick \
+    libbz2-dev \
+    libcurl4-openssl-dev \
+    libevent-dev \
+    libffi-dev \
+    libglib2.0-dev \
+    libjpeg-dev \
+    libmagickcore-dev \
+    libmagickwand-dev \
+    libmysqlclient-dev \
+    libncurses-dev \
+    libpq-dev \
+    libpq-dev \
+    libreadline-dev \
+    libsqlite3-dev \
+    libssl-dev \
+    libxml2-dev \
+    libxslt-dev \
+    libyaml-dev \
+    zlib1g-dev \
+    &amp;amp;&amp;amp; rm -rf /var/lib/apt/lists/*
+
+RUN apt-get update &amp;amp;&amp;amp; apt-get install -y \
+    bzr \
+    cvs \
+    git \
+    mercurial \
+    subversion \
+    &amp;amp;&amp;amp; rm -rf /var/lib/apt/lists/*
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;よく言語をインストールする際に依存で入れるべきものが揃っている．これを元に各言語スタックは作成されるので，これらの依存のインストールし忘れなどを防ぐことができる．&lt;/p&gt;
+
+&lt;h3 id=&#34;version:a43e5633ef9ac367236908013de3f376&#34;&gt;Version&lt;/h3&gt;
+
+&lt;p&gt;各言語スタックは適切にバージョンがタグとして付加されているため，使いたいバージョンを選んで使うことができる．例えば，rubyのv2.1.3を使いたければ&lt;a href=&#34;https://github.com/docker-library/ruby/blob/50295f3a139273601b5f2df29060ee2788f067d3/2.1/Dockerfile&#34;&gt;ruby:2.1.3イメージ&lt;/a&gt;を，pythonの3.4.1を使いたければ&lt;a href=&#34;https://github.com/docker-library/python/blob/a30ed3056ee58ca3df4fd5b51e3d30849dcb7e32/3.4/Dockerfile&#34;&gt;python:3.4.1イメージ&lt;/a&gt;を選択できる．&lt;/p&gt;
+
+&lt;h3 id=&#34;onbuild:a43e5633ef9ac367236908013de3f376&#34;&gt;ONBUILD&lt;/h3&gt;
+
+&lt;p&gt;言語スタックでは，普通のイメージに加えて，&lt;code&gt;ONBUILD&lt;/code&gt;イメージもサポートされている．&lt;/p&gt;
+
+&lt;p&gt;&lt;code&gt;ONBUILD&lt;/code&gt;はDockerfileのコマンドで，これに続いて別のDockerfileコマンドを記述する．そして，そのDockerfileを元にビルドされたイメージをFROMとしてDockerfileを新たに作成し，ビルドを実行すると，上で&lt;code&gt;ONBUILD&lt;/code&gt;と共に記述したコマンドが実行される．つまり，Dockerfileに親子関係を持たせることができる（詳しくは，&lt;a href=&#34;http://deeeet.com/writing/2014/03/21/docker-onbuild/&#34;&gt;&amp;ldquo;DockerfileのONBUILD&amp;rdquo;&lt;/a&gt;に書いた）．&lt;/p&gt;
+
+&lt;p&gt;これは結構良くて，言語スタックでは，依存関係ファイルの&lt;code&gt;ADD&lt;/code&gt;とインストールの実行，アプリの&lt;code&gt;ADD&lt;/code&gt;に使われている．例えば，RailsのONBUILDイメージの場合は，GemfileとGemfile.lockの&lt;code&gt;ADD&lt;/code&gt;，Railsアプリの&lt;code&gt;ADD&lt;/code&gt;が記述されている．つまり，RailsのONBUILDイメージを使えば，特殊なことをしていない限りDockerfileにほとんど何も書かなくて良い．&lt;/p&gt;
+
+&lt;p&gt;また，ここにはコミュニティ開発の良さも含まれていて，例えば，&lt;a href=&#34;http://wazanova.jp/items/901&#34;&gt;&amp;ldquo;RailsアプリをDockerにデプロイするときにGemfileを変更してなければBundle Installをスキップする方法&amp;rdquo;&lt;/a&gt;といった，Dockerfileのベストプラクティスがちゃんと含まれている．&lt;/p&gt;
+
+&lt;h2 id=&#34;使ってみる:a43e5633ef9ac367236908013de3f376&#34;&gt;使ってみる&lt;/h2&gt;
+
+&lt;p&gt;とりあえず，いくつか軽く使ってみる．&lt;/p&gt;
+
+&lt;h3 id=&#34;rails:a43e5633ef9ac367236908013de3f376&#34;&gt;rails&lt;/h3&gt;
+
+&lt;p&gt;まず，railsイメージ．&lt;a href=&#34;https://github.com/docker-library/ruby/blob/50295f3a139273601b5f2df29060ee2788f067d3/2.1/Dockerfile&#34;&gt;ruby:2.1.2イメージ&lt;/a&gt;を元に作られた&lt;a href=&#34;https://github.com/docker-library/rails/blob/7bb6ade7f97129cc58967d7d0ae17f4b62ae52eb/onbuild/Dockerfile&#34;&gt;onbuildイメージ&lt;/a&gt;を使う．このイメージは以下のDockerfileで作成されている．いくつかの&lt;code&gt;ONBUILD&lt;/code&gt;と，Railsを動かすのに必要なnodeのインストールなどが記述されている．&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-bash&#34;&gt;FROM ruby:2.1.2
+
+RUN mkdir -p /usr/src/app
+WORKDIR /usr/src/app
+
+ONBUILD ADD Gemfile /usr/src/app/
+ONBUILD ADD Gemfile.lock /usr/src/app/
+ONBUILD RUN bundle install --system
+
+ONBUILD ADD . /usr/src/app
+
+RUN apt-get update &amp;amp;&amp;amp; apt-get install -y nodejs --no-install-recommends &amp;amp;&amp;amp; rm -rf /var/lib/apt/lists/*
+
+EXPOSE 3000
+CMD [&amp;quot;rails&amp;quot;, &amp;quot;server&amp;quot;]
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;これを使うのは簡単．実際にサンプルアプリを作って動かしてみる．まず，以下でDockerイメージをbuildする．&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-bash&#34;&gt;$ rails new sample-app
+$ cd sample-app
+$ echo &#39;FROM rails:onbuild&#39; &amp;gt; Dockerfile
+$ docker build -t tcnksm/sample-rails .
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;1行のDockerfileを作るだけで良い．それをbuildすると&lt;code&gt;ONBUILD&lt;/code&gt;により，&lt;code&gt;Gemfile&lt;/code&gt;と&lt;code&gt;Gemfile.lock&lt;/code&gt;の&lt;code&gt;ADD&lt;/code&gt;と&lt;code&gt;bundle install&lt;/code&gt;が実行される．そして，カレントディレクトリのアプリケーションが&lt;code&gt;ADD&lt;/code&gt;される．&lt;/p&gt;
+
+&lt;p&gt;後は以下を実行すれば，親Dockerfileの&lt;code&gt;CMD&lt;/code&gt;に記述された&lt;code&gt;rails server&lt;/code&gt;で，コンテナが起動する．&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-bash&#34;&gt;$ docker run -d -p 3000:3000 tcnksm/sample-app
+$ curl http://&amp;lt;container-ip&amp;gt;:3000
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;h3 id=&#34;golang:a43e5633ef9ac367236908013de3f376&#34;&gt;golang&lt;/h3&gt;
+
+&lt;p&gt;golangだとアプリケーションを動かすより，コンテナによるクリーンな環境でのコンパイルに使うのが良さそう．それも簡単にできる．&lt;/p&gt;
+
+&lt;p&gt;例えば，&lt;a href=&#34;https://github.com/tcnksm/ghr&#34;&gt;tcnksm/ghr&lt;/a&gt;を&lt;a href=&#34;https://github.com/docker-library/golang/blob/9ff2ccca569f9525b023080540f1bb55f6b59d7f/1.3/Dockerfile&#34;&gt;go-1.3.1イメージ&lt;/a&gt;でコンパイルする．&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-bash&#34;&gt;$ git clone https://github.com/tcnksm/ghr
+$ cd ghr
+$ docker run --rm -v &amp;quot;$(pwd)&amp;quot;:/usr/src/ghr -w /usr/src/ghr golang:1.3.1 bash -c &#39;go get -d ./... &amp;amp;&amp;amp; go build -v&#39;
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;&lt;a href=&#34;https://github.com/docker-library/golang/blob/9ff2ccca569f9525b023080540f1bb55f6b59d7f/1.2/Dockerfile&#34;&gt;go-1.2イメージ&lt;/a&gt;でコンパイルする．&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-bash&#34;&gt;$ docker run --rm -v &amp;quot;$(pwd)&amp;quot;:/usr/src/ghr -w /usr/src/ghr golang:1.2 go build -v
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;&lt;a href=&#34;https://github.com/docker-library/golang/blob/40bd84e4bcc278281595174a60e7b4451d972dee/1.3/cross/Dockerfile&#34;&gt;go-1.3.1のクロスコンパイル用イメージ&lt;/a&gt;で&lt;code&gt;windows/386&lt;/code&gt;にクロスコンパイルする．&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-bash&#34;&gt;$ docker run --rm -v &amp;quot;$(pwd)&amp;quot;:/usr/src/ghr -w /usr/src/ghr -e GOOS=windows -e GOARCH=386 golang:1.3.1-cross go build -v
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;h2 id=&#34;コントリビュートしたい:a43e5633ef9ac367236908013de3f376&#34;&gt;コントリビュートしたい&lt;/h2&gt;
+
+&lt;p&gt;プロジェクトを作って&lt;a href=&#34;mailto:partners@docker.com&#34;&gt;partners@docker.com&lt;/a&gt;にメールすれば，公式のDockerHubレポジトリとして取り込んでもらえる可能性もある．&lt;/p&gt;
+
+&lt;p&gt;以下のガイドラインに従う．&lt;/p&gt;
+
+&lt;ul&gt;
+&lt;li&gt;&lt;a href=&#34;https://docs.docker.com/docker-hub/official_repos/&#34;&gt;Guidelines for Creating and Documenting Official Repositories&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a href=&#34;https://docs.docker.com/articles/dockerfile_best-practices/&#34;&gt;Best Practices for Writing Dockerfile&lt;/a&gt;&lt;/li&gt;
+&lt;/ul&gt;
+
+&lt;h2 id=&#34;まとめ:a43e5633ef9ac367236908013de3f376&#34;&gt;まとめ&lt;/h2&gt;
+
+&lt;p&gt;Dockerが出たときって，Dockerfileを書くのは時代に逆行しているから自動生成しようといった意見やツールを見た．実際，自分でも&lt;a href=&#34;http://deeeet.com/writing/2014/03/06/rbdock/&#34;&gt;&amp;ldquo;rbdockというRuby/Rails/Sinatra用のDockerfileを生成するgem&amp;rdquo;&lt;/a&gt;をつくったりした．でも，DockerHubのおかげで良いDockerfileを&lt;strong&gt;みんなで作って&lt;/strong&gt;，そのイメージを使えるだけにしようという流れになっている．どんどん簡単になっていく．&lt;/p&gt;
+
+&lt;p&gt;ただ，いきなり使うのは危険で，例えばONBUILDとか何が仕込まれてるかbuildしないとわからい．ので，使う前にちゃんとDockerfileに一度目を通すのが大事かなと．その辺はOSSのツールを使うときと同じ．&lt;/p&gt;
+</description>
+    </item>
+    
+    <item>
+      <title>Dockerの再起動オプション</title>
+      <link>http://deeeet.com/writing/2014/09/17/docker-1-2-restart/</link>
+      <pubDate>Wed, 17 Sep 2014 00:00:00 +0000</pubDate>
+      
+      <guid>http://deeeet.com/writing/2014/09/17/docker-1-2-restart/</guid>
+      <description>
+
+&lt;p&gt;&lt;a href=&#34;http://blog.docker.com/2014/08/announcing-docker-1-2-0/&#34;&gt;Announcing Docker 1.2.0 | Docker Blog&lt;/a&gt;&lt;/p&gt;
+
+&lt;p&gt;v1.2でもいくつかの面白い機能が追加された．例えば，今まで&lt;code&gt;--privileged&lt;/code&gt;オプションを使うと全権限を与えてしまっていたが&lt;code&gt;--cap-add&lt;/code&gt;や&lt;code&gt;--cap-drop&lt;/code&gt;オプションでそれを制限できるようになったり，&lt;code&gt;–device&lt;/code&gt;オプションで利用したいデバイスを指定できたり，コンテナ起動時に&lt;code&gt;/etc/hosts&lt;/code&gt;を編集できたり&amp;hellip;など．&lt;/p&gt;
+
+&lt;p&gt;中でも再起動オプションが良さげなので，実際に触ってみた．&lt;code&gt;docker run&lt;/code&gt;を実行するときに&lt;code&gt;--restart&lt;/code&gt;オプションに以下を指定するとコンテナの再起動の挙動を変更できる:&lt;/p&gt;
+
+&lt;ul&gt;
+&lt;li&gt;&lt;code&gt;no&lt;/code&gt; - 再起動しない（デフォルト）&lt;/li&gt;
+&lt;li&gt;&lt;code&gt;on-failure&lt;/code&gt; - 終了ステータスがnon-zeroの場合に再起動する&lt;/li&gt;
+&lt;li&gt;&lt;code&gt;on-failure:X&lt;/code&gt; - 終了ステータスがnon-zeroの場合に&lt;code&gt;X&lt;/code&gt;回だけ再起動する&lt;/li&gt;
+&lt;li&gt;&lt;code&gt;always&lt;/code&gt; - 終了ステータスがなんであろうと再起動する&lt;/li&gt;
+&lt;/ul&gt;
+
+&lt;h3 id=&#34;no:a8ce05ddb0ac3a35b1bc0778ca0f995e&#34;&gt;no&lt;/h3&gt;
+
+&lt;p&gt;これはデフォルトの挙動で，再起動は行わない．&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-bash&#34;&gt;$ docker run --restart=no busybox /bin/sh -c &#39;date; exit 1&#39;
+Wed Sep 17 08:13:15 UTC 2014
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-bash&#34;&gt;$ docker ps -a
+CONTAINER ID        IMAGE               COMMAND                CREATED             STATUS                     PORTS               NAMES
+e3389974b4ef        busybox:latest      &amp;quot;/bin/sh -c &#39;date; e   5 seconds ago       Exited (1) 4 seconds ago                       jolly_hoover
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;h3 id=&#34;on-failure:a8ce05ddb0ac3a35b1bc0778ca0f995e&#34;&gt;on-failure&lt;/h3&gt;
+
+&lt;p&gt;これは終了ステータスがnon-zeroの場合に再起動し続ける．&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-bash&#34;&gt;$ docker run --restart=on-failure busybox /bin/sh -c &#39;date; exit 1&#39;
+Wed Sep 17 08:15:38 UTC 2014
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-bash&#34;&gt;$ docker ps -a
+CONTAINER ID        IMAGE               COMMAND                CREATED             STATUS                         PORTS               NAMES
+4fd4e22ecb35        busybox:latest      &amp;quot;/bin/sh -c &#39;date; e   4 seconds ago       Restarting (1) 1 seconds ago                       trusting_wilson
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;ログを見ると，バックグランドで再起動し続けてるのがわかる．&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-bash&#34;&gt;$ docker log 4fd4e22ecb35
+Wed Sep 17 08:15:38 UTC 2014
+Wed Sep 17 08:15:39 UTC 2014
+Wed Sep 17 08:15:39 UTC 2014
+Wed Sep 17 08:15:41 UTC 2014
+Wed Sep 17 08:15:42 UTC 2014
+Wed Sep 17 08:15:46 UTC 2014
+Wed Sep 17 08:15:53 UTC 2014
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;h3 id=&#34;on-failure-x:a8ce05ddb0ac3a35b1bc0778ca0f995e&#34;&gt;on-failure:X&lt;/h3&gt;
+
+&lt;p&gt;&lt;code&gt;on-failure&lt;/code&gt;は再起動の回数を制限することができる．例えば5回にしてみる．&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-bash&#34;&gt;$ docker run --restart=on-failure:5 busybox /bin/sh -c &#39;date; exit 1&#39;
+Wed Sep 17 08:51:05 UTC 2014
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-bash&#34;&gt;$ docker ps -a
+CONTAINER ID        IMAGE               COMMAND                CREATED             STATUS                                  PORTS               NAMES
+c5a86fc5e242        busybox:latest      &amp;quot;/bin/sh -c &#39;date; e   2 seconds ago       Restarting (1) Less than a second ago                       cocky_hawking
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;ログを見る．&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-bash&#34;&gt;$ docker logs c5a86fc5e242
+Wed Sep 17 08:51:05 UTC 2014
+Wed Sep 17 08:51:06 UTC 2014
+Wed Sep 17 08:51:07 UTC 2014
+Wed Sep 17 08:51:08 UTC 2014
+Wed Sep 17 08:51:10 UTC 2014
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;5回再起動した後にステータスを見るとコンテナが終了しているのが確認できる．&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-bash&#34;&gt;$ docker ps -a
+CONTAINER ID        IMAGE               COMMAND                CREATED             STATUS                      PORTS               NAMES
+c5a86fc5e242        busybox:latest      &amp;quot;/bin/sh -c &#39;date; e   29 seconds ago      Exited (1) 24 seconds ago                       cocky_hawking
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;h3 id=&#34;always:a8ce05ddb0ac3a35b1bc0778ca0f995e&#34;&gt;always&lt;/h3&gt;
+
+&lt;p&gt;終了コードが何であっても起動し続ける．&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-bash&#34;&gt;$ docker run --restart=always busybox /bin/sh -c &#39;date; exit 0&#39;
+Wed Sep 17 08:57:34 UTC 2014
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-bash&#34;&gt;$ docker run --restart=always busybox /bin/sh -c &#39;date; exit 1&#39;
+Wed Sep 17 08:57:37 UTC 2014
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-bash&#34;&gt;$ docker ps -a
+CONTAINER ID        IMAGE               COMMAND                CREATED             STATUS                         PORTS               NAMES
+19df55aec365        busybox:latest      &amp;quot;/bin/sh -c &#39;date; e   4 seconds ago       Restarting (1) 1 seconds ago                       drunk_ritchie
+a158cdffcaae        busybox:latest      &amp;quot;/bin/sh -c &#39;date; e   8 seconds ago       Restarting (0) 3 seconds ago                       naughty_mclean
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;h3 id=&#34;再起動の間隔:a8ce05ddb0ac3a35b1bc0778ca0f995e&#34;&gt;再起動の間隔&lt;/h3&gt;
+
+&lt;p&gt;触っていて再起動の間隔が一定でないことに気がついた．ソースを読んでみると，&lt;/p&gt;
+
+&lt;ul&gt;
+&lt;li&gt;デフォルトの再起動間隔は100ms&lt;/li&gt;
+&lt;li&gt;コンテナが10秒以内で終了すると起動間隔を前回の2倍にする&lt;/li&gt;
+&lt;li&gt;コンテナが10秒より長く起動した後に終了すると起動間隔をデフォルトに戻す&lt;/li&gt;
+&lt;/ul&gt;
+
+&lt;p&gt;というロジックが入っていた．上の例のような即終了する処理をしていると起動間隔はどんどん長くなる（ドキュメントが見当たらなかったので，この辺は外部から指定できたり，いづれ変更は入りそう）．&lt;/p&gt;
+
+&lt;p&gt;&lt;a href=&#34;https://github.com/docker/docker/blob/master/daemon/monitor.go&#34;&gt;docker/daemon/monitor.go&lt;/a&gt;&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-go&#34;&gt;// resetMonitor resets the stateful fields on the containerMonitor based on the
+// previous runs success or failure.  Reguardless of success, if the container had
+// an execution time of more than 10s then reset the timer back to the default
+func (m *containerMonitor) resetMonitor(successful bool) {
+    executionTime := time.Now().Sub(m.lastStartTime).Seconds()
+
+    if executionTime &amp;gt; 10 {
+        m.timeIncrement = defaultTimeIncrement
+    } else {
+        // otherwise we need to increment the amount of time we wait before restarting
+        // the process.  We will build up by multiplying the increment by 2
+        m.timeIncrement *= 2
+    }
+
+    // the container exited successfully so we need to reset the failure counter
+    if successful {
+        m.failureCount = 0
+    } else {
+        m.failureCount++
+    }
+}
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;h2 id=&#34;まとめ:a8ce05ddb0ac3a35b1bc0778ca0f995e&#34;&gt;まとめ&lt;/h2&gt;
+
+&lt;p&gt;使いどころを間違えなければ，良い感じで使えそう．&lt;/p&gt;
+
+&lt;p&gt;コンテナの再起動は外部ツール（e.g., systemd）の領域だったけどDockerのみでそれができるようになった．でも，それらが不要になるわけではない．CLIから使えるということはAPIが公開されているということなので，外部ツールはより効率よくそれを使えるようになるということかなと．&lt;/p&gt;
+
+&lt;h3 id=&#34;参考:a8ce05ddb0ac3a35b1bc0778ca0f995e&#34;&gt;参考&lt;/h3&gt;
+
+&lt;ul&gt;
+&lt;li&gt;&lt;a href=&#34;https://news.ycombinator.com/item?id=8212908&#34;&gt;Docker 1.2.0, with restart policies | Hacker News&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a href=&#34;https://speakerdeck.com/vieux/whats-new-in-the-latest-docker-release-and-docker-hub-at-braintree&#34;&gt;What&amp;rsquo;s new in the latest Docker release and Docker Hub @ braintree // Speaker Deck&lt;/a&gt;&lt;/li&gt;
+&lt;/ul&gt;
+</description>
+    </item>
+    
+    <item>
+      <title>Dockerコンテナのおもしろい名前</title>
+      <link>http://deeeet.com/writing/2014/07/15/docker-container-name/</link>
+      <pubDate>Tue, 15 Jul 2014 00:00:00 +0000</pubDate>
+      
+      <guid>http://deeeet.com/writing/2014/07/15/docker-container-name/</guid>
+      <description>
+
+&lt;p&gt;Dockerコンテナを立ち上げるときに，&lt;code&gt;--name&lt;/code&gt;オプションで名前を指定しないと勝手に名前がつけられる．&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-bash&#34;&gt;$ docker run -d dockerfile/nginx
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-bash&#34;&gt;$ docker ps
+CONTAINER ID        IMAGE                     COMMAND             CREATED             STATUS              PORTS               NAMES
+1f29f753eaf6        dockerfile/nginx:latest   nginx               2 days ago          Up 11 hours         80/tcp, 443/tcp     elegant_feynma
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;例えば，上では&lt;code&gt;elegant_feynma&lt;/code&gt;という名前がつけられている．&lt;/p&gt;
+
+&lt;p&gt;で，これどうやってやってるのかなーと思ってソースを眺めていると，&lt;a href=&#34;https://github.com/dotcloud/docker/tree/master/pkg/namesgenerator&#34;&gt;docker/pkg/namesgenerator&lt;/a&gt;というパッケージが名前を生成していた．&lt;/p&gt;
+
+&lt;p&gt;名前の生成方法はとても単純で，49個の形容詞と68名の著名な科学者もしくはハッカーの名前をランダムに組み合せているだけ．ソースを見ると，科学者もしくはハッカーの名前と簡単な紹介文，wikipediaへのリンクがコメントに書かれている．&lt;/p&gt;
+
+&lt;p&gt;以下が，生成部分の実装．注意深くみると，異変に気づく．&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-go&#34;&gt;func GetRandomName(retry int) string {
+    rand.Seed(time.Now().UnixNano())
+
+begin:
+    name := fmt.Sprintf(&amp;quot;%s_%s&amp;quot;, left[rand.Intn(len(left))], right[rand.Intn(len(right))])
+    if name == &amp;quot;boring_wozniak&amp;quot; /* Steve Wozniak is not boring */ {
+        goto begin
+    }
+
+    if retry &amp;gt; 0 {
+        name = fmt.Sprintf(&amp;quot;%s%d&amp;quot;, name, rand.Intn(10))
+    }
+    return name
+}
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;この実装のIssueは&lt;a href=&#34;https://github.com/dotcloud/docker/pull/4902&#34;&gt;ここ&lt;/a&gt;にある．まあ，LGTMである．&lt;/p&gt;
+
+&lt;p&gt;このnamegeneratorパッケージはDocker以外でも使えるようになっている．例えば以下のように使う．&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-go&#34;&gt;package main
+
+import (
+    &amp;quot;fmt&amp;quot;
+    &amp;quot;github.com/dotcloud/docker/pkg/namesgenerator&amp;quot;
+)
+
+func main() {
+    fmt.Println(namesgenerator.GetRandomName(0))
+}    
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;便利ー．&lt;/p&gt;
+
+&lt;h3 id=&#34;参考:d6491249fbde0befdc7ea37ada76f757&#34;&gt;参考&lt;/h3&gt;
+
+&lt;ul&gt;
+&lt;li&gt;&lt;a href=&#34;http://stackoverflow.com/questions/184618/what-is-the-best-comment-in-source-code-you-have-ever-encountered&#34;&gt;What is the best comment in source code you have ever encountered?&lt;/a&gt;&lt;/li&gt;
+&lt;/ul&gt;
+</description>
+    </item>
+    
+    <item>
+      <title>libswarmの現状と将来</title>
+      <link>http://deeeet.com/writing/2014/07/14/libswarm/</link>
+      <pubDate>Mon, 14 Jul 2014 00:00:00 +0000</pubDate>
+      
+      <guid>http://deeeet.com/writing/2014/07/14/libswarm/</guid>
+      <description>
+
+&lt;p&gt;DockerCon14で新たに発表されたDockerによる新しいOSSである&lt;a href=&#34;https://github.com/docker/libswarm&#34;&gt;libswarm&lt;/a&gt;をざっと触ってみたので，現状何ができて，将来的にどういったことができそうになるかを簡単にまとめておく．&lt;/p&gt;
+
+&lt;h2 id=&#34;tl-dr:41cc6cd5853fa3d7d20008d6d7ded1fb&#34;&gt;TL;DR&lt;/h2&gt;
+
+&lt;p&gt;libswarmを使うと複数ホストやサービス（自社サーバー，DigitalOcean，Amazon EC2，Orchardなど）に存在するDockerコンテナを，１つのホストに存在しているかのように扱うことができるようになる．Dockerがホストを抽象化したのに対して，libswarmは複数ホストを抽象化する．&lt;/p&gt;
+
+&lt;p&gt;libswarmを使ったswarmdコマンドを使って，UNIXのパイプのように複数ホストやサービスを連鎖的につなげる．&lt;/p&gt;
+
+&lt;h2 id=&#34;デモ:41cc6cd5853fa3d7d20008d6d7ded1fb&#34;&gt;デモ&lt;/h2&gt;
+
+&lt;p&gt;libswarmで何ができるのかは，DockerCon14でのデモ動画&lt;a href=&#34;https://www.youtube.com/watch?v=a_YbxWbHgQA&#34;&gt;&amp;ldquo;Orchard + libswarm demo from DockerCon&amp;rdquo;&lt;/a&gt;を観るのが一番わかりやすい．&lt;/p&gt;
+
+&lt;p&gt;ここでは，異なるホスト（ローカルホストとDigitalOcean，Orchard）に対して，swarmdを立ち上げるだけで，それらに個別にログインすることなく，同様のコマンドを発行してaanand/hello-worldコンテナを立ち上げ，かつそれら全てのコンテナの情報を一気に取得している様子が観られる．&lt;/p&gt;
+
+&lt;h2 id=&#34;libswarmの動作:41cc6cd5853fa3d7d20008d6d7ded1fb&#34;&gt;libswarmの動作&lt;/h2&gt;
+
+&lt;p&gt;libswarmのプロジェクトをみると，&lt;a href=&#34;https://github.com/docker/libswarm/tree/master/backends&#34;&gt;backends&lt;/a&gt;というディレクトリがある．ここに，様々ななバックエンドサービス，例えば標準的なDocker server/clientやAmazon EC2，Orchardなど，が定義されており，libswarmはこれらのサービスの間の情報のやりとりを受け持つ．&lt;/p&gt;
+
+&lt;p&gt;例えば，一番単純なコマンドは以下のようになる．&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-bash&#34;&gt;$ swarmd &#39;dockerserver unix:///var/run/docker.sock&#39; &#39;dockerclient tcp://192.168.59.103:2375&#39;
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;これを立ち上げたまま，ローカルでDockerコマンドを実行すると，&lt;/p&gt;
+
+&lt;ol&gt;
+&lt;li&gt;クライアントによるHTTPリクエストを&lt;code&gt;dockerserver&lt;/code&gt;が受ける&lt;/li&gt;
+&lt;li&gt;&lt;code&gt;dockerserver&lt;/code&gt;はリクエストを&lt;code&gt;dockerclient&lt;/code&gt;にフォワードする&lt;/li&gt;
+&lt;li&gt;&lt;code&gt;193.168.59.103&lt;/code&gt;のDockerデーモンでコマンドが実行される&lt;/li&gt;
+&lt;/ol&gt;
+
+&lt;p&gt;この動作は以下の図がわかりやすい．&lt;/p&gt;
+
+&lt;p&gt;&lt;img src=&#34;http://www.tech-d.net/wp-content/uploads/2014/07/548d351e8542debc543ca059d96859c9.png&#34; alt=&#34;&#34; /&gt;
+
+&lt;a href=&#34;http://www.tech-d.net/2014/07/03/libswarm/&#34;&gt;Libswarm (in a nutshell) | Tech&amp;rsquo;d&lt;/a&gt;&lt;/p&gt;
+
+&lt;p&gt;上の例は最小限で感動はない．libswarmがすごいのは，例えばdockerclientバックエンドをorchardバックエンドに変えればorchardにコマンドが発行されるし，EC2バックエンドに変えればEC2にコマンドが発行されるところ．さらに，複数のバックエンドサービスを束ねて同時にそれらを扱えるところ．&lt;/p&gt;
+
+&lt;h2 id=&#34;デモの再現:41cc6cd5853fa3d7d20008d6d7ded1fb&#34;&gt;デモの再現&lt;/h2&gt;
+
+&lt;p&gt;とりあえず，DockerCon14のデモをOSX上で再現してみる．まず，インストールは以下．Goがインストールされている必要がある．&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-bash&#34;&gt;$ go get github.com/docker/libswarm/...
+$ go install github.com/docker/libswarm/swarmd
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;h3 id=&#34;dockerclient:41cc6cd5853fa3d7d20008d6d7ded1fb&#34;&gt;dockerclient&lt;/h3&gt;
+
+&lt;p&gt;まず，dockerclientにboot2dockerを指定してみる．&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-bash&#34;&gt;$ swarmd &#39;dockerserver tcp://localhost:4567&#39; &#39;debug&#39; &amp;quot;dockerclient tcp://:2375&amp;quot;
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;別のウィンドウを立ち上げて，&lt;code&gt;DOCKER_HOST&lt;/code&gt;を&lt;code&gt;dockerserver&lt;/code&gt;で指定した値にして，コマンドを発行する．&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-bash&#34;&gt;$ export DOCKER_HOST=tcp://:4567
+$ docker run -d -p 80:80 dockerfile/nginx
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;すると，nginxコンテナが立ち上がる．&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-bash&#34;&gt;$ docker ps
+CONTAINER ID        IMAGE               COMMAND             CREATED             STATUS              PORTS                       NAMES
+3eac36e063d6        dockerfile/nginx    nginx               25 hours ago        Up                  0.0.0.0:80-&amp;gt;80/tcp, 0/tcp   evil_leakey
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;現時点（2014.07.10）では，ポートフォーワードは効かない．これを再現するには，&lt;a href=&#34;https://github.com/docker/libswarm/blob/master/backends/dockerclient.go&#34;&gt;libswarm/backends/dockerclient.go&lt;/a&gt;の&lt;code&gt;start()&lt;/code&gt;関数のポストパラメータを無理矢理いじるしかない．&lt;/p&gt;
+
+&lt;h3 id=&#34;digitalocean:41cc6cd5853fa3d7d20008d6d7ded1fb&#34;&gt;DigitalOcean&lt;/h3&gt;
+
+&lt;p&gt;次に，dockerclientにDigitalOceanに立てたサーバを指定してみる．&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-bash&#34;&gt;$ swarmd &#39;dockerserver tcp://localhost:4243&#39; &#39;debug&#39; &amp;quot;dockerclient $DIGITAL_OCEAN_HOST&amp;quot;
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;&lt;code&gt;DOCKER_HOST&lt;/code&gt;を指定してあれば上記を同じコマンドでnginxコンテナを立ち上げることができる．&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-bash&#34;&gt;$ docker run -d -p 80:80 dockerfile/nginx
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-bash&#34;&gt;$ docker ps
+CONTAINER ID        IMAGE               COMMAND             CREATED              STATUS              PORTS                       NAMES
+5d84aaca9fbc        dockerfile/nginx    nginx               About a minute ago   Up                  0.0.0.0:80-&amp;gt;80/tcp, 0/tcp   happy_mayer
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;h3 id=&#34;orchard:41cc6cd5853fa3d7d20008d6d7ded1fb&#34;&gt;Orchard&lt;/h3&gt;
+
+&lt;p&gt;次にOrchardバックエンドを使ってみる．これを使うには，OrchardのAPI tokenを事前に取得しておく必要がある．&lt;/p&gt;
+
+&lt;p&gt;まず，Orchardでホストを立ち上げる．&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-bash&#34;&gt;$ orchard hosts create
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;次に，Orchardバックエンドを指定して，swarmdを立ち上げる．&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-bash&#34;&gt;$ swarmd &#39;dockerserver tcp://localhost:4567&#39; &#39;debug&#39; &amp;quot;orchard $ORCHARD_API_TOKEN default&amp;quot;
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;あとは，同じコマンドでnginxコンテナを立ち上げることができる．&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-bash&#34;&gt;$ docker run -d -p 80:80 dockerfile/nginx
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-bash&#34;&gt;$ docker ps
+CONTAINER ID        IMAGE               COMMAND             CREATED             STATUS              PORTS                       NAMES
+6e26732ecc14        dockerfile/nginx    nginx               15 seconds ago      Up                  0.0.0.0:80-&amp;gt;80/tcp, 0/tcp   nostalgic_pike
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;h3 id=&#34;aggregate:41cc6cd5853fa3d7d20008d6d7ded1fb&#34;&gt;aggregate&lt;/h3&gt;
+
+&lt;p&gt;これまでのバックエンドサービスを全て指定する．これには，aggregateバックエンドを利用する．&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-bash&#34;&gt;$ swarmd &#39;dockerserver tcp://localhost:4567&#39; \
+    &amp;quot;aggregate &#39;dockerclient tcp://localhost:2375&#39; \
+               &#39;dockerclient $DIGITAL_OCEAN_HOST&#39; \
+               &#39;orchard $ORCHARD_API_TOKEN default&#39;&amp;quot;
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;コンテナの情報を取得してみる．&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-bash&#34;&gt;$ docker ps
+CONTAINER ID        IMAGE               COMMAND             CREATED             STATUS              PORTS                       NAMES
+3eac36e063d6        dockerfile/nginx    nginx               25 hours ago        Up                  0.0.0.0:80-&amp;gt;80/tcp, 0/tcp   evil_leakey
+5d84aaca9fbc        dockerfile/nginx    nginx               About a minute ago   Up                  0.0.0.0:80-&amp;gt;80/tcp, 0/tcp   happy_mayer
+6e26732ecc14        dockerfile/nginx    nginx               15 seconds ago      Up                  0.0.0.0:80-&amp;gt;80/tcp, 0/tcp   nostalgic_pike
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;上は期待する動作で，boot2docker，DigitalOcean，Orchardに立てたコンテナの情報が取得できるはず．現状は，&lt;code&gt;not implemented&lt;/code&gt;エラーになる．&lt;/p&gt;
+
+&lt;h2 id=&#34;将来できそうなこと:41cc6cd5853fa3d7d20008d6d7ded1fb&#34;&gt;将来できそうなこと&lt;/h2&gt;
+
+&lt;p&gt;最後に，&lt;a href=&#34;http://www.tech-d.net/2014/07/03/libswarm&#34;&gt;この記事&lt;/a&gt;を参考に将来こんなことできるようになるのでは？をざっと書いておく．&lt;/p&gt;
+
+&lt;p&gt;例えば，複数のdockerclientを指定する．&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-bash&#34;&gt;$ swarmd &#39;dockerserver tcp://:4567&#39; \
+    &#39;aggregate &amp;quot;dockerclient tcp://172.20.20.10:2375&amp;quot; \
+               &amp;quot;dockerclient tcp://172.20.20.11:2375&amp;quot; \
+               &amp;quot;dockerclient tcp://172.20.20.12:2375&amp;quot;&#39;
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;これに対して，&lt;code&gt;docker run&lt;/code&gt;を実行すると，dockerclientで指定したホストのどれか1つでコンテナを実行する．&lt;code&gt;docker ps&lt;/code&gt;をすると，すべてのホストからコンテナの情報を取得できる．また，コンテナ間のlink機能を複数ホストにまたがりそのまま使える．&lt;/p&gt;
+
+&lt;p&gt;例えば，Mesosバックエンド（実装されてない）を指定する．&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-bash&#34;&gt;$ swarmd &#39;dockerserver tcp://:4567&#39; \
+    &#39;mesos &amp;quot;dockerclient tcp://172.20.20.10:2375&amp;quot; \
+           &amp;quot;dockerclient tcp://172.20.20.11:2375&amp;quot; \
+           &amp;quot;dockerclient tcp://172.20.20.12:2375&amp;quot;&#39;
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;これに対して，&lt;code&gt;docker run&lt;/code&gt;を実行すると，Mesosがサーバのリソースの状況に合わせて，コンテナを実行する．&lt;/p&gt;
+
+&lt;p&gt;などなど．&lt;/p&gt;
+
+&lt;h2 id=&#34;まとめ:41cc6cd5853fa3d7d20008d6d7ded1fb&#34;&gt;まとめ&lt;/h2&gt;
+
+&lt;p&gt;期待は多いが，実装やコードを見てるとプロトタイプ感は半端ない．みんなでlibswarmにコミットしてコンテナオーケストレーションツールの乱立を阻止する必要がある．&lt;/p&gt;
+
+&lt;h2 id=&#34;参考:41cc6cd5853fa3d7d20008d6d7ded1fb&#34;&gt;参考&lt;/h2&gt;
+
+&lt;ul&gt;
+&lt;li&gt;&lt;a href=&#34;http://www.slideshare.net/shykes/docker-the-road-ahead&#34;&gt;Docker: the road ahead&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a href=&#34;http://www.centurylinklabs.com/analyzing-dockers-new-oss-libchan-and-libswarm/&#34;&gt;Analyzing Docker’s New OSS: libchan and libswarm | CenturyLink Labs&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a href=&#34;http://www.activestate.com/blog/2014/06/libswarm-docker-orchestration-announced&#34;&gt;libswarm - Docker Orchestration Announced | ActiveBlog: Insights on Code, the Cloud and More&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a href=&#34;http://yugui.jp/articles/880&#34;&gt;Dockerで何が変わるのか - 世界線航跡蔵&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a href=&#34;http://www.tech-d.net/2014/07/03/libswarm/&#34;&gt;Libswarm (in a nutshell) | Tech&amp;rsquo;d&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a href=&#34;http://www.slideshare.net/YutakaMatsubara/out-36624126&#34;&gt;How to impl libswarm backend&lt;/a&gt;&lt;/li&gt;
+&lt;/ul&gt;
+</description>
+    </item>
+    
+    <item>
+      <title>DockerによるマルチホストのPaaS flynnの概要とそのアーキテクチャー</title>
+      <link>http://deeeet.com/writing/2014/07/07/flynn/</link>
+      <pubDate>Mon, 07 Jul 2014 00:00:00 +0000</pubDate>
+      
+      <guid>http://deeeet.com/writing/2014/07/07/flynn/</guid>
+      <description>
+
+&lt;script async class=&#34;speakerdeck-embed&#34; data-id=&#34;3e5fba00e59601314f771288f3080752&#34; data-ratio=&#34;1.77777777777778&#34; src=&#34;http://speakerdeck.com/assets/embed.js&#34;&gt;&lt;/script&gt;
+
+&lt;p&gt;&lt;a href=&#34;https://speakerdeck.com/tcnksm/flynnfalseshi-dai-number-dockerjp&#34;&gt;&amp;ldquo;flynnの時代&amp;rdquo;&lt;/a&gt;&lt;/p&gt;
+
+&lt;p&gt;&lt;a href=&#34;http://connpass.com/event/6998/&#34;&gt;&amp;ldquo;Docker meetup tokyo #3&amp;rdquo;&lt;/a&gt;で発表してきた．内容は，Dockerの応用の１つであるOSSでPaaSをつくる&lt;a href=&#34;https://flynn.io&#34;&gt;flynn&lt;/a&gt;というプロジェクトの概要とそのアーキテクチャーの紹介．このflynnというプロジェクトの中には，Dockerの面白い使い方がたくさん詰まってるため，今後Dockerを使う人が，その応用の際の参考になればという思いで紹介させてもらった．&lt;/p&gt;
+
+&lt;p&gt;今回の発表のために資料を集めまくり，理解できない部分は出来る限りコードも読んだ．発表スライドの補完にもなると思うので，そのメモ書き（一応体裁は整えた）を公開しておく．&lt;/p&gt;
+
+&lt;h2 id=&#34;デモ:5de78529c255714e0db6de21637ac9d1&#34;&gt;デモ&lt;/h2&gt;
+
+&lt;p&gt;以下は，簡単なデモ．&lt;/p&gt;
+
+&lt;p&gt;&lt;img src=&#34;http://deeeet.com/images/flynn.gif&#34; class=&#34;image&#34;&gt;&lt;/p&gt;
+
+&lt;p&gt;やっていることは以下．&lt;/p&gt;
+
+&lt;ul&gt;
+&lt;li&gt;nodeのアプリケーションをデプロイ&lt;/li&gt;
+&lt;li&gt;ルーティングの追加&lt;/li&gt;
+&lt;li&gt;スケール&lt;/li&gt;
+&lt;/ul&gt;
+
+&lt;p&gt;コマンドを含めた詳しい解説は以下で解説する．&lt;/p&gt;
+
+&lt;h2 id=&#34;前提知識-herokuの動作:5de78529c255714e0db6de21637ac9d1&#34;&gt;前提知識 (Herokuの動作)&lt;/h2&gt;
+
+&lt;p&gt;まず，前提知識としてPaaS (ここではHeroku) がどのように動作しているのかをそのワークフローとともにまとめておく．&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-bash&#34;&gt;$ heroku create
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;ul&gt;
+&lt;li&gt;Stackと呼ばれるベースとなるOSを準備する
+
+&lt;ul&gt;
+&lt;li&gt;e.g., Cedar stack&lt;/li&gt;
+&lt;/ul&gt;&lt;/li&gt;
+&lt;/ul&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-bash&#34;&gt;$ git push heroku master
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;ol&gt;
+&lt;li&gt;アプリケーションがデプロイされる&lt;/li&gt;
+&lt;li&gt;slug compilerでアプリケーションをビルドしてslugを作成する
+
+&lt;ul&gt;
+&lt;li&gt;&lt;a href=&#34;https://devcenter.heroku.com/articles/slug-compiler&#34;&gt;slug compiler&lt;/a&gt;
+
+&lt;ul&gt;
+&lt;li&gt;各言語のBuildpackの集合&lt;/li&gt;
+&lt;li&gt;依存関係のインストール
+
+&lt;ul&gt;
+&lt;li&gt;e.g., RubyならGemfileをもとにrubygemsをインストール&lt;/li&gt;
+&lt;/ul&gt;&lt;/li&gt;
+&lt;/ul&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a href=&#34;https://devcenter.heroku.com/articles/platform-api-deploying-slugs&#34;&gt;slug&lt;/a&gt;
+
+&lt;ul&gt;
+&lt;li&gt;ソースと依存ライブラリ，言語のランタイムを含んだ圧縮されたファイルシステム(SquashFS)&lt;/li&gt;
+&lt;/ul&gt;&lt;/li&gt;
+&lt;/ul&gt;&lt;/li&gt;
+&lt;li&gt;アプリケーションの実行環境（Dyno）を準備する
+
+&lt;ul&gt;
+&lt;li&gt;&lt;a href=&#34;https://devcenter.heroku.com/articles/dynos&#34;&gt;Dyno&lt;/a&gt;
+
+&lt;ul&gt;
+&lt;li&gt;&lt;strong&gt;LXC&lt;/strong&gt;をベースにしたContainer環境&lt;/li&gt;
+&lt;/ul&gt;&lt;/li&gt;
+&lt;/ul&gt;&lt;/li&gt;
+&lt;li&gt;Dynoにslugをロードする&lt;/li&gt;
+&lt;li&gt;Procfileをもとにアプリケーションを起動する
+
+&lt;ul&gt;
+&lt;li&gt;&lt;a href=&#34;https://devcenter.heroku.com/articles/procfile&#34;&gt;Procfile&lt;/a&gt;
+
+&lt;ul&gt;
+&lt;li&gt;プロセスの起動コマンドを記述
+
+&lt;ul&gt;
+&lt;li&gt;e.g., &lt;code&gt;web: bundle exec rails server -p $PORT&lt;/code&gt;&lt;/li&gt;
+&lt;/ul&gt;&lt;/li&gt;
+&lt;/ul&gt;&lt;/li&gt;
+&lt;/ul&gt;&lt;/li&gt;
+&lt;/ol&gt;
+
+&lt;p&gt;&lt;img src=&#34;https://s3-eu-west-1.amazonaws.com/jon-assettest/dynos.jpg&#34; alt=&#34;&#34; /&gt;
+&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-bash&#34;&gt;$ heroku ps:scale web=2
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;ul&gt;
+&lt;li&gt;プロセスモデル（上図を参考）に基づき&lt;code&gt;web&lt;/code&gt;プロセスを増やす&lt;/li&gt;
+&lt;li&gt;実行Dynoの数を増やす&lt;/li&gt;
+&lt;/ul&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-bash&#34;&gt;$ heroku run bash
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;ul&gt;
+&lt;li&gt;Dynoにログインする（一度限りのプロセスを実行する）&lt;/li&gt;
+&lt;li&gt;新しくDynoが準備され，最新のSlugが読み込まれる&lt;/li&gt;
+&lt;li&gt;変更は他の起動中のDynoに影響を与えない&lt;/li&gt;
+&lt;/ul&gt;
+
+&lt;p&gt;Herokuの重要な要素はDynoとslugであることがわかる．これをDockerに置き換えるとslugはDockerイメージに，DynoはDockerコンテナと考えることができる．&lt;/p&gt;
+
+&lt;h2 id=&#34;flynnとは何か:5de78529c255714e0db6de21637ac9d1&#34;&gt;flynnとは何か？&lt;/h2&gt;
+
+&lt;p&gt;&lt;a href=&#34;https://flynn.io&#34;&gt;flynn&lt;/a&gt;はDockerによるPlatform-as-a-Service．開発には，dokkuの作者である&lt;a href=&#34;https://github.com/progrium&#34;&gt;@progrium&lt;/a&gt;氏も関わっている．OSSかつクラウドファンディングを受けて開発が進められている．実装はGo言語．&lt;/p&gt;
+
+&lt;h3 id=&#34;flynnが与えてくれるもの:5de78529c255714e0db6de21637ac9d1&#34;&gt;flynnが与えてくれるもの&lt;/h3&gt;
+
+&lt;p&gt;flynnのトップページには，「The product that ops provides to developers」が掲げられている．flynnは開発者に対して以下のようなものを可能にしてくれる．&lt;/p&gt;
+
+&lt;ul&gt;
+&lt;li&gt;簡単かつ一貫した方法でデプロイできる
+
+&lt;ul&gt;
+&lt;li&gt;e.g., git pushで，Dockerコンテナで&lt;/li&gt;
+&lt;/ul&gt;&lt;/li&gt;
+&lt;li&gt;どんな言語/フレームワークでも動かせる&lt;/li&gt;
+&lt;li&gt;簡単にスケールできる
+
+&lt;ul&gt;
+&lt;li&gt;新たにノードを追加するだけで&lt;/li&gt;
+&lt;/ul&gt;&lt;/li&gt;
+&lt;/ul&gt;
+
+&lt;h3 id=&#34;他のdockerによるossのpaas:5de78529c255714e0db6de21637ac9d1&#34;&gt;他のDockerによるOSSのPaaS&lt;/h3&gt;
+
+&lt;p&gt;DockerによるOSSなPaaSプロジェクトは他にもある．例えば，&lt;a href=&#34;https://github.com/progrium/dokku&#34;&gt;dokku&lt;/a&gt;や&lt;a href=&#34;http://deis.io/&#34;&gt;Deis&lt;/a&gt;が挙げられる．&lt;/p&gt;
+
+&lt;p&gt;[dokku]()は，100行のbashで書かれたシンプルなPaaS．dokkuの内部実装は&lt;a href=&#34;http://banyan.me/slides/20140116/slides.html&#34;&gt;&amp;ldquo;Inside Dokku in 5 minutes&amp;rdquo;&lt;/a&gt;が詳しい．flynnと比較すると，dokkuはシングルホストが前提となっているが，flynnはマルチホストに対応している点が異なる．分散システムの上にのったdokkuがflynnであると考えることもできる．&lt;/p&gt;
+
+&lt;p&gt;&lt;a href=&#34;http://deis.io&#34;&gt;Deis&lt;/a&gt;は，CoreOSを用いたマルチホストのDocker PaaS．Deisについては，DockerCoon14の発表&lt;a href=&#34;http://gabrtv.github.io/deis-dockercon-2014/#/&#34;&gt;&amp;ldquo;Deis: Evolution of a Docker PAAS&amp;rdquo;&lt;/a&gt;が詳しい．flynnとDeisでできることはほとんど変わらない．敢えて比較するなら，DeisはCoreOSが前提であるが，flynnはOSを限定しない（現状はUbuntuが使われているが）．&lt;/p&gt;
+
+&lt;h2 id=&#34;flynnのアーキテクチャーの概要:5de78529c255714e0db6de21637ac9d1&#34;&gt;flynnのアーキテクチャーの概要&lt;/h2&gt;
+
+&lt;p&gt;flynnのアーキテクチャーは，シンプルで理解しやすいようにデザインされている．ほとんどのコンポーネントがDockerコンテナとして動作する．すべてがコンテナで動作するため，flynnにデプロイされるサービスやアプリケーションは，flynnを構成するコンポーネントと同様であると見なすこともできる．また，コンポーネントはモジュラー的に実装されているため，再利用，変更，切り替えが容易になっている（すべてがDockerコンテナで動作する様子は，&lt;a href=&#34;https://github.com/flynn/flynn-demo&#34;&gt;flynn/flynn-demo&lt;/a&gt;の&lt;a href=&#34;https://github.com/flynn/flynn-demo/blob/master/Vagrantfile&#34;&gt;Vagrantfile&lt;/a&gt;を見るとわかる）．&lt;/p&gt;
+
+&lt;p&gt;flynnのアーキテクチャーは大きく分けて2つのレイヤーに分けることができる．&lt;/p&gt;
+
+&lt;ul&gt;
+&lt;li&gt;&lt;strong&gt;layer0 (The Grid)&lt;/strong&gt;
+
+&lt;ul&gt;
+&lt;li&gt;低位なリソースフレームワーク層&lt;/li&gt;
+&lt;li&gt;この上に載る全てのアプリケーションやサービスの基礎&lt;/li&gt;
+&lt;li&gt;コンテナ管理, サービスディスカバリー, タスクスケジューラー, 分散型KVS（etcd）&lt;/li&gt;
+&lt;/ul&gt;&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;layer1&lt;/strong&gt;
+
+&lt;ul&gt;
+&lt;li&gt;高位なコンポーネント層&lt;/li&gt;
+&lt;li&gt;PaaSの基本的な機能
+
+&lt;ul&gt;
+&lt;li&gt;e.g., Git-receive，Heroku Buildpack，DB，HTTP Routing&lt;/li&gt;
+&lt;/ul&gt;&lt;/li&gt;
+&lt;/ul&gt;&lt;/li&gt;
+&lt;/ul&gt;
+
+&lt;h2 id=&#34;layer0-the-grid:5de78529c255714e0db6de21637ac9d1&#34;&gt;layer0 (The Grid)&lt;/h2&gt;
+
+&lt;p&gt;layer0は&lt;a href=&#34;http://mesos.apache.org/&#34;&gt;Apache Mesos&lt;/a&gt;やGoogleの&lt;a href=&#34;http://eurosys2013.tudos.org/wp-content/uploads/2013/paper/Schwarzkopf.pdf&#34;&gt;Omega&lt;/a&gt;の影響を受けた，リソースフレームワーク層．以下の2つコンポーネントから成る．&lt;/p&gt;
+
+&lt;ul&gt;
+&lt;li&gt;&lt;a href=&#34;https://github.com/flynn/discoverd&#34;&gt;flynn/discoverd&lt;/a&gt;
+
+&lt;ul&gt;
+&lt;li&gt;サービスディスカバリー&lt;/li&gt;
+&lt;/ul&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a href=&#34;https://github.com/flynn/flynn-host&#34;&gt;flynn/flynn-host&lt;/a&gt;
+
+&lt;ul&gt;
+&lt;li&gt;コンテナ管理，タスクスケジューラー&lt;/li&gt;
+&lt;/ul&gt;&lt;/li&gt;
+&lt;/ul&gt;
+
+&lt;p&gt;この2つのコンポーネントは全てのホストで起動する．&lt;/p&gt;
+
+&lt;h3 id=&#34;flynn-discoverd:5de78529c255714e0db6de21637ac9d1&#34;&gt;flynn/discoverd&lt;/h3&gt;
+
+&lt;p&gt;discoverdはサービスディスカバリーを行う．具体的には，ホストのクラスタを構築し，メンバーの参加/離脱イベントを他のホストのメンバーに通知する等を行う．&lt;/p&gt;
+
+&lt;p&gt;discoverdには専用のクライアントである，&lt;a href=&#34;https://github.com/flynn/go-discoverd&#34;&gt;flynn/go-discoverd&lt;/a&gt;がある．このクライアントを通して，クラスタへのホストの登録/削除や，各ホストのアドレスやメタ情報，新しいホストの参加/離脱のイベントの購読を行う．&lt;/p&gt;
+
+&lt;p&gt;現在バックエンドには，CoreOSのetcdを利用している．これは，ZooKeeperなどに入れ替え可能にしていくとのこと．&lt;/p&gt;
+
+&lt;h3 id=&#34;flynn-flynn-host:5de78529c255714e0db6de21637ac9d1&#34;&gt;flynn/flynn-host&lt;/h3&gt;
+
+&lt;p&gt;flynn-hostは，HTTP API経由でホストのDockerコンテナの管理を行う．flynn-hostには，リーダーとそれ以外という役割がある．リーダーは，クラスタ全体のホストの一覧とそれらが実行しているジョブの管理や新しいジョブの登録/依頼を行う．それ以外は，リーダから依頼されたジョブをDockerコンテナで実行/停止，実行中のジョブ，指定されたジョブの情報の返答を行う．&lt;/p&gt;
+
+&lt;p&gt;flynn-hostは，内部にGoogle Omegaの影響を受けたタスクスケジューラフレームワークである，&lt;a href=&#34;https://github.com/flynn/flynn-host/tree/master/sampi&#34;&gt;flynn/flynn-host/sampi&lt;/a&gt;を持っている．&lt;/p&gt;
+
+&lt;h2 id=&#34;layer1:5de78529c255714e0db6de21637ac9d1&#34;&gt;layer1&lt;/h2&gt;
+
+&lt;p&gt;layer1には基本的なPaaSの機能がくる．また，実際にユーザにデプロイされるアプリケーションもlayer1に存在する（ユーザランドとしてのlayer2が存在しないのは，実際にデプロイされるアプリケーションとlayer1のコンポーネントに技術的な差がないため）．layer1のコンポーネントは以下．&lt;/p&gt;
+
+&lt;ul&gt;
+&lt;li&gt;&lt;a href=&#34;https://github.com/flynn/flynn-controller&#34;&gt;flynn-controller&lt;/a&gt;
+
+&lt;ul&gt;
+&lt;li&gt;Flynn上で動いているアプリケーションをHTTP APIで管理する&lt;/li&gt;
+&lt;li&gt;HerokuのPlatfrom APIにインスパイアを受けている&lt;/li&gt;
+&lt;/ul&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a href=&#34;https://github.com/flynn/flynn-cli&#34;&gt;flynn-cli&lt;/a&gt;
+
+&lt;ul&gt;
+&lt;li&gt;flynn-controller (HTTP API) のコマンドラインクライアント&lt;br /&gt;&lt;/li&gt;
+&lt;/ul&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a href=&#34;https://github.com/flynn/flynn-bootstrap&#34;&gt;flynn-bootstrap&lt;/a&gt;
+
+&lt;ul&gt;
+&lt;li&gt;設定ファイルに基づきLayer1を起動する&lt;/li&gt;
+&lt;/ul&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a href=&#34;https://github.com/flynn/gitreceived&#34;&gt;flynn/gitreceived&lt;/a&gt;
+
+&lt;ul&gt;
+&lt;li&gt;git pushをうけることに特化したSSHサーバ&lt;/li&gt;
+&lt;li&gt;git pushを契機にauthcheckerスクリプトとreceiverスクリプトを動かす&lt;/li&gt;
+&lt;/ul&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a href=&#34;https://github.com/flynn/flynn-receive&#34;&gt;flynn/flynn-receive&lt;/a&gt;
+
+&lt;ul&gt;
+&lt;li&gt;gitreceivedをラップして認証とアプリケーションのビルド/実行を行う&lt;/li&gt;
+&lt;/ul&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a href=&#34;https://github.com/flynn/slugbuilder&#34;&gt;flynn/slugbuilder&lt;/a&gt;
+
+&lt;ul&gt;
+&lt;li&gt;Dockerとbuildpackを使ってHeroku的なslugを作成する&lt;/li&gt;
+&lt;/ul&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a href=&#34;https://github.com/flynn/slugrunner&#34;&gt;flynn/slugrunner&lt;/a&gt;
+
+&lt;ul&gt;
+&lt;li&gt;slugbuilderで作成されたslugを実行する&lt;/li&gt;
+&lt;/ul&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a href=&#34;https://github.com/flynn/strowger&#34;&gt;strowger&lt;/a&gt;
+
+&lt;ul&gt;
+&lt;li&gt;HTTP/TCP のルータ（リバースプロキシ）&lt;/li&gt;
+&lt;/ul&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a href=&#34;https://github.com/flynn/shelf&#34;&gt;shelf&lt;/a&gt;
+
+&lt;ul&gt;
+&lt;li&gt;シンプルなHTTPのファイルサービス&lt;/li&gt;
+&lt;li&gt;HTTPを通してファイルの読み出し／書き込み，削除のインターフェースを提供する&lt;/li&gt;
+&lt;li&gt;シンプルなS3&lt;/li&gt;
+&lt;/ul&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a href=&#34;https://github.com/flynn/flynn-postgres&#34;&gt;flynn-postgres&lt;/a&gt;
+
+&lt;ul&gt;
+&lt;li&gt;flynn専用のPostgreSQL&lt;/li&gt;
+&lt;li&gt;今後他のDBにも対応する予定&lt;/li&gt;
+&lt;/ul&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a href=&#34;https://github.com/flynn/taffy&#34;&gt;Taffy&lt;/a&gt;
+
+&lt;ul&gt;
+&lt;li&gt;レポジトリをpullしてflynnにデプロイする&lt;/li&gt;
+&lt;/ul&gt;&lt;/li&gt;
+&lt;/ul&gt;
+
+&lt;h3 id=&#34;flynn-gitreceived:5de78529c255714e0db6de21637ac9d1&#34;&gt;flynn/gitreceived&lt;/h3&gt;
+
+&lt;p&gt;gitreceivedはgit pushを受けるこをに特化したSSHサーバ．アプリケーションがgit pushによりデプロイされると，gitreceivedは以下を行う．&lt;/p&gt;
+
+&lt;ol&gt;
+&lt;li&gt;認証キーとユーザ名を引数に&lt;code&gt;authchecker&lt;/code&gt;スクリプトの実行&lt;/li&gt;
+&lt;li&gt;pushされたアプリケーションのソース(.tar)を引数に&lt;code&gt;receiver&lt;/code&gt;スクリプトの実行&lt;/li&gt;
+&lt;/ol&gt;
+
+&lt;p&gt;flynnはこれをflynn-receiveでラップして使っている．flynn-receiveでは，&lt;code&gt;receiver&lt;/code&gt;スクリプトで以下をflynn-controllerに要請している．&lt;/p&gt;
+
+&lt;ol&gt;
+&lt;li&gt;slugbuilderでアプリケーションのビルド (slugの作成)&lt;/li&gt;
+&lt;li&gt;slugをslugrunnerで実行&lt;/li&gt;
+&lt;/ol&gt;
+
+&lt;h3 id=&#34;flynn-slugbuilder:5de78529c255714e0db6de21637ac9d1&#34;&gt;flynn/slugbuilder&lt;/h3&gt;
+
+&lt;p&gt;slugbuilderはDockerとHerokuのbuildpackを使ってHeroku的なslugを作成する．具体的には以下を実行している．&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-bash&#34;&gt;$ id=$(git archive master | docker run -i -a stdin flynn/slugbuilder) 
+$ docker wait $id
+$ docker cp $id:/tmp/slug.tgz . # コンテナ内のslug.tgzを取り出す
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;flynn/slugbuilderというDockerコンテナにアプリケーションのソースを標準入力から突っ込み，コンテナ内部でHerokuのbuildpackを使ったビルドを実行する．ビルドが終わったら，&lt;code&gt;docker cp&lt;/code&gt;で生成物を取り出す．&lt;/p&gt;
+
+&lt;h3 id=&#34;flynn-slugrunner:5de78529c255714e0db6de21637ac9d1&#34;&gt;flynn/slugrunner&lt;/h3&gt;
+
+&lt;p&gt;slugrunnerはslugbuilderで作成された（Heroku的な）slugを実行する．具体的には以下を実行している．&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-bash&#34;&gt;$ cat myslug.tgz |
+    docker run -i -a stdin -a stdout flynn/slugrunner start web
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;flynn/slugrunnerというDockerコンテナにslugを標準入力から突っ込み，&lt;code&gt;Procfile&lt;/code&gt;に基づくwebプロセスを実行する．&lt;/p&gt;
+
+&lt;h3 id=&#34;flynn-strowger:5de78529c255714e0db6de21637ac9d1&#34;&gt;flynn/strowger&lt;/h3&gt;
+
+&lt;p&gt;strowgerはTCP/HTTP ルータで，複数のslugrunnerに対するランダムロードバランシングのためのリバースプロキシとして動作する．サービスディスカバリーがバックで動いており，背後で何が起動したかを常に監視する．&lt;/p&gt;
+
+&lt;p&gt;HAProxyやnginxと比較した利点は，サービスディスカバリーをネイティブで持っていることで，動的な設定変更が可能である点（HAProxyやnginxは設定変更で新しくプロセスを作成する必要がある）．&lt;/p&gt;
+
+&lt;h2 id=&#34;flynnの操作:5de78529c255714e0db6de21637ac9d1&#34;&gt;flynnの操作&lt;/h2&gt;
+
+&lt;p&gt;flynnは専用のコマンドクライアントである&lt;a href=&#34;https://github.com/flynn/flynn-cli&#34;&gt;flynn/flynn-cli&lt;/a&gt;を使って操作する．&lt;/p&gt;
+
+&lt;p&gt;まず，サーバを登録する．以下を実行すると設定が&lt;code&gt;~/.flynnrc&lt;/code&gt;に書き込まれる．&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-bash&#34;&gt;$ flynn server-add \
+    -g lxr.flynnhub.com \ #githost
+    -p XXXXXXXXXXXXXXXX \ # SHA256 of the server&#39;s TLS cert
+    &amp;quot;flynn-demo&amp;quot; \ # server-name
+    https://lxr.flynnhub.com \ # server url
+    xxxxxxxxxxxxxxxxxxxxxxxx # key
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;次に，SSH-KEYを登録する．&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-bash&#34;&gt;$ flynn key-add
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;アプリケーションの作成は以下．git remoteを追加しつつ，flynn-controllerにそれを伝えている．&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-bash&#34;&gt;$ flynn create node-demo
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;アプリケーションのデプロイはHerokuと同様にgitを使う．これによりgitreceivedでアプリケーションのソースコードが受け取られ，slugbuilderでビルド，slugrunnerで実行，が行われる．&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-bash&#34;&gt;$ git push flynn master
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;ルーティングを確認するには以下．&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-bash&#34;&gt;$ flynn routes
+ROUTE                            SERVICE        ID
+http:node-demo.lxr.flynnhub.com  node-demo-web  http/65ae6884514622f0e7dcd85f71724814
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;新しいルーティングを追加するには以下．&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-bash&#34;&gt;$ flynn route-add-http docker-meetup.lxr.flynnhub.com
+$ flynn routes
+ROUTE                                SERVICE        ID
+http:docker-meetup.lxr.flynnhub.com  node-demo-web  http/8aecdfad5adb70ddff6a2ac32b79da4d
+http:node-demo.lxr.flynnhub.com      node-demo-web  http/65ae6884514622f0e7dcd85f71724814
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;不要になったルートはそのIDを使って削除する．&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-bash&#34;&gt;$ flynn route-remove http/baf06246e4ec7f3486a89a2e313205ba
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;プロセスを確認する (&lt;code&gt;docker ps&lt;/code&gt;)．&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-bash&#34;&gt;$ flynn ps
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;ログはプロセスのIDで確認する (&lt;code&gt;docker log&lt;/code&gt;)．&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-bash&#34;&gt;$ flynn log e4cffae4ce2b-8cb1212f582f498eaed467fede768d6f
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;スケールは以下で行う．これは単純にDockerコンテナの数を増やしているだけ．&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-bash&#34;&gt;$ flynn scale web=8
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;slug (コンテナ) に対してを直接コマンドの実行を要請することもできる．例えばbashを起動してコンテナの内部に入ることもできる．&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-bash&#34;&gt;$ flynn run bash
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;h2 id=&#34;最後に:5de78529c255714e0db6de21637ac9d1&#34;&gt;最後に&lt;/h2&gt;
+
+&lt;p&gt;今回Docker meetupで発表の機会をもうけて頂いた&lt;a href=&#34;https://twitter.com/stanaka&#34;&gt;@stanaka&lt;/a&gt;さん，&lt;a href=&#34;https://twitter.com/kazunori_279&#34;&gt;@kazunori_279&lt;/a&gt;さんありがとうございました．他のスタッフのかたもありがとうございました．&lt;/p&gt;
+
+&lt;p&gt;帰りにゲストの&lt;a href=&#34;https://twitter.com/philwhln&#34;&gt;@philwhln&lt;/a&gt;を駅まで送って行き，Solomon Hykes氏によるlibswarm，Mitchell Hashimoto氏によるConsulのインタビューなどの話を聴けたのは良い思い出．&lt;/p&gt;
+
+&lt;h2 id=&#34;参考文献:5de78529c255714e0db6de21637ac9d1&#34;&gt;参考文献&lt;/h2&gt;
+
+&lt;ul&gt;
+&lt;li&gt;&lt;a href=&#34;https://flynn.io/&#34;&gt;&amp;ldquo;Flynn - Open source Platform as a Service powered by Docker&amp;rdquo;&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a href=&#34;http://progrium.com/blog/2014/02/06/the-start-of-the-age-of-flynn/&#34;&gt;&amp;ldquo;The Start of the Age of Flynn&amp;rdquo;&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a href=&#34;http://jpetazzo.github.io/2013/11/17/flynn-docker-paas/&#34;&gt;&amp;ldquo;Unveiling Flynn, a new PAAS based on Docker&amp;rdquo;&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a href=&#34;http://5by5.tv/changelog/99&#34;&gt;&amp;ldquo;5by5 | The Changelog #99: Flynn, Tent, open source PaaSes and more with Jeff Lindsay and Jonathan Rudenberg&amp;rdquo;&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a href=&#34;http://5by5.tv/changelog/115&#34;&gt;&amp;ldquo;5by5 | The Changelog #115: Flynn updates with Jonathan Rudenberg and Jeff Lindsay&amp;rdquo;&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a href=&#34;https://flynn.io/blog/container-indepedence&#34;&gt;&amp;ldquo;Container Independence&amp;rdquo;&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a href=&#34;https://docs.google.com/presentation/d/1ni1BFiVMTLN_8q34si-qPfl0F6w2W3oPVKqSMfcs_XA/edit#slide=id.p&#34;&gt;&amp;ldquo;Bazooka: Continuous Deployment at SoundCloud - Google Slides&amp;rdquo;&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a href=&#34;http://gabrtv.github.io/deis-dockercon-2014/#/&#34;&gt;&amp;ldquo;Deis: Evolution of a Docker PAAS&amp;rdquo;&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a href=&#34;http://www.centurylinklabs.com/flynn-vs-deis-the-tale-of-two-docker-micro-paas-technologies/&#34;&gt;&amp;ldquo;Flynn vs. Deis: The Tale of Two Docker Micro-PaaS Technologies | CenturyLink Labs&amp;rdquo;&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a href=&#34;http://banyan.me/slides/20140116/slides.html&#34;&gt;&amp;ldquo;Inside Dokku in 5 minutes&amp;rdquo;&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a href=&#34;http://r7kamura.github.io/2014/06/24/discoverd.html&#34;&gt;&amp;ldquo;Discoverd - r7km/s&amp;rdquo;&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a href=&#34;http://r7kamura.github.io/2014/06/26/flynn-host.html&#34;&gt;&amp;ldquo;Flynn Host - r7km/s&amp;rdquo;&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a href=&#34;http://progrium.com/blog/2014/07/01/beyond-flynn-or-flynn-as-a-worldview/&#34;&gt;&amp;ldquo;Beyond Flynn, or Flynn-as-a-Worldview&amp;rdquo;&lt;/a&gt;&lt;/li&gt;
+&lt;/ul&gt;
+</description>
+    </item>
+    
+    <item>
+      <title>flynnの時代</title>
+      <link>http://deeeet.com/talking/2014/07/07/docker-meetup-3/</link>
+      <pubDate>Mon, 07 Jul 2014 00:00:00 +0000</pubDate>
+      
+      <guid>http://deeeet.com/talking/2014/07/07/docker-meetup-3/</guid>
+      <description>
+
+&lt;script async class=&#34;speakerdeck-embed&#34; data-id=&#34;3e5fba00e59601314f771288f3080752&#34; data-ratio=&#34;1.77777777777778&#34; src=&#34;http://speakerdeck.com/assets/embed.js&#34;&gt;&lt;/script&gt;
+
+&lt;p&gt;&lt;a href=&#34;http://connpass.com/event/6998/&#34;&gt;Docker meetup tokyo #3&lt;/a&gt;&lt;/p&gt;
+
+&lt;p&gt;内容は，Dockerの応用の１つであるOSSでPaaSをつくる&lt;a href=&#34;https://flynn.io&#34;&gt;flynn&lt;/a&gt;というプロジェクトの概要とそのアーキテクチャーの紹介．FlynnのアーキテクチャやDockerの使いかたは非常に面白く，これからDockerを使うときに参考になると思い発表した．&lt;/p&gt;
+
+&lt;h3 id=&#34;参考:2364097a629fda60c10c2510028fb9d6&#34;&gt;参考&lt;/h3&gt;
+
+&lt;ul&gt;
+&lt;li&gt;&lt;a href=&#34;https://flynn.io/&#34;&gt;&amp;ldquo;Flynn - Open source Platform as a Service powered by Docker&amp;rdquo;&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a href=&#34;http://progrium.com/blog/2014/02/06/the-start-of-the-age-of-flynn/&#34;&gt;&amp;ldquo;The Start of the Age of Flynn&amp;rdquo;&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a href=&#34;http://jpetazzo.github.io/2013/11/17/flynn-docker-paas/&#34;&gt;&amp;ldquo;Unveiling Flynn, a new PAAS based on Docker&amp;rdquo;&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a href=&#34;http://5by5.tv/changelog/99&#34;&gt;&amp;ldquo;5by5 | The Changelog #99: Flynn, Tent, open source PaaSes and more with Jeff Lindsay and Jonathan Rudenberg&amp;rdquo;&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a href=&#34;http://5by5.tv/changelog/115&#34;&gt;&amp;ldquo;5by5 | The Changelog #115: Flynn updates with Jonathan Rudenberg and Jeff Lindsay&amp;rdquo;&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a href=&#34;https://flynn.io/blog/container-indepedence&#34;&gt;&amp;ldquo;Container Independence&amp;rdquo;&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a href=&#34;https://docs.google.com/presentation/d/1ni1BFiVMTLN_8q34si-qPfl0F6w2W3oPVKqSMfcs_XA/edit#slide=id.p&#34;&gt;&amp;ldquo;Bazooka: Continuous Deployment at SoundCloud - Google Slides&amp;rdquo;&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a href=&#34;http://gabrtv.github.io/deis-dockercon-2014/#/&#34;&gt;&amp;ldquo;Deis: Evolution of a Docker PAAS&amp;rdquo;&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a href=&#34;http://www.centurylinklabs.com/flynn-vs-deis-the-tale-of-two-docker-micro-paas-technologies/&#34;&gt;&amp;ldquo;Flynn vs. Deis: The Tale of Two Docker Micro-PaaS Technologies | CenturyLink Labs&amp;rdquo;&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a href=&#34;http://banyan.me/slides/20140116/slides.html&#34;&gt;&amp;ldquo;Inside Dokku in 5 minutes&amp;rdquo;&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a href=&#34;http://r7kamura.github.io/2014/06/24/discoverd.html&#34;&gt;&amp;ldquo;Discoverd - r7km/s&amp;rdquo;&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a href=&#34;http://r7kamura.github.io/2014/06/26/flynn-host.html&#34;&gt;&amp;ldquo;Flynn Host - r7km/s&amp;rdquo;&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a href=&#34;http://progrium.com/blog/2014/07/01/beyond-flynn-or-flynn-as-a-worldview/&#34;&gt;&amp;ldquo;Beyond Flynn, or Flynn-as-a-Worldview&amp;rdquo;&lt;/a&gt;&lt;/li&gt;
+&lt;/ul&gt;
+</description>
+    </item>
+    
+    <item>
+      <title>Proxy環境下でDockerを動かす</title>
+      <link>http://deeeet.com/writing/2014/07/01/docker-behind-proxy/</link>
+      <pubDate>Tue, 01 Jul 2014 00:00:00 +0000</pubDate>
+      
+      <guid>http://deeeet.com/writing/2014/07/01/docker-behind-proxy/</guid>
+      <description>
+
+&lt;p&gt;Docker1.0がリリースされたことで，プロダクションレディ感もあり，企業でもDockerを使う機運が高まっている．でも，実際はまだまだ本番環境ではなく，テスト環境などで使われることが多い．&lt;/p&gt;
+
+&lt;p&gt;Dockerによるテスト環境構築でまず思い浮かぶのは&lt;a href=&#34;https://github.com/progrium/dokku&#34;&gt;dokku&lt;/a&gt;．dokkuはDockerを使ったbash実装のPaaS．プライベートPaaSを持たない，かつHerokuなどを気軽に使えない企業のテスト環境として今後使われる機会がありそう．&lt;/p&gt;
+
+&lt;p&gt;ただ，個人での利用とは違い企業などでDockerやdokkuを使う場合は，Proxyに阻まれることがある（というか今日阻まれた）．ので，Proxy環境下でのDocker，dokkuの使い方を簡単にまとめておく．まず，Docker全般に関して，次にdokku特有の問題についてProxyの問題を解決しなければならない状況とその解決方法を説明する．&lt;/p&gt;
+
+&lt;h2 id=&#34;proxy環境下でのdocker:ea3937ae50390dd1a705f32ab47db421&#34;&gt;Proxy環境下でのDocker&lt;/h2&gt;
+
+&lt;p&gt;Dockerを使う中で，外部ネットワークとのやりとりが必要になるのは，以下の3つの場合が考えられる．&lt;/p&gt;
+
+&lt;ul&gt;
+&lt;li&gt;DockerHub（Docker Index）とのやりとり&lt;/li&gt;
+&lt;li&gt;Dockerfile&lt;/li&gt;
+&lt;li&gt;Dockerコンテナ&lt;/li&gt;
+&lt;/ul&gt;
+
+&lt;p&gt;これらの解決方法をそれぞれ説明する．&lt;/p&gt;
+
+&lt;h3 id=&#34;dockerhub-docker-index:ea3937ae50390dd1a705f32ab47db421&#34;&gt;DockerHub（Docker Index）&lt;/h3&gt;
+
+&lt;p&gt;まずは，DockerHub（Docker Index）とのやりとりを行う場合．例えば，&lt;code&gt;docker pull&lt;/code&gt;などでイメージを取得する場合など．&lt;/p&gt;
+
+&lt;p&gt;この場合は，dockerデーモンを起動する際に&lt;code&gt;http_proxy&lt;/code&gt;環境変数を設定すればよい．例えば，Ubuntuの場合は，Upstartの設定ファイル&lt;code&gt;/etc/default/docker&lt;/code&gt;に&lt;code&gt;export http_proxy=&amp;lt;HTTP_PROXY&amp;gt;&lt;/code&gt;を記述すればよい．&lt;/p&gt;
+
+&lt;h3 id=&#34;dockerfile:ea3937ae50390dd1a705f32ab47db421&#34;&gt;Dockerfile&lt;/h3&gt;
+
+&lt;p&gt;次に，Dockerfileで外部ネットワークとやりとりを行う場合．例えば，&lt;code&gt;apt-get&lt;/code&gt;などでパッケージをインストールする場合など．&lt;/p&gt;
+
+&lt;p&gt;この場合は，&lt;code&gt;ENV&lt;/code&gt;コマンドを使ってDockerfile内で環境変数を設定すればよい．&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-bash&#34;&gt;FROM ubuntu:13.10
+ENV http_proxy &amp;lt;HTTP_PROXY&amp;gt;
+ENV https_proxy &amp;lt;HTTPS_PROXY&amp;gt;
+RUN apt-get -y update
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;h3 id=&#34;dockerコンテナ:ea3937ae50390dd1a705f32ab47db421&#34;&gt;Dockerコンテナ&lt;/h3&gt;
+
+&lt;p&gt;最後は，&lt;code&gt;docker run&lt;/code&gt;でコンテナを起動した後に，コンテナ内から外部ネットワークとやりとりをする場合．例えば，サードパーティー製のDockerイメージをそのまま使う場合など．&lt;/p&gt;
+
+&lt;p&gt;この場合は，&lt;code&gt;-e&lt;/code&gt;オプションを使って&lt;code&gt;http_proxy&lt;/code&gt;環境変数を設定してコンテナを起動すればよい．&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-bash&#34;&gt;$ docker run -d \
+    -e &amp;quot;http_proxy=&amp;lt;HTTP_PROXY&amp;gt;&amp;quot; \
+    progrium/buildstep /build/builder
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;h2 id=&#34;proxy環境下でのdokku:ea3937ae50390dd1a705f32ab47db421&#34;&gt;Proxy環境下でのdokku&lt;/h2&gt;
+
+&lt;p&gt;dokkuのインストール以外で，dokkuが外部ネットワークとやりとりするのは以下の2カ所．&lt;/p&gt;
+
+&lt;ul&gt;
+&lt;li&gt;dokku専用のDockerイメージ&lt;a href=&#34;https://github.com/progrium/buildstep&#34;&gt;progrium/buildstep&lt;/a&gt;のpull&lt;/li&gt;
+&lt;li&gt;Buildpackを使ったアプリケーションのビルド&lt;/li&gt;
+&lt;/ul&gt;
+
+&lt;p&gt;1つ目は上記のDockerHubとのやりとりで示した方法で解決できる．2つ目は若干のハックが必要になる．&lt;/p&gt;
+
+&lt;p&gt;dokkuはHerokuと同様にアプリケーションのビルドにBuildpackを使用し，依存パッケージ等のインストールを行う．このビルドは，dokku専用のDockerイメージ&lt;a href=&#34;https://github.com/progrium/buildstep&#34;&gt;progrium/buildstep&lt;/a&gt;を使い，そのコンテナ内で実行される．よって，そのときにProxyが設定されている必要がある．これは上記のDockerコンテナで示した方法で解決できる．&lt;/p&gt;
+
+&lt;p&gt;dokkuは，bash実装なので，&lt;code&gt;/usr/local/bin/dokku&lt;/code&gt;を直接編集してしまえばよい．編集するのは，&lt;code&gt;build/builder&lt;/code&gt;コマンドと共にコンテナを起動するところ．そこで&lt;code&gt;-e&lt;/code&gt;オプションを使って環境変数を設定すればよい．&lt;/p&gt;
+
+&lt;p&gt;具体的には，&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-bash&#34;&gt;id=$(docker run -d -v $CACHE_DIR:/cache $IMAGE /build/builder)
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;を以下のようにする．&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-bash&#34;&gt;id=$(docker run -d -v $CACHE_DIR:/cache -e &amp;quot;http_proxy=&amp;lt;HTTP_PROXY&amp;gt;&amp;quot; -e &amp;quot;https_proxy=&amp;lt;HTTP_PROXY&amp;gt;&amp;quot; $IMAGE /build/builder)
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;でも，ソースいじるのはあれだから良い方法があれば教えてください．&lt;/p&gt;
+</description>
+    </item>
+    
+    <item>
+      <title>カーネル読書会 #111でLTしてきた&#43;Dockerによる次世代のPaaS</title>
+      <link>http://deeeet.com/writing/2014/05/30/ylug-111/</link>
+      <pubDate>Fri, 30 May 2014 00:00:00 +0000</pubDate>
+      
+      <guid>http://deeeet.com/writing/2014/05/30/ylug-111/</guid>
+      <description>&lt;script async class=&#34;speakerdeck-embed&#34; data-id=&#34;231be5a0ca170131569646e151884671&#34; data-ratio=&#34;1.33333333333333&#34; src=&#34;https://speakerdeck.com/assets/embed.js&#34;&gt;&lt;/script&gt;
+
+&lt;p&gt;&lt;a href=&#34;https://speakerdeck.com/tcnksm/dockerdepaaswotukuru-number-ylug-111&#34;&gt;&amp;ldquo;DockerでPaaSをつくる #ylug_111&amp;rdquo;&lt;/a&gt;&lt;/p&gt;
+
+&lt;p&gt;&lt;a href=&#34;https://twitter.com/hyoshiok&#34;&gt;@hyoshiok&lt;/a&gt;さんにカーネル読書会でLTをする機会をいただいた．内容はDockerの応用の１つでOSSのPaaSをつくるというもの．Herokuの内部実装を説明しつつ，Dockerによりいかに簡単にPaaSを作れるようになったかを話した．&lt;/p&gt;
+
+&lt;p&gt;最後にちょっと話した，次世代のPaaSもしくはHeroku++を目指す&lt;a href=&#34;https://flynn.io/&#34;&gt;Flynn&lt;/a&gt;は，野心的ですごく面白い．簡単にいうとFlynnはHerokuの簡便さとAmazon EC2のような自由度を兼ね備えたPaaSを目指している．Flynnは以下の2つのレイヤーで構成される．&lt;/p&gt;
+
+&lt;ul&gt;
+&lt;li&gt;&lt;strong&gt;layer0&lt;/strong&gt;：CoreOSのetcdによるサービスディスカバリー層&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;layor1&lt;/strong&gt;：Herokuのようなアプリケーションのデプロイ+管理層&lt;/li&gt;
+&lt;/ul&gt;
+
+&lt;p&gt;このプロジェクトには&lt;a href=&#34;https://github.com/progrium/dokku&#34;&gt;dokku&lt;/a&gt;の作者である&lt;a href=&#34;https://github.com/progrium&#34;&gt;@progrium&lt;/a&gt;さんも関わっている．dokkuは単にProof of conceptで，実際にこの辺のコミュニティが目指してるのはFlynnのような次世代のPaaSなんだろうなと思う（詳しくは&lt;a href=&#34;http://progrium.com/blog/2014/02/06/the-start-of-the-age-of-flynn/&#34;&gt;&amp;ldquo;The Start of the Age of Flynn&amp;rdquo;&lt;/a&gt;を参考）．&lt;/p&gt;
+
+&lt;p&gt;Flynnについては最近いろいろ調べたりしているので，そのうちちゃんとまとめたい．とりあえず，参考文献だけ載せる．&lt;/p&gt;
+
+&lt;ul&gt;
+&lt;li&gt;&lt;a href=&#34;http://www.infoq.com/jp/news/2014/02/paas-future&#34;&gt;PaaSに何が起きているのか？&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a href=&#34;http://progrium.com/blog/2014/02/06/the-start-of-the-age-of-flynn/&#34;&gt;The Start of the Age of Flynn&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a href=&#34;http://www.centurylinklabs.com/flynn-vs-deis-the-tale-of-two-docker-micro-paas-technologies/&#34;&gt;Flynn vs. Deis: The Tale of Two Docker Micro-PaaS Technologies | CenturyLink Labs&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a href=&#34;https://github.com/flynn/flynn&#34;&gt;Welcome to Flynn&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a href=&#34;http://5by5.tv/changelog/99&#34;&gt;5by5 | The Changelog #99: Flynn, Tent, open source PaaSes and more with Jeff Lindsay and Jonathan Rudenberg&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a href=&#34;http://5by5.tv/changelog/115&#34;&gt;5by5 | The Changelog #115: Flynn updates with Jonathan Rudenberg and Jeff Lindsay&lt;/a&gt;&lt;/li&gt;
+&lt;/ul&gt;
+</description>
+    </item>
+    
+    <item>
+      <title>Heroku Meetup #12でLTしてきた&#43;Heroku on Docker</title>
+      <link>http://deeeet.com/writing/2014/05/23/heroku-meetup-12/</link>
+      <pubDate>Fri, 23 May 2014 00:00:00 +0000</pubDate>
+      
+      <guid>http://deeeet.com/writing/2014/05/23/heroku-meetup-12/</guid>
+      <description>
+
+&lt;script async class=&#34;speakerdeck-embed&#34; data-id=&#34;8c6ce790c3cf0131b3ad163a5c5b95ea&#34; data-ratio=&#34;1.33333333333333&#34; src=&#34;http://speakerdeck.com/assets/embed.js&#34;&gt;&lt;/script&gt;
+
+&lt;p&gt;&lt;a href=&#34;https://speakerdeck.com/tcnksm/go-web-applicationwoherokunidepuroi-plus-heroku-on-docker-number-herokujp&#34;&gt;&amp;ldquo;Go Web ApplicationをHerokuにデプロイ + Heroku on Docker #herokujp&amp;rdquo;&lt;/a&gt;&lt;/p&gt;
+
+&lt;p&gt;&lt;a href=&#34;http://herokujp.doorkeeper.jp/events/10902&#34;&gt;Heroku Meetup #12&lt;/a&gt;でLTをしてきた．&lt;a href=&#34;http://martini.codegangsta.io/&#34;&gt;Martini&lt;/a&gt;をつかったGo Web ApplicationをHerokuにぶっ込んでみたという内容で，基本は&lt;a href=&#34;http://deeeet.com/writing/2014/04/23/martini/&#34;&gt;&amp;ldquo;Martini(+Ginkgo)をWerckerでCIしてHerokuにデプロイ&amp;rdquo;&lt;/a&gt;が基になっている．&lt;/p&gt;
+
+&lt;p&gt;せっかく最近Dockerを使っているので，HerokuとDockerを絡めた話がしたいなと思い，&lt;a href=&#34;https://github.com/CenturyLinkLabs/building&#34;&gt;&amp;ldquo;building&amp;rdquo;&lt;/a&gt;を使ってDocker Container上にHerokuと同じ環境を作るという話を追加した．以下はその補足．&lt;/p&gt;
+
+&lt;h2 id=&#34;heroku-on-docker:f7e02036545f2bcb1834bf6fdb943d2d&#34;&gt;Heroku on Docker&lt;/h2&gt;
+
+&lt;p&gt;&lt;a href=&#34;http://www.centurylinklabs.com/heroku-on-docker/&#34;&gt;Heroku on Docker | CenturyLink Labs&lt;/a&gt;&lt;/p&gt;
+
+&lt;p&gt;CenturyLink Labsが開発した&lt;a href=&#34;https://github.com/CenturyLinkLabs/buildin&#34;&gt;&amp;ldquo;building&amp;rdquo;&lt;/a&gt;というツールを使えば，Herokuのbuildpackを使うアプケーション用のコンテナを簡単に立ち上げることができる．つまり，ローカルで気軽にHerokuと同様の環境をつくることができる．&lt;/p&gt;
+
+&lt;p&gt;似たようなツールに&lt;a href=&#34;https://github.com/progrium/dokku&#34;&gt;&amp;ldquo;dokku&amp;rdquo;&lt;/a&gt;というツールがある．dokkuはbuildpackとDockerを使ってmini Herokuを作ることができるツール．dokkuを立てたサーバに対してアプリケーションを&lt;code&gt;git push&lt;/code&gt;すると，新しくDockerコンテナが起動し，アプリケーションのビルドが行われる（&lt;a href=&#34;http://banyan.me/slides/20140116/slides.html&#34;&gt;&amp;ldquo;Inside Dokku in 5 minutes&amp;rdquo;&lt;/a&gt;が詳しい）．&lt;/p&gt;
+
+&lt;p&gt;buildingは，dokkuをシンプルにしたツール．カレントディレクトリのアプリケーションをdokkuのbuildstepというスクリプトを使ってビルドしたDockerイメージをつくり，それを使ってコンテナを立ち上げるということをやってくれる．dokkuのようにサーバを立ててssh鍵を通すといった設定なしで使える．&lt;/p&gt;
+
+&lt;p&gt;buildingはdokkuをカジュアルに使えるようにしたツールであると言える．&lt;/p&gt;
+
+&lt;h3 id=&#34;buildingの使いどころ:f7e02036545f2bcb1834bf6fdb943d2d&#34;&gt;buildingの使いどころ&lt;/h3&gt;
+
+&lt;p&gt;以下のような場合に使える．&lt;/p&gt;
+
+&lt;ul&gt;
+&lt;li&gt;ローカルにHerokuと同じ環境をつくりたい&lt;/li&gt;
+&lt;li&gt;Cleanな環境でHerokuアプリケーションをビルドしたい&lt;/li&gt;
+&lt;li&gt;buildpackのテストをしたい&lt;/li&gt;
+&lt;/ul&gt;
+
+&lt;p&gt;buildingはHeroku同様にThird partyのbuildpackの追加も可能なので，それがちゃんと動作するかをテストすることもできる．&lt;/p&gt;
+
+&lt;h3 id=&#34;buildingを動かす:f7e02036545f2bcb1834bf6fdb943d2d&#34;&gt;buildingを動かす&lt;/h3&gt;
+
+&lt;p&gt;まず，インストール．Rubygemsとして配布されている．&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-bash&#34;&gt;$ gem install building
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;あとは，動かしたHerokuアプリケーション（Rails，Node，HHVM，WordPress，Go）のディレクトリ内で以下を実行するだけ．&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-bash&#34;&gt;$ building -p 3000 tcnksm/app
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;&lt;code&gt;-p&lt;/code&gt;で解放したいポート番号を指定する．&lt;code&gt;tcnksm/app&lt;/code&gt;は作成したいDockerイメージ名．&lt;/p&gt;
+
+&lt;p&gt;これだけで，&lt;/p&gt;
+
+&lt;ul&gt;
+&lt;li&gt;専用の&lt;code&gt;Dockerfile&lt;/code&gt;の作成&lt;/li&gt;
+&lt;li&gt;イメージのビルド&lt;/li&gt;
+&lt;li&gt;コンテナの起動&lt;/li&gt;
+&lt;/ul&gt;
+
+&lt;p&gt;をやってくれ，ローカルにHerokuと同じ環境でアプリケーションが立ち上がる．&lt;/p&gt;
+
+&lt;h3 id=&#34;buildingの動作:f7e02036545f2bcb1834bf6fdb943d2d&#34;&gt;buildingの動作&lt;/h3&gt;
+
+&lt;p&gt;buildingがつくる&lt;code&gt;Dockerfile&lt;/code&gt;は以下のような感じ．&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-bash&#34;&gt;FROM ctlc/buildstep:ubuntu13.10
+
+ADD . /app
+RUN /build/builder
+CMD /start web
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;たいしたことはしていない．カレントディレクトリのアプリケーションを&lt;code&gt;ADD&lt;/code&gt;してそれに対して，&lt;code&gt;builder&lt;/code&gt;というコマンドを実行しているだけ．&lt;/p&gt;
+
+&lt;p&gt;builderは&lt;code&gt;ctlc/buildstep:ubuntu13.10&lt;/code&gt;イメージに含まれており，dokkuの&lt;a href=&#34;https://github.com/progrium/buildstep&#34;&gt;buildstep&lt;/a&gt;というスクリプトの一部．これがアプリケーションの言語を判断し，その言語のBuildpackを使ってアプリケーションのビルドを行う．&lt;/p&gt;
+
+&lt;h2 id=&#34;まとめ:f7e02036545f2bcb1834bf6fdb943d2d&#34;&gt;まとめ&lt;/h2&gt;
+
+&lt;p&gt;&lt;code&gt;ctlc/buildstep:ubuntu13.10&lt;/code&gt;という肝となるDockerイメージがあり，それの立ち上げ等を支援するというbuildingは新しいアプリケーションの形であるなあと思った．&lt;/p&gt;
+
+&lt;p&gt;最後に，Heroku Meetupで発表する機会を与えてくださった&lt;a href=&#34;https://twitter.com/ayumin&#34;&gt;@ayumin&lt;/a&gt;さん，ありがとうございました．がちゃぴん先生のLXCの話もとても面白く勉強になりました．&lt;/p&gt;
+
+&lt;h3 id=&#34;参考:f7e02036545f2bcb1834bf6fdb943d2d&#34;&gt;参考&lt;/h3&gt;
+
+&lt;ul&gt;
+&lt;li&gt;&lt;a href=&#34;https://speakerdeck.com/udzura/docker&#34;&gt;Introduce of building/Docker // Speaker Deck&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a href=&#34;http://qiita.com/futoase/items/21167e9d064b0e336e8f&#34;&gt;【個人メモ】buildingを使って気軽にDocker containerをつくろう - Qiita&lt;/a&gt;&lt;/li&gt;
+&lt;/ul&gt;
+</description>
+    </item>
+    
+    <item>
+      <title>logspoutでDockerコンテナのログの集約・ルーティング</title>
+      <link>http://deeeet.com/writing/2014/05/14/logspout/</link>
+      <pubDate>Wed, 14 May 2014 00:00:00 +0000</pubDate>
+      
+      <guid>http://deeeet.com/writing/2014/05/14/logspout/</guid>
+      <description>
+
+&lt;p&gt;&lt;a href=&#34;https://github.com/progrium/logspout#streaming-endpoints&#34;&gt;progrium/logspout&lt;/a&gt;&lt;/p&gt;
+
+&lt;p&gt;logspoutは，ホスト内で動かした全てのDockerコンテナの出力を集約して，好きなところに飛ばす（ルーティングする）ためのツール．開発者はDokkの&lt;a href=&#34;https://github.com/progrium&#34;&gt;Jeff Lindsay&lt;/a&gt;．&lt;/p&gt;
+
+&lt;p&gt;以下の2つの特徴がある&lt;/p&gt;
+
+&lt;ul&gt;
+&lt;li&gt;コンテナとして起動（ステートレス）&lt;/li&gt;
+&lt;li&gt;HTTP APIによるルーティングの設定&lt;/li&gt;
+&lt;/ul&gt;
+
+&lt;p&gt;ログを貯めて管理したり，検索するといったことはできない．コンテナのログをリアルタイムで好きなところに飛ばすだけ．&lt;/p&gt;
+
+&lt;p&gt;これだけだが，Dockerのログの問題をいい感じに解決してくれそう．&lt;/p&gt;
+
+&lt;h2 id=&#34;dockerのログのしくみ:b75ac6591b168421d8171ffda96d3e4e&#34;&gt;Dockerのログのしくみ&lt;/h2&gt;
+
+&lt;p&gt;まず，簡単にDockerのログのしくみを説明する．&lt;/p&gt;
+
+&lt;p&gt;現時点（2014年5月）でDockerはコンテナ内で吐き出されたstdout/stderrを取得することができる．コンテナのプロセスが&lt;code&gt;stdout&lt;/code&gt;と&lt;code&gt;stderr&lt;/code&gt;にログを吐き出し，Dockerはそれをホストに&lt;code&gt;json&lt;/code&gt;として保存する．&lt;code&gt;docker log&lt;/code&gt;コマンドを使うとそれを取得することができる．&lt;/p&gt;
+
+&lt;p&gt;これはシンプルだけど欠点でもある．いずれディスクが圧迫されるし，毎回&lt;code&gt;docker log&lt;/code&gt;を叩くわけにもいかない．そのため，Dockerのログをどうするかってのはいろいろ試みられている．&lt;/p&gt;
+
+&lt;h2 id=&#34;dockerのログ収集の試み:b75ac6591b168421d8171ffda96d3e4e&#34;&gt;Dockerのログ収集の試み&lt;/h2&gt;
+
+&lt;p&gt;Dockerコンテナのログ収集の試みは，大きく分けて3つある．&lt;/p&gt;
+
+&lt;ul&gt;
+&lt;li&gt;&lt;strong&gt;コンテナの内部で収集する&lt;/strong&gt;：コンテナ内でログ収集のプロセスを同時に走らせる（&lt;a href=&#34;http://qiita.com/kazunori279/items/1bbb8fce10219217c247&#34;&gt;&amp;ldquo;dockerなら5分で動く！ nginxのログをfluentdで集めてnorikraでストリーム分析&amp;rdquo;&lt;/a&gt;，&lt;a href=&#34;https://blog.logentries.com/2014/03/how-to-run-rsyslog-in-a-docker-container-for-logging/&#34;&gt;&amp;ldquo;How To Run Rsyslog in a Docker Container for Logging&amp;rdquo;&lt;/a&gt;）&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;コンテナの外部で収集する&lt;/strong&gt;：ホスト側でログ収集のエージェントを走らせて，コンテナのログの書き出し先をホストからマウントする，もしくは&lt;code&gt;json&lt;/code&gt;を直接読む（&lt;a href=&#34;http://jasonwilder.com/blog/2014/03/17/docker-log-management-using-fluentd/&#34;&gt;&amp;ldquo;Docker Log Management Using Fluentd&amp;rdquo;&lt;/a&gt;）&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;収集および配信用のコンテナを立てる&lt;/strong&gt;：&lt;a href=&#34;https://github.com/elasticsearch/logstash-forwarder&#34;&gt;logstash-forwarder&lt;/a&gt;のようなログの収集および配信を担うエージェントをコンテナ内に立てる．そして各コンテナが起動の際に&lt;code&gt;--volumes-from&lt;/code&gt;でそのコンテナを指定する（&lt;a href=&#34;https://denibertovic.com/post/docker-and-logstash-smarter-log-management-for-your-containers/&#34;&gt;&amp;ldquo;Docker And Logstash: Smarter Log management For Your Containers&amp;rdquo;&lt;/a&gt;）&lt;/li&gt;
+&lt;/ul&gt;
+
+&lt;p&gt;やりようはいろいろあるが，少なくともDocker的に良いのは，&lt;/p&gt;
+
+&lt;ul&gt;
+&lt;li&gt;コンテナに複数プロセスを立てない　&lt;/li&gt;
+&lt;li&gt;ホストに多くを設定しない&lt;/li&gt;
+&lt;/ul&gt;
+
+&lt;p&gt;これを満たすのは，3番目の専用のコンテナを立てる方式．ただ，現状の方法は立てるコンテナごとに&lt;code&gt;--volumes-from&lt;/code&gt;を駆使しなといけないなど，少しめんどくさい．&lt;/p&gt;
+
+&lt;h2 id=&#34;logsoutの良い点:b75ac6591b168421d8171ffda96d3e4e&#34;&gt;logsoutの良い点&lt;/h2&gt;
+
+&lt;p&gt;専用のコンテナ（&lt;a href=&#34;https://index.docker.io/u/progrium/logspout/&#34;&gt;progrium/logspout&lt;/a&gt;）を立てるだけ使える．&lt;/p&gt;
+
+&lt;p&gt;つまり，現状動いている他のコンテナになんの設定もなしに使える．当然，ホスト側に特別な設定をする必要がない．&lt;/p&gt;
+
+&lt;h2 id=&#34;logsoutを使う:b75ac6591b168421d8171ffda96d3e4e&#34;&gt;logsoutを使う&lt;/h2&gt;
+
+&lt;p&gt;まず，インストール（以下で&lt;code&gt;docker run&lt;/code&gt;すればインストールもされるので実際は必要ない）&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-bash&#34;&gt;$ docker pull progrium/logspout
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;例として，&amp;rdquo;hello world&amp;rdquo;を出力し続ける単純なコンテナを立てておく．&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-bash&#34;&gt;$ docker run -d --name hello1 busybox /bin/sh -c &amp;quot;while true; do echo hello world; sleep 1; done&amp;quot;
+$ docker run -d --name hello2 busybox /bin/sh -c &amp;quot;while true; do echo hello world; sleep 1; done&amp;quot;
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;これらに対してログを収集するには以下を実行する．&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-bash&#34;&gt;$ docker run -d -p 8000:8000 --name log -v=/var/run/docker.sock:/tmp/docker.sock progrium/logspout
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;HTTP APIのアクセスを可能にするため&lt;code&gt;8000&lt;/code&gt;ポートを解放し，ホストの&lt;code&gt;/var/run/docker.sock&lt;/code&gt;をマウントする．&lt;/p&gt;
+
+&lt;p&gt;ログを見てみる．&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-bash&#34;&gt;$ curl $(docker port log 8000)/logs
+             log|[martini] Started GET /logs for 172.17.42.1:50859
+             hello2|hello world
+             hello1|hello world
+             hello2|hello world
+             hello1|hello world
+             hello2|hello world
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;リアルタイムの出力が確認できる．出力は色づけもされている．&lt;/p&gt;
+
+&lt;h3 id=&#34;ルーティング:b75ac6591b168421d8171ffda96d3e4e&#34;&gt;ルーティング&lt;/h3&gt;
+
+&lt;p&gt;一番単純な方法は，rsyslogに投げること．以下のように起動コマンドにURIを指定するだけ．&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-bash&#34;&gt;$ docker run -v=/var/run/docker.sock:/tmp/docker.sock progrium/logspout syslog://logs.papertrailapp.com:55555
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;以下のようにPOSTを使って，ルーティングの設定をすることもできる．&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-bash&#34;&gt;$ curl $(docker port log 8000)/logs -X POST \
+    -d &#39;{&amp;quot;source&amp;quot;: {&amp;quot;filter&amp;quot;: &amp;quot;db&amp;quot;, &amp;quot;types&amp;quot;: [&amp;quot;stderr&amp;quot;]}, target&amp;quot;: {&amp;quot;type&amp;quot;: &amp;quot;syslog&amp;quot;, &amp;quot;addr&amp;quot;: &amp;quot;logs.papertrailapp.com:55555&amp;quot;}}&#39;
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;上の例では，名前が&lt;code&gt;db&lt;/code&gt;であるコンテナの&lt;code&gt;stderr&lt;/code&gt;への出力を&lt;code&gt;logs.papertrailapp.com:55555&lt;/code&gt;に飛ばすように設定している．&lt;code&gt;addr&lt;/code&gt;はDNSで名前解決さえできればいいので，&lt;a href=&#34;https://github.com/hashicorp/consul&#34;&gt;Consul&lt;/a&gt;などのサービスディスカバリを使えば，さらなる道を開けそう．&lt;/p&gt;
+
+&lt;p&gt;ルーティングは以下のようにGETでデバッグしつつ設定できる．&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-bash&#34;&gt;GET /logs
+GET /logs/filter:&amp;lt;container-name-substring&amp;gt;
+GET /logs/id:&amp;lt;container-id&amp;gt;
+GET /logs/name:&amp;lt;container-name&amp;gt;
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;h2 id=&#34;coreosの場合:b75ac6591b168421d8171ffda96d3e4e&#34;&gt;CoreOSの場合&lt;/h2&gt;
+
+&lt;p&gt;Dockerの運用に関しては&lt;a href=&#34;https://coreos.com/&#34;&gt;CoreOS&lt;/a&gt;に多くの知見がある．CoreOSのコンテナのログのルーティング方法について&lt;a href=&#34;https://twitter.com/mopemope&#34;&gt;@mopemopeさん&lt;/a&gt;に教えていただいた（参考：&lt;a href=&#34;https://medium.com/coreos-linux-for-massive-server-deployments/defb984185c5&#34;&gt;&amp;ldquo;CoreOS logging to remote destinations&amp;rdquo;&lt;/a&gt;）．&lt;/p&gt;
+
+&lt;p&gt;CoreOSの場合は，上の分類でいうと&lt;strong&gt;コンテナの外部で収集する&lt;/strong&gt;方式になる．そもそもCoreOSでは，systemdでコンテナを起動する想定になっている．そのため，ログのルーティングにはsystemd自前のjournalが使える．logspoutと同様のことをするには，以下のようにする．&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-bash&#34;&gt;$ journalctl -o short -f | ncat remote-destination.com 12345
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;どの方法が一番良いかはまだまだ一概には言えないが，コンテナをsystemdで起動することが前提になっていれば，余計な設定などもなく，シンプルだなと．&lt;/p&gt;
+
+&lt;h2 id=&#34;まとめ:b75ac6591b168421d8171ffda96d3e4e&#34;&gt;まとめ&lt;/h2&gt;
+
+&lt;p&gt;考慮する問題はいくつかある．&lt;/p&gt;
+
+&lt;ul&gt;
+&lt;li&gt;若干の遅れが生じる&lt;/li&gt;
+&lt;li&gt;stdout/stderrだけしか取得できない（これはDockerの仕様）&lt;/li&gt;
+&lt;li&gt;&lt;a href=&#34;https://twitter.com/kenjiskywalker/status/466784403020992512&#34;&gt;ルーティング用のコンテナが落ちたときにログを保証できない&lt;/a&gt;&lt;/li&gt;
+&lt;/ul&gt;
+
+&lt;p&gt;まだ出たばかりなので，1つ目はすぐに解決しそう．2つ目の問題に関しては， 特別なログは&lt;code&gt;volume&lt;/code&gt;やマウントを駆使してなんとかするしかない．3つ目に関して，このコンテナはログをルーティングするだけで，保存はできない．つまり，コンテナが落ちている間のログは失われ，再度送信することはできない．コンテナのヘルスチェックや障害対応などまだまだ考えることは多いように思える．&lt;/p&gt;
+</description>
+    </item>
+    
+    <item>
+      <title>Dockerのネットワークの基礎</title>
+      <link>http://deeeet.com/writing/2014/05/11/docker-network/</link>
+      <pubDate>Sun, 11 May 2014 00:00:00 +0000</pubDate>
+      
+      <guid>http://deeeet.com/writing/2014/05/11/docker-network/</guid>
+      <description>
+
+&lt;p&gt;今までいろいろ触ってきて，Dockerネットワーク周りに関しては何となくは理解していたが，人に説明できるほど理解してなかったのでまとめておく．基本は，&lt;a href=&#34;http://docs.docker.io/use/networking&#34;&gt;Advanced networking - Docker Documentation&lt;/a&gt;がベースになっている．&lt;/p&gt;
+
+&lt;h2 id=&#34;仮想ブリッジの仕組み:b6bda556bf948c440615bef0942b3980&#34;&gt;仮想ブリッジの仕組み&lt;/h2&gt;
+
+&lt;p&gt;Dockerのネットワークは，仮想ブリッジ&lt;code&gt;docker0&lt;/code&gt;を通じて管理され，他のネットワークとは隔離された環境で動作する．&lt;/p&gt;
+
+&lt;p&gt;Dockerデーモンを起動すると，&lt;/p&gt;
+
+&lt;ul&gt;
+&lt;li&gt;仮想ブリッジ&lt;code&gt;docker0&lt;/code&gt;の作成&lt;/li&gt;
+&lt;li&gt;ホストの既存ルートからの空きのIPアドレス空間を検索&lt;/li&gt;
+&lt;li&gt;空きから特定の範囲のIPアドレス空間を取得&lt;/li&gt;
+&lt;li&gt;取得したIPアドレス空間を&lt;code&gt;docker0&lt;/code&gt;に割り当て&lt;/li&gt;
+&lt;/ul&gt;
+
+&lt;p&gt;が行われる．&lt;/p&gt;
+
+&lt;p&gt;コンテナを起動すると，コンテナには以下が割り当てられる．&lt;/p&gt;
+
+&lt;ul&gt;
+&lt;li&gt;&lt;code&gt;docker0&lt;/code&gt;に紐づいた&lt;code&gt;veth&lt;/code&gt;（Virtual Ethernet）インターフェース&lt;/li&gt;
+&lt;li&gt;&lt;code&gt;docker0&lt;/code&gt;に割り当てられたIPアドレス空間から専用のIPアドレス&lt;/li&gt;
+&lt;/ul&gt;
+
+&lt;p&gt;そして&lt;code&gt;docker0&lt;/code&gt;はコンテナのデフォルトのgatewayとして利用されるようになる．コンテナに付与される&lt;code&gt;veth&lt;/code&gt;は仮想NICで，コンテナ側からは&lt;code&gt;eth0&lt;/code&gt;として見える．2つはチューブのように接続され，あらゆるやりとりはここを経由して行われるようになる．&lt;/p&gt;
+
+&lt;p&gt;実際にコンテナを起動して確認する．まず，インターフェースから．&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-bash&#34;&gt;$ brctl show
+bridge name     bridge id               STP enabled     interfaces
+docker0         8000.000000000000       no
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-bash&#34;&gt;$ docker run -d ubuntu /bin/sh -c &amp;quot;while true; do echo hello world; sleep 1; done&amp;quot;
+b9ffb0800ca5
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-bash&#34;&gt;$ docker run -d ubuntu /bin/sh -c &amp;quot;while true; do echo hello world; sleep 1; done&amp;quot;
+4c0d9b786e8f
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-bash&#34;&gt;$ brctl show
+bridge name     bridge id               STP enabled     interfaces
+docker0         8000.7ab1e2001566       no              veth29c1, veth9eb7
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;&lt;code&gt;b9ffb0800ca5&lt;/code&gt;コンテナには&lt;code&gt;veth29c1&lt;/code&gt;が，&lt;code&gt;4c0d9b786e8f&lt;/code&gt;コンテナには&lt;code&gt;veth9eb7&lt;/code&gt;がそれぞれ割り当てられているのがわかる．&lt;/p&gt;
+
+&lt;p&gt;次にIPを見てみる．&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-bash&#34;&gt;$ ifconfig docker0
+docker0   Link encap:Ethernet  HWaddr 7a:b1:e2:00:15:66
+          inet addr:172.17.42.1  Bcast:0.0.0.0  Mask:255.255.0.0
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-bash&#34;&gt;$ docker inspect --format &#39;{{ .NetworkSettings.IPAddress }}&#39; b9ffb0800ca5
+172.17.0.2
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-bash&#34;&gt;$ docker inspect --format &#39;{{ .NetworkSettings.IPAddress }}&#39; 4c0d9b786e8f
+172.17.0.3
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;&lt;code&gt;docker0&lt;/code&gt;に割り当てられた&lt;code&gt;172.17.42.1/16&lt;/code&gt;のうち，&lt;code&gt;b9ffb0800ca5&lt;/code&gt;コンテナには&lt;code&gt;172.17.02&lt;/code&gt;が，&lt;code&gt;4c0d9b786e8f&lt;/code&gt;コンテナには&lt;code&gt;172.17.0.3&lt;/code&gt;がそれぞれ割り当てられているのがわかる．&lt;/p&gt;
+
+&lt;h2 id=&#34;コンテナ同士のやりとり:b6bda556bf948c440615bef0942b3980&#34;&gt;コンテナ同士のやりとり&lt;/h2&gt;
+
+&lt;p&gt;コンテナ間のやりとりの制御は，Dockerデーモンの&lt;code&gt;-icc&lt;/code&gt;パラメータにより行う．Dockerはこれに&lt;code&gt;iptables&lt;/code&gt;を使っている．&lt;/p&gt;
+
+&lt;ul&gt;
+&lt;li&gt;&lt;code&gt;-icc=true&lt;/code&gt;とすると，コンテナ間のやりとりが可能になる（default）&lt;/li&gt;
+&lt;li&gt;&lt;code&gt;-icc=false&lt;/code&gt;とすると，コンテナ同士は隔離される&lt;/li&gt;
+&lt;/ul&gt;
+
+&lt;p&gt;さらに，コンテナ同士でやりとりするにはportを&lt;code&gt;docker0&lt;/code&gt;に晒す必要がある．これには，以下の2つの方法がある．&lt;/p&gt;
+
+&lt;ul&gt;
+&lt;li&gt;Dockerfileに&lt;code&gt;EXPOSE &amp;lt;port&amp;gt;&lt;/code&gt;を記述する&lt;/li&gt;
+&lt;li&gt;コンテナ起動時に&lt;code&gt;--expose &amp;lt;port&amp;gt;&lt;/code&gt;を指定する&lt;/li&gt;
+&lt;/ul&gt;
+
+&lt;p&gt;具体的に，&lt;code&gt;docker0&lt;/code&gt;を通じてコンテナ同士を接続する場合は，link機能を使う．コンテナを起動する際に，&lt;code&gt;--link コンテナ名:エイリアス名&lt;/code&gt;とすると，環境変数を通じて接続したいコンテナのIPやPortを取得できるようになる（詳しくは，&lt;a href=&#34;http://deeeet.com/writing/2014/03/20/docker-link-container/&#34;&gt;&amp;ldquo;Dockerコンテナ間のlink，database.ymlの書き方&amp;rdquo;&lt;/a&gt;に書いた）．&lt;/p&gt;
+
+&lt;h2 id=&#34;外部ネットワークからコンテナへのアクセス:b6bda556bf948c440615bef0942b3980&#34;&gt;外部ネットワークからコンテナへのアクセス&lt;/h2&gt;
+
+&lt;p&gt;外部ネットワークからコンテナにアクセスするには，コンテナを起動するときに外部ポートを&lt;code&gt;docker0&lt;/code&gt;に晒した内部portにマップする必要がある．&lt;/p&gt;
+
+&lt;p&gt;例えば，ホストの8080ポートをコンテナの80ポートにマップして&lt;a href=&#34;https://gist.github.com/tcnksm/4381bbe7e8258c1f9e8d&#34;&gt;Apacheコンテナ&lt;/a&gt;を起動してみる．&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-bash&#34;&gt;$ ID=$(docker run -d -p 8080:80 tcnksm/apache)
+caad0cfc2a0
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;マッピングは以下で確認できる．&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-bash&#34;&gt;$ docker ps
+CONTAINER ID        IMAGE                  COMMAND                CREATED              STATUS              PORTS                  NAMES
+caad0cfc2a03        tcnksm/apache:latest   /usr/sbin/apache2 -D   About a minute ago   Up About a minute   0.0.0.0:8080-&amp;gt;80/tcp   elegant_thompson
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;IDと晒したportを基に確認することもできる．&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-bash&#34;&gt;$ docker port $ID 80
+0.0.0.0:8080
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;実際に接続してみる．&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-bash&#34;&gt;$ curl http://localhost:8080
+Hello, docker
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;ホスト側のIPの指定を省略することもできる．この場合，自動でポートが選ばれる．&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-bash&#34;&gt;$ ID=$(docker run -d -p 80 tcnksm/apache)
+$ docker port $ID 80
+0.0.0.0:49156
+$ curl `docker port $ID 80`
+Hello, docker
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;h3 id=&#34;参考:b6bda556bf948c440615bef0942b3980&#34;&gt;参考&lt;/h3&gt;
+
+&lt;ul&gt;
+&lt;li&gt;&lt;a href=&#34;http://d.hatena.ne.jp/enakai00/20140424/1398321672&#34;&gt;Dockerのネットワーク管理とnetnsの関係 - めもめも&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a href=&#34;http://www.slideshare.net/hansode/hack-for-dockers-network&#34;&gt;Hack for Docker&amp;rsquo;s Network&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a href=&#34;http://www.slideshare.net/adrienblind/docker-networking-basics-using-software-defined-networks&#34;&gt;Docker networking basics &amp;amp; coupling with Software Defined Networks&lt;/a&gt;&lt;/li&gt;
+&lt;/ul&gt;
+</description>
+    </item>
+    
+  </channel>
+</rss>

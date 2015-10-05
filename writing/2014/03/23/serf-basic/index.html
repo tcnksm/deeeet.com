@@ -1,0 +1,751 @@
+<!doctype html>
+<html>
+  <head>
+    <meta http-equiv="content-type" content="text/html; charset=utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    
+    <title>Serf 虎の巻 | SOTA</title>
+    
+    <link href="https://fonts.googleapis.com/css?family=Lato%3a900" rel="stylesheet" type="text/css">
+    <link rel="stylesheet" href="/css/main.css">
+    <link rel="shortcut icon" href="/favicon.png" type="image/x-icon" />
+    <link href="http://deeeet.com//index.xml" rel="alternate" type="application/rss+xml" title="" />
+    <meta name="title" content="http://deeeet.com/writing/2014/03/23/serf-basic/">
+    <link rel="canonical" href="http://deeeet.com/writing/2014/03/23/serf-basic/">
+    
+    <meta property="og:title" content="Serf 虎の巻"/>
+    <meta property="og:url" content="http://deeeet.com/writing/2014/03/23/serf-basic/"/>
+  </head>
+  
+  <body>
+    <section class="site-nav">
+      <header>
+        <nav id="navigation">
+          <ul class="menu">
+            <li><a href="https://github.com/tcnksm/talks">Talks</a></li>
+            <li><a href="https://tcnksm.exposure.co/">Photos</a></li>
+          </ul>
+
+          <a class="name" href="/">SOTA</a>
+        </nav>        
+      </header>
+    </section>
+    
+
+
+<article>
+  <div class="container">
+    <header>
+      <div class="meta">
+        <time pubdate datetime="2014-03-23" title="2014-03-23">March 23, 2014</time>
+      </div>
+      <h1 class="title">Serf 虎の巻</h1>
+    </header>
+    
+    <section>
+      
+
+<p>サービスディスカバリーとオーケストレーション用のツールである<a href="http://www.serfdom.io/">Serf</a>についてまとめた．基本的には公式のHPのGetting Startの抄訳．Vagrantで試験環境を立てて実際に触りつつSerfを使い始められるようにした．</p>
+
+<h2 id="m">目次</h2>
+
+<ul>
+<li><a href="#ov">Serfとは</a></li>
+<li><a href="#g">Gossip protocolとは</a></li>
+<li><a href="#pre">試験環境の準備</a></li>
+<li><a href="#jcluster">クラスタの形成</a></li>
+<li><a href="#lcluster">クラスタからの離脱</a></li>
+<li><a href="#eh">イベントハンドラ</a></li>
+<li><a href="#ce">カスタムイベント</a></li>
+<li><a href="#q">カスタムクエリ</a></li>
+<li><a href="#com">コマンド一覧</a></li>
+<li><a href="#ref">参考</a></li>
+</ul>
+
+<h2 id="#ov">Serfとは</h2>
+
+<p>Serfはサービスディスカバリーやオーケストレーション，障害検出のためのツール．Vagrantの開発者であるMitchell Hashimoto氏により開発が進められている．Serfは<a href="http://www.publickey1.jp/blog/14/immutable_infrastructure.html">Immutable Infrastructure</a>の文脈で登場してきたツールであり，Immutableなシステムアーキテクチャー，デプロイを実現する上で必須のツールである．</p>
+
+<p>Immutable Infrastructureを簡単に説明すると，上書き的にサーバーを更新するのではなく，デプロイの度に１からにサーバ，イメージを構築してしまおうという考え方．現段階では，ChefやPuppet，AnsibleのようなConfiguration toolでソフトウェア，サービスの設定を行いイメージを作成し，テストが完了した段階でロードバランサを切り替えるというワークフローが提唱されている（<a href="http://www.publickey1.jp/blog/14/blue-green_deployment.html">Blue Green Deployment</a>）．もしくは，Dockerなどのコンテナベースであれば，そのポータビリティにより，ローカルでコンテナをつくって，それをそのままプロダクションデプロイする方法も考えられる．</p>
+
+<p>このとき問題になるのは，ロードバランサへの追加や，Memcacheのクラスタ，MySQLのslave/masterなどの動的に変わるような設定．もちろんChefやPuppetがこれらの設定まで受け持つことは可能であるが，Immutableなデプロイを実現する上では複雑性が増す．</p>
+
+<p>これを解決するのがSerf．ChefやPuppetで不変なサーバ，イメージが完成したあとに，それらのサーバ，イメージ間の紐付けやクラスタリングを行う．</p>
+
+<h3 id="serfができること:949cea981e22858e171e92950843d958">Serfができること</h3>
+
+<p>Serfは，大きく以下の3つのことを行うことができる．</p>
+
+<ul>
+<li><strong>クラスタリング</strong>: Serfはクラスタを形成し，クラスタへメンバーの参加，離脱といったイベントを検出して，メンバーそれぞれにあらかじめ設定したスクリプトを実行させることができる．例えば，SerfはロードバランサのためのWebサーバのリストをもち，ノードの増減の度にロードバランサにそれを通知することができる．</li>
+<li><strong>障害の検出と回復</strong>: Serfはクラスタのメンバーが障害で落ちた場合にそれを検出し，残りのメンバーにそれを通知することができる．また，障害によりダウンしたメンバーを再びクラスタに参加させるように働く．</li>
+<li><strong>イベントの伝搬</strong>: Serfはメンバーの参加，離脱といったイベント以外にオリジナルのカスタムイベントをメンバーに伝搬させることができる．これらは，デプロイやConfigurationのトリガーなどに使うことができる．</li>
+</ul>
+
+<h3 id="serfの利用例:949cea981e22858e171e92950843d958">Serfの利用例</h3>
+
+<p>具体的なSerfの利用例には以下のようなものがある．</p>
+
+<ul>
+<li>Webサーバのロードバランサへの登録，解除</li>
+<li>RedisやMemcachedのクラスタリング</li>
+<li>DNSの更新</li>
+<li>デプロイのトリガー（<a href="#ce">カスタムイベント</a>）</li>
+<li>シンプルなサービス監視（<a href="#q">カスタムクエリ</a>）</li>
+</ul>
+
+<p>詳細は，公式の<a href="http://www.serfdom.io/intro/use-cases.html">Use Cases</a>を参照．</p>
+
+<p><a href="#m">目次へ</a></p>
+
+<h2 id="g">Gossip Protocolとは</h2>
+
+<p>Serfはクラスタのメンバーへのイベントの伝搬に<a href="http://en.wikipedia.org/wiki/Gossip_protocol">Gossip Protocol</a>を用いている．Gossip Protocolは<a href="http://www.cs.cornell.edu/~asdas/research/dsn02-swim.pdf">&ldquo;SWIM: Scalable Weakly-consistent Infection-style Process Group Membership Protocol&rdquo;</a>を基にしており，SWIMのイベントの伝搬速度とカバレッジに改良を加えている．</p>
+
+<h3 id="swim-protocolの概要:949cea981e22858e171e92950843d958">SWIM Protocolの概要</h3>
+
+<p>Serfは新しいクラスタの形成，既存のクラスタへ参入，のどちらかで起動する．新しいクラスタが形成されると，そこには新しいノードが参入してくることが期待される．既存のクラスタに参入するには，既存クラスタのメンバーのIPアドレスが必要になる．新しいメンバーはTCPで既存クラスタのメンバーと状態が同期され，Gossiping（噂，情報のやりとり）が始まる．</p>
+
+<p>GossipingはUDPで通信される．これにより，ネットワークの容量はノードの数に比例して一定になる．Gossipingよりも頻度は低いが，定期的にTCPによるランダムなノード間で完全な状態同期が行われる．</p>
+
+<p>障害検出は，定期的にランダムなノードをチェックすることにより行われる．もし一定期間あるノードから反応がない場合は，直接そのノードに対してチェックが行われる．ネットワーク上問題でノードからの反応が得られていない可能性を考慮して，この直接のチェックは複数のノードから行われる．ランダムなチェックおよび，直接のチェックでも反応がない場合，そのノードは，_suspicious_と認定される．_suspicious_であってもそのノードはクラスタの一員として扱われる．それでも反応が慣れれば，そのノードは落ちたと認定され，それは他のノードにGossipされる．</p>
+
+<h3 id="gossipのswimからの改良点:949cea981e22858e171e92950843d958">GossipのSWIMからの改良点</h3>
+
+<p>Gossip ProtocolのSWIMからの変更点は大きく以下の3点</p>
+
+<ul>
+<li>SerfはTCPで全状態の同期を行うが，SWIMは変更をGossipすることしかしない．最終的には，どちらも一貫性を持つが，Serfは状態の収束が速い．</li>
+<li>SerfはGossipingのみを行うレイヤーと障害検出を行うプロトコルを分離しているが，SWIMは，障害検出にGossipingが上乗りしている．Serfは上乗りもしている．これによりSerfはより速いGossipingを可能にする．</li>
+<li>Serfは落ちたノードを一定期間保持するため，全状態の同期の際にそれも伝搬される．SWIMはTCPによる状態の同期を行わない．これにより障害からの復帰が速くなる．</li>
+</ul>
+
+<p><a href="#m">目次へ</a></p>
+
+<h2 id="pre">試験環境の準備</h2>
+
+<p><a href="https://github.com/hashicorp/serf/tree/master/demo/vagrant-cluster">serf/demo/vagrant-cluster</a>のVagrantfileを改良して，Serfがプレインストールされたノードが3つ立ち上がった試験環境を作る．ノードのIPはそれぞれ&rdquo;172.20.20.10&rdquo;，&rdquo;172.20.20.11&rdquo;，&rdquo;172.20.20.12&rdquo;とし，同一ネットワーク上に存在する．Vagrantfileは以下．</p>
+
+<pre><code class="language-ruby">$script = &lt;&lt;SCRIPT
+
+echo Installing depedencies...
+sudo apt-get install -y unzip
+
+echo Fetching Serf...
+cd /tmp/
+wget https://dl.bintray.com/mitchellh/serf/0.5.0_linux_amd64.zip -O serf.zip
+
+echo Installing Serf...
+unzip serf.zip
+sudo chmod +x serf
+sudo mv serf /usr/bin/serf
+
+SCRIPT
+
+Vagrant.configure(VAGRANTFILE_API_VERSION) do |config|
+  config.vm.box = &quot;precise64&quot;
+    config.vm.box_url = &quot;http://files.vagrantup.com/precise64.box&quot;
+
+  config.vm.provision &quot;shell&quot;, inline: $script
+
+  config.vm.define &quot;n1&quot; do |n1|
+      n1.vm.network &quot;private_network&quot;, ip: &quot;172.20.20.10&quot;
+  end
+
+  config.vm.define &quot;n2&quot; do |n2|
+      n2.vm.network &quot;private_network&quot;, ip: &quot;172.20.20.11&quot;
+  end
+
+  config.vm.define &quot;n3&quot; do |n3|
+      n3.vm.network &quot;private_network&quot;, ip: &quot;172.20.20.12&quot;
+  end
+end  
+</code></pre>
+
+<p>立ち上げる．</p>
+
+<pre><code class="language-bash">$ vagrant up
+$ vagrant status
+Current machine states:
+
+n1                        running (virtualbox)
+n2                        running (virtualbox)
+n3                        running (virtualbox)
+</code></pre>
+
+<p><a href="#m">目次へ</a></p>
+
+<h2 id="jcluster">クラスタの形成</h2>
+
+<p>シンプルなクラスタを形成してみる．</p>
+
+<h3 id="エージェントの起動:949cea981e22858e171e92950843d958">エージェントの起動</h3>
+
+<p>まず，<code>n1</code>で最初のエージェント（<code>agent1</code>）を起動する．同一ネットワーク上で発見されるように，bindアドレスにはprivate networkのIPを指定する．</p>
+
+<pre><code class="language-bash">$ vagrant ssh n1
+vagrant@n1:$ serf agent -node=agent1 -bind=172.20.20.10
+==&gt; Starting Serf agent...
+==&gt; Starting Serf agent RPC...
+==&gt; Serf agent running!
+         Node name: 'agent1'
+         Bind addr: '172.20.20.10:7946'
+         RPC addr: '127.0.0.1:7373'
+         Encrypted: false
+         Snapshot: false
+         Profile: lan
+</code></pre>
+
+<p>次に，別のウィンドウを立ち上げて<code>n2</code>で新たなエージェント（<code>agent2</code>）を起動する．</p>
+
+<pre><code class="language-bash">$ vagrant ssh n2
+vagrant@n2:$ serf agent -node=agent2 -bind=172.20.20.11
+==&gt; Starting Serf agent...
+==&gt; Starting Serf agent RPC...
+==&gt; Serf agent running!
+         Node name: 'agent2'
+         Bind addr: '172.20.20.11:7946'
+         RPC addr: '127.0.0.1:7373'
+         Encrypted: false
+         Snapshot: false
+         Profile: lan
+</code></pre>
+
+<p>この時点で，2つのホストで2つのserfエージェントが起動してる．しかし，2つのエージェントは互いについては何も知らない．それぞれが自分自身のクラスタを形成している．<code>serf member</code>を実行するとそれを確認できる．</p>
+
+<pre><code class="language-bash">vagrant@n1:$ serf members
+agent1  172.20.20.10:7946  alive
+</code></pre>
+
+<pre><code class="language-bash">vagrant@n2:$ serf members
+agent2  172.20.20.11:7946  alive
+</code></pre>
+
+<h3 id="クラスタへのjoin:949cea981e22858e171e92950843d958">クラスタへのJoin</h3>
+
+<p>クラスタにjoinしてみる．<code>agent2</code>を<code>agent1</code>にjoinさせる．</p>
+
+<pre><code class="language-bash">vagrant@n2$ serf join 172.20.20.10
+Successfully joined cluster by contacting 1 nodes.
+</code></pre>
+
+<p>それぞれのエージェントのログをみると，メンバーのjoin情報（<code>EventMemberJoin</code>）を互いに受け取っていることが確認できる．</p>
+
+<pre><code class="language-bash"># agent1
+2014/03/23 13:45:18 [INFO] serf: EventMemberJoin: agent2 172.20.20.11
+</code></pre>
+
+<pre><code class="language-bash"># agent2
+2014/03/23 13:45:18 [INFO] agent: joining: [172.20.20.10] replay: false
+2014/03/23 13:45:18 [INFO] serf: EventMemberJoin: agent1 172.20.20.10
+2014/03/23 13:45:18 [INFO] agent: joined: 1 Err: &lt;nil&gt;
+</code></pre>
+
+<p>それぞれのエージェントで<code>serf member</code>を実行すると，それぞれのエージェントが互いのことを認識していることが確認できる．</p>
+
+<pre><code class="language-bash">vagrant@n1:$ serf members
+agent1  172.20.20.10:7946  alive
+agent2  172.20.20.11:7946  alive
+</code></pre>
+
+<pre><code class="language-bash">vagrant@n2:$ serf members
+agent2  172.20.20.11:7946  alive
+agent1  172.20.20.10:7946  alive
+</code></pre>
+
+<p>さらに別のウィンドウを立ち上げて<code>n3</code>で新たなエージェント（<code>agent3</code>）を起動し，同時に<code>agent1</code>と<code>agent2</code>で形成するクラスタにjoinする．起動と同時にクラスタにjoinするには，<code>-join</code>オプションを使う．ここでは，<code>agent2</code>のbindアドレスを指定してjoinしてみる．</p>
+
+<pre><code class="language-bash">$ vagrant ssh n3
+vagrant@precise64:~$ serf agent -node=agent3 -bind=172.20.20.12 -join=172.20.20.11
+==&gt; Starting Serf agent...
+==&gt; Starting Serf agent RPC...
+==&gt; Serf agent running!
+         Node name: 'agent3'
+         Bind addr: '172.20.20.12:7946'
+         RPC addr: '127.0.0.1:7373'
+         Encrypted: false
+         Snapshot: false
+         Profile: lan
+==&gt; Joining cluster...(replay: false)
+Join completed. Synced with 1 initial agents
+</code></pre>
+
+<p>それぞれのエージェントのログをみると，エージェントのjoinの情報がやり取りされているのがわかる．<code>agent1</code>と<code>agent2</code>は<code>agent3</code>のjoin情報を，新しくクラスタにjoinしたばかりの<code>agent3</code>は<code>agent1</code>と<code>agent2</code>のjoin情報を受け取っている．</p>
+
+<pre><code class="language-bash"># agent1
+2014/03/23 14:15:09 [INFO] serf: EventMemberJoin: agent3 172.20.20.12
+</code></pre>
+
+<pre><code class="language-bash"># agent2
+2014/03/23 14:15:08 [INFO] serf: EventMemberJoin: agent3 172.20.20.12
+</code></pre>
+
+<pre><code class="language-bash"># agent3
+2014/03/23 14:15:08 [INFO] agent: joining: [172.20.20.11] replay: false
+2014/03/23 14:15:08 [INFO] serf: EventMemberJoin: agent1 172.20.20.10
+2014/03/23 14:15:08 [INFO] serf: EventMemberJoin: agent2 172.20.20.11
+</code></pre>
+
+<p>それぞれのエージェントでserf memberを実行すると，<code>agent3</code>が新たなメンバーとして追加されていることが確認できる．</p>
+
+<pre><code class="language-bash">vagrant@n1:$ serf members
+agent1  172.20.20.10:7946  alive
+agent2  172.20.20.11:7946  alive
+agent3  172.20.20.12:7946  alive
+</code></pre>
+
+<pre><code class="language-bash">vagrant@n2:$ serf members
+agent2  172.20.20.11:7946  alive
+agent1  172.20.20.10:7946  alive
+agent3  172.20.20.12:7946  alive
+</code></pre>
+
+<pre><code class="language-bash">vagrant@n3:$ serf members
+agent3  172.20.20.12:7946  alive
+agent1  172.20.20.10:7946  alive
+agent2  172.20.20.11:7946  alive
+</code></pre>
+
+<p><a href="#m">目次へ</a></p>
+
+<h2 id="lcluster">クラスタからの離脱</h2>
+
+<p>クラスタから抜けてみる．エージェントを停止するだけ．停止方法は，エージェントの起動画面で<code>Ctrl-C</code>（interrupt signalを送る）するか，エージェントのプロセスをkill（terminated）するだけ．</p>
+
+<p>二つの停止方法で，serfの挙動は異なる．</p>
+
+<ul>
+<li>正常終了．<code>Ctrl-C</code>（interrupt）による停止．Serfは他のクラスタのメンバーにその停止エージェントの_left_を通知し，以後そのノードに対して通信はしない．</li>
+<li>異常終了．プロセスをkill（terminated）して停止．クラスタの他のメンバーはそのノードが_failed_したと検知する．そしてSerfは再びそのノードに接続しよう通信を継続する．</li>
+</ul>
+
+<h3 id="正常終了:949cea981e22858e171e92950843d958">正常終了</h3>
+
+<p>まず，<code>agent3</code>を<code>Ctrl-C</code>で停止してみる．</p>
+
+<pre><code class="language-bash">==&gt; Caught signal: interrupt
+==&gt; Gracefully shutting down agent...
+    2014/03/23 14:42:07 [INFO] agent: requesting graceful leave from Serf
+    2014/03/23 14:42:08 [INFO] serf: EventMemberLeave: agent3 172.20.20.12
+    2014/03/23 14:42:08 [INFO] agent: requesting serf shutdown
+    2014/03/23 14:42:08 [INFO] agent: shutdown complete
+</code></pre>
+
+<p>他のメンバーに対して，クラスタのleaveを通知してからエージェントを停止している．また，残ったエージェントのログをみると，メンバーのleave情報（<code>EventMemberLeave</code>）を受け取っていることが確認できる．</p>
+
+<pre><code class="language-bash"># agent1
+2014/03/23 14:42:08 [INFO] serf: EventMemberLeave: agent3 172.20.20.12
+</code></pre>
+
+<pre><code class="language-bash"># agent2
+2014/03/23 14:42:08 [INFO] serf: EventMemberLeave: agent3 172.20.20.12
+</code></pre>
+
+<p>それぞれのエージェントでserf memberを実行すると，<code>agent3</code>が_left_したことが確認できる．</p>
+
+<pre><code class="language-bash">vagrant@n1:$ serf members
+agent1  172.20.20.10:7946  alive
+agent2  172.20.20.11:7946  alive
+agent3  172.20.20.12:7946  left
+</code></pre>
+
+<pre><code class="language-bash">vagrant@n2:$ serf members
+agent2  172.20.20.11:7946  alive
+agent1  172.20.20.10:7946  alive
+agent3  172.20.20.12:7946  left
+</code></pre>
+
+<h3 id="異常終了:949cea981e22858e171e92950843d958">異常終了</h3>
+
+<p>次に，<code>agent2</code>をプロセスのkillで停止してみる．</p>
+
+<pre><code class="language-bash">==&gt; Caught signal: terminated
+    2014/03/23 14:58:11 [INFO] agent: requesting serf shutdown
+    2014/03/23 14:58:11 [WARN] Shutdown without a Leave
+    2014/03/23 14:58:11 [INFO] agent: shutdown complete
+</code></pre>
+
+<p><code>agent3</code>の場合とは異なり，leave通知なしで停止している．残った<code>agent1</code>のログをみると，メンバーの_failed_を検知し，再接続しようとしているのが確認できる．</p>
+
+<pre><code class="language-bash"># agent1
+2014/03/23 14:58:19 [INFO] serf: EventMemberFailed: agent2 172.20.20.11
+2014/03/23 14:58:20 [INFO] agent: Received event: member-failed
+2014/03/23 14:58:36 [INFO] serf: attempting reconnect to agent2 172.20.20.11
+2014/03/23 14:59:06 [INFO] serf: attempting reconnect to agent2 172.20.20.11
+2014/03/23 14:59:36 [INFO] serf: attempting reconnect to agent2 172.20.20.11
+</code></pre>
+
+<p><code>serf members</code>を実行すると，<code>agent2</code>が_failed_となっていることが確認できる．</p>
+
+<pre><code class="language-bash">vagrant@n1:$ serf members
+agent1  172.20.20.10:7946  alive
+agent2  172.20.20.11:7946  failed
+agent3  172.20.20.12:7946  left
+</code></pre>
+
+<p>Serfは_failed_ノードを再接続しようとし続けるので，再び<code>n2</code>で<code>agent2</code>を起動すると，joinすることなく自動でクラスタにjoinされる．</p>
+
+<pre><code class="language-bash">vagrant@n2:$ serf agent -node=agent2 -bind=172.20.20.11
+...
+2014/03/23 15:05:36 [INFO] serf: EventMemberJoin: agent1 172.20.20.10
+</code></pre>
+
+<p><a href="#m">目次へ</a></p>
+
+<h2 id="eh">イベントハンドラ</h2>
+
+<p>Serfのエージェントの起動方法，クラスタへの参入/離脱方法はわかった．Serfが強力なのは，メンバーのjoinやその他のイベントに反応できるところ．特定のイベントに対して，オリジナルのスクリプトを実行することができる．</p>
+
+<p>以下のような，単純なrubyスクリプトによるイベントハンドラ（<code>handler.rb</code>）を作る．</p>
+
+<pre><code class="language-ruby">#handler.rb
+
+puts
+puts &quot;New event: #{ENV[&quot;SERF_EVENT&quot;]}. &quot;
+
+while str = STDIN.gets
+    puts str
+end
+</code></pre>
+
+<p>このイベントハンドラは，単純に<code>SERF_EVENT</code>という環境変数に格納されたイベント名を出力する．Serfのイベントのデータは常に標準入力からくる，ので<code>STDIN</code>によりこれを取得する．</p>
+
+<h3 id="イベントハンドラの登録:949cea981e22858e171e92950843d958">イベントハンドラの登録</h3>
+
+<p>では，実際にこのイベントハンドラを動かしてみる．エージェントを起動する際に，<code>-event-handler</code>で上記のスクリプトを指定するだけ．イベントハンドラの出力はDEBUGモードの時に出力されるので，ログレベルをDEBUGにしておく．</p>
+
+<pre><code class="language-bash">$ serf agent -node=agent1 -log-level=debug -event-handler='ruby handler.rb'
+==&gt; Starting Serf agent...
+==&gt; Starting Serf agent RPC...
+==&gt; Serf agent running!
+         Node name: 'agent1'
+         Bind addr: '0.0.0.0:7946'
+         RPC addr: '127.0.0.1:7373'
+         Encrypted: false
+         Snapshot: false
+         Profile: lan
+
+==&gt; Log data will now stream in as it occurs:
+
+    2014/03/25 16:43:00 [INFO] agent: Serf agent starting
+    2014/03/25 16:43:00 [INFO] serf: EventMemberJoin: agent1 10.0.2.15
+    2014/03/25 16:43:01 [INFO] agent: Received event: member-join
+    2014/03/25 16:43:01 [DEBUG] agent: Event 'member-join' script output:
+    New event: member-join.
+    agent1  10.0.2.15
+</code></pre>
+
+<p>ログの最終行をみると，イベントに対して，スクリプトを実行しているのがわかる．今回の<code>
+SERF_EVENT</code>は<code>member-join</code>で，それを出力している．</p>
+
+<h3 id="イベントハンドラの種類:949cea981e22858e171e92950843d958">イベントハンドラの種類</h3>
+
+<p>Serfが発行するイベントは以下．</p>
+
+<ul>
+<li><code>member-join</code> メンバーのjoin</li>
+<li><code>member-leave</code> メンバーの離脱（<code>Ctrl+c</code>による離脱，正常終了の場合）</li>
+<li><code>member-failed</code> メンバーのダウン，Failed（異常終了の場合）</li>
+<li><code>member-update</code> メンバーのアップデート</li>
+<li><code>member-reap</code> メンバーの解除（_failed_メンバーへの再接続のタイムアウト）</li>
+<li><code>user</code> <a href="#ce">カスタムイベント</a>の発行</li>
+<li><code>query</code> <a href="#q">カスタムクエリ</a>の発行</li>
+</ul>
+
+<h3 id="環境変数:949cea981e22858e171e92950843d958">環境変数</h3>
+
+<p>イベントハンドラが実行されると，Serfは以下のような環境変数を設定する．</p>
+
+<ul>
+<li><code>SERF_EVENT</code> 発生したイベント名</li>
+<li><code>SERF_SELF_NAME</code> イベントを発行したノード名</li>
+<li><code>SERF_SELF_ROLE</code> イベントを発行したノードのrole名</li>
+<li><code>SERF_TAG_${TAG}</code> エージェントが持つタグ名</li>
+<li><code>SERF_USER_EVENT</code> <a href="#ce">カスタムイベント</a>名</li>
+<li><code>SERF_USER_LTIME</code> <a href="#ce">カスタムイベント</a>の<code>LamportTime</code></li>
+<li><code>SERF_QUERY_NAME</code> <a href="#q">カスタムクエリ</a>名</li>
+<li><code>SERF_QUERY_LTIME</code> <a href="#q">カスタムクエリ</a>の<code>LamportTime</code></li>
+</ul>
+
+<p><code>LamportTime</code>は<a href="http://en.wikipedia.org/wiki/Lamport_timestamps">Lamport timestamps</a>を参照．</p>
+
+<h3 id="特定のイベントに対するイベントハンドラの登録:949cea981e22858e171e92950843d958">特定のイベントに対するイベントハンドラの登録</h3>
+
+<p>特定のイベントに対して，イベントハンドラを登録することもできる．</p>
+
+<p><code>member-leave</code>のときのみ，<code>handler.rb</code>を実行したい場合は，</p>
+
+<pre><code class="language-bash">$ serf agent -node=agent1 -log-level=debug -event-handler member-leave='ruby handler.rb'
+</code></pre>
+
+<p><code>memver-join</code>と<code>member-leave</code>のときのみ，<code>handler.rb</code>を実行した場合は，</p>
+
+<pre><code class="language-bash">$ serf agent -node=agent1 -log-level=debug -event-handler member-join,member-leave='ruby handler.rb'
+</code></pre>
+
+<p><a href="#m">目次へ</a></p>
+
+<h2 id="ce">カスタムイベント</h2>
+
+<p>joinやleave等の標準のイベントに加えて，ユーザ独自のイベントをクラスタ内に伝搬させることもできる．このイベントには，基になるノードもないし，反応も期待しない．また，全てのノードに伝搬したか保証できない．カスタムイベントは，デプロイのトリガー，クラスタの再起動などに使われる．</p>
+
+<h3 id="カスタムイベントの発行:949cea981e22858e171e92950843d958">カスタムイベントの発行</h3>
+
+<p>あらかじめエージェントを起動しておく．例として，二つのホスト（<code>n1</code>と<code>n2</code>）で<code>agent1</code>と<code>agent2</code>を起動し，クラスタを形成する．</p>
+
+<pre><code class="language-bash">$ vagrant ssh n1
+vagrant@n1:$ serf agent -node=agent1 -bind=172.20.20.10
+</code></pre>
+
+<pre><code class="language-bash">$ vagrant ssh n2
+vagrant@n2:$ serf agent -node=agent2 -bind=172.20.20.11 -join=172.20.20.10
+</code></pre>
+
+<pre><code class="language-bash">$ serf members
+agent1  172.20.20.10:7946  alive
+agent2  172.20.20.11:7946  alive
+</code></pre>
+
+<p>カスタムイベントを発行するには，<code>serf event</code>コマンドを実行する．<code>hello</code>というイベントを発行する．</p>
+
+<pre><code class="language-bash">$ vagrant ssh n2
+vagrant@n2:$ vagrant event hello
+</code></pre>
+
+<p>それぞれのエージェントのログをみると，<code>hello</code>イベントを受け取っていることがわかる</p>
+
+<pre><code class="language-bash">#agent1
+2014/03/26 14:10:38 [INFO] agent: Received event: user-event: hello
+</code></pre>
+
+<pre><code class="language-bash">#agent2
+2014/03/26 14:10:38 [INFO] agent: Received event: user-event: hello
+</code></pre>
+
+<h3 id="カスタムイベントに対するイベントハンドラ:949cea981e22858e171e92950843d958">カスタムイベントに対するイベントハンドラ</h3>
+
+<p>標準のイベントと同様に，イベントハンドラはこのカスタムイベントに反応することができる．</p>
+
+<p>すべてのカスタムイベントに対して，<code>handler.rb</code>を実行したい場合，</p>
+
+<pre><code class="language-bash">$ serf agent -log-level=debug -event-handler user=&quot;ruby handler.rb&quot;
+</code></pre>
+
+<p>特定のカスタムイベントに対するイベントハンドラは，<code>user:イベント名</code>で登録する．例えば，上の<code>hello</code>カスタムイベントに対して，<code>handler.rb</code>を実行したい場合，</p>
+
+<pre><code class="language-bash">$ serf agent -log-level=debug -event-handler user:hello=&quot;ruby handler.rb&quot;
+</code></pre>
+
+<h3 id="イベントペイロード:949cea981e22858e171e92950843d958">イベントペイロード</h3>
+
+<p>イベント名を伝搬するだけではなく，イベント名に紐づく任意のデータ（ペイロード）を同時に伝搬させることができる．</p>
+
+<p>例えば，<code>name</code>というイベント名で，<code>deeeet</code>を伝搬させるには以下のようにする．</p>
+
+<pre><code class="language-bash">$ serf event name deeeet
+</code></pre>
+
+<p>データは，標準入力として入力されるので，イベントハンドラ内で利用できる．</p>
+
+<p>SerfのゴシッププロトコルはUDPを使っているので，理論的には，最大積載量は1KB未満であり，Serfはさらにそれを制限している．</p>
+
+<p><a href="#m">目次へ</a></p>
+
+<h2 id="q">カスタムクエリ</h2>
+
+<p><a href="#ce">カスタムイベント</a>は，イベントを伝搬させるだけだが，カスタムクエリは各ノードにレスポンスを要求する．カスタムクエリは，イベントよりも柔軟で，伝搬させるべきノードをフィルタリングして，さらに好きなレスポンスを返させることができる．カスタムクエリは，ノードの情報種集などに利用される．</p>
+
+<h3 id="カスタムクエリの発行:949cea981e22858e171e92950843d958">カスタムクエリの発行</h3>
+
+<p>あらかじめエージェントを起動しておく．例として，二つのホスト（<code>n1</code>と<code>n2</code>）で<code>agent1</code>と<code>agent2</code>を起動し，クラスタを形成する．</p>
+
+<pre><code class="language-bash">$ vagrant ssh n1
+vagrant@n1:$ serf agent -node=agent1 -bind=172.20.20.10
+</code></pre>
+
+<pre><code class="language-bash">$ vagrant ssh n2
+vagrant@n2:$ serf agent -node=agent2 -bind=172.20.20.11 -join=172.20.20.10
+</code></pre>
+
+<pre><code class="language-bash">$ serf members
+agent1  172.20.20.10:7946  alive
+agent2  172.20.20.11:7946  alive
+</code></pre>
+
+<p>カスタムクエリを発行するには，<code>serf query</code>コマンドを実行する．<code>uptime</code>というクエリを発行する．</p>
+
+<pre><code class="language-bash">$ serf query uptime
+Query 'uptime' dispatched
+Ack from 'agent2'
+Ack from 'agent1'
+Total Acks: 2
+Total Responses: 0
+</code></pre>
+
+<p>カスタムイベントとはことなり，各ノードからレスポンスが返ってきている．それぞれのエージェントのログをみると，<code>uptime</code>クエリを受け取っていることがわかる．</p>
+
+<pre><code class="language-bash"># agent1
+2014/03/26 15:18:32 [INFO] agent: Received event: query: uptime
+</code></pre>
+
+<pre><code class="language-bash"># agent2
+2014/03/26 15:18:32 [INFO] agent: Received event: query: uptime
+</code></pre>
+
+<h3 id="カスタムクエリに対するイベントハンドラ:949cea981e22858e171e92950843d958">カスタムクエリに対するイベントハンドラ</h3>
+
+<p>カスタムクエリが強力なのは，イベントハンドラの出力結果をレスポンスとして返させることができること．</p>
+
+<p>特定のクエリに対するイベントハンドラは，<code>query:クエリ名</code>で登録する．例えば，上の<code>uptime</code>カスタムクエリに対して，<code>uptime</code>を実行したい場合は，以下のようにする．</p>
+
+<pre><code class="language-bash">$ serf agent -node=agent1 -bind=172.20.20.10 -event-handler query:uptime=uptime
+</code></pre>
+
+<p>この状態で，<code>uptime</code>クエリを実行すると，</p>
+
+<pre><code class="language-bash">$ serf query uptime
+Query 'uptime' dispatched
+Ack from 'agent1'
+Response from 'agent1':  15:29:29 up 2 days,  6:27,  2 users,  load average: 0.13, 0.25, 0.30
+Total Acks: 1
+Total Responses: 1
+</code></pre>
+
+<p><code>agent1</code>から<code>uptime</code>の実行結果が返ってきているのがわかる．</p>
+
+<h3 id="クエリペイロード:949cea981e22858e171e92950843d958">クエリペイロード</h3>
+
+<p>クエリ名を伝搬するだけではなく，クエリ名に紐づく任意のデータ（ペイロード）を同時に伝搬させることができる．</p>
+
+<p>例えば，nameというクエリ名で，deeeetを伝搬させるには以下のようにする．</p>
+
+<pre><code class="language-bash">$ serf query name deeeet
+</code></pre>
+
+<p>データは，標準入力として入力されるので，イベントハンドラ内で利用できる．</p>
+
+<p>SerfのゴシッププロトコルはUDPを使っているので，理論的には，最大積載量は1KB未満であり，Serfはさらにそれを制限している．</p>
+
+<h3 id="伝搬させるノードの制限:949cea981e22858e171e92950843d958">伝搬させるノードの制限</h3>
+
+<p>クエリを伝搬させるべきノードを制限することができる．例えば<code>agent1</code>のみに伝搬させたい場合は，</p>
+
+<pre><code class="language-bash">$ serf query -node agent1 uptime
+</code></pre>
+
+<h3 id="カスタムクエリの応用例:949cea981e22858e171e92950843d958">カスタムクエリの応用例</h3>
+
+<p>イベントハンドラにシェルを指定し，クエリペイロードを用いると，任意のコマンドを発行し，その結果を受け取ることができる．</p>
+
+<pre><code class="language-bash">$ serf agent -node=agent1 -bind=172.20.20.10 -event-handler query:sh='/bin/bash'
+</code></pre>
+
+<pre><code class="language-bash">$ serf query sh 'service nginx reload'
+</code></pre>
+
+<p><a href="http://www.slideshare.net/sonots/serf-iiconf-20140325">&ldquo;Serf という Orchestration ツール #immutableinfra&rdquo;</a>を参考．</p>
+
+<p><a href="#m">目次へ</a></p>
+
+<h2 id="com">コマンド一覧</h2>
+
+<p>v0.5.0現在で利用可能なコマンド一覧．</p>
+
+<p>メンバーシップ関連</p>
+
+<ul>
+<li><code>serf agent</code> エージェントを起動する</li>
+<li><code>serf join</code> クラスタに参入する</li>
+<li><code>serf leave</code> クラスタから離脱する</li>
+<li><code>serf force-leave</code> メンバーを離脱させる</li>
+<li><code>serf memers</code> クラスタのメンバーを確認する</li>
+</ul>
+
+<p>カスタムメッセージ関連</p>
+
+<ul>
+<li><code>serf event</code> カスタムイベントを配信する</li>
+<li><code>serf query</code> カスタムクエリを配信する</li>
+</ul>
+
+<p>デバッグ関連</p>
+
+<ul>
+<li><code>serf monitor</code> 起動しているエージェントの接続して，そのログを確認する</li>
+<li><code>serf reachability</code> ネットワークの接続確認をする</li>
+</ul>
+
+<p>その他</p>
+
+<ul>
+<li><code>serf keygen</code> <a href="http://www.serfdom.io/docs/agent/encryption.html">暗号通信</a>を行うための暗号キーを生成する</li>
+<li><code>serf tag</code> クラスタのメンバーのタグを変更する</li>
+</ul>
+
+<p><a href="#m">目次へ</a></p>
+
+<h2 id="ref">参考</h2>
+
+<ul>
+<li><a href="http://mizzy.org/blog/2013/10/29/1/">インフラ系技術の流れ</a></li>
+<li><a href="http://blog.glidenote.com/blog/2013/10/30/serf-haproxy/">Serf+HAProxyで作るAutomatic Load Balancer</a></li>
+<li><a href="http://jedipunkz.github.io/blog/2013/11/10/serf/">Serf を使ってみた</a></li>
+<li><a href="http://pocketstudio.jp/log3/2013/11/12/raspberrypi-notify-with-serf/">RaspberryPi起動・停止時にSerfで画面に通知する方法</a></li>
+<li><a href="http://www.slideshare.net/sonots/serf-iiconf-20140325">&ldquo;Serf という Orchestration ツール #immutableinfra&rdquo;</a></li>
+</ul>
+
+      <div class="social">
+  
+  
+  <a href="https://twitter.com/share" class="twitter-share-button" data-via="deeeet" data-count="none">Tweet</a>
+  
+  
+</div>
+
+    </section>
+
+    <footer>
+      <address>
+        
+        <img src="/images/bio.jpeg"/>
+        
+        <p>Written by <strong><a rel="author" href="https://twitter.com/deeeet" title="Taichi Nakashima" target="_blank">Taichi Nakashima</a></strong><br>
+          <span class="muted">A Tokyo based PaaS engineer. Please contact me via twitter.</span>
+        </p>
+      </address>
+
+    </footer>
+
+  </div>
+</article>
+
+<script type="text/javascript" src="//ajax.googleapis.com/ajax/libs/jquery/1.7.2/jquery.min.js"></script>
+<script type="text/javascript" src="/js/main.js"></script>
+
+<script>!function(d,s,id){var js,fjs=d.getElementsByTagName(s)[0],p=/^http:/.test(d.location)?'http':'https';if(!d.getElementById(id)){js=d.createElement(s);js.id=id;js.src=p+'://platform.twitter.com/widgets.js';fjs.parentNode.insertBefore(js,fjs);}}(document, 'script', 'twitter-wjs');</script>
+
+
+<script type="text/javascript">var HN=[];HN.factory=function(e){return function(){HN.push([e].concat(Array.prototype.slice.call(arguments,0)))};},HN.on=HN.factory("on"),HN.once=HN.factory("once"),HN.off=HN.factory("off"),HN.emit=HN.factory("emit"),HN.load=function(){var e="hn-button.js";if(document.getElementById(e))return;var t=document.createElement("script");t.id=e,t.src="//hn-button.herokuapp.com/hn-button.js";var n=document.getElementsByTagName("script")[0];n.parentNode.insertBefore(t,n)},HN.load();</script>
+
+
+  <script>
+  (function(i,s,o,g,r,a,m){i['GoogleAnalyticsObject']=r;i[r]=i[r]||function(){
+  (i[r].q=i[r].q||[]).push(arguments)},i[r].l=1*new Date();a=s.createElement(o),
+  m=s.getElementsByTagName(o)[0];a.async=1;a.src=g;m.parentNode.insertBefore(a,m)
+  })(window,document,'script','//www.google-analytics.com/analytics.js','ga');
+
+  ga('create', 'UA-45390253-1', 'auto');
+  ga('send', 'pageview');
+
+</script>
+
+
+
+<script>
+  $(document).ready(function() {
+  
+  $('p:has(img)').css('text-align', 'center');
+  $('iframe').css('style', 'display: block; margin: 0px auto;');
+  });
+</script>
+

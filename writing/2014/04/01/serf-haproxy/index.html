@@ -1,0 +1,403 @@
+<!doctype html>
+<html>
+  <head>
+    <meta http-equiv="content-type" content="text/html; charset=utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    
+    <title>SerfでHAProxyの更新 on Vagrant | SOTA</title>
+    
+    <link href="https://fonts.googleapis.com/css?family=Lato%3a900" rel="stylesheet" type="text/css">
+    <link rel="stylesheet" href="/css/main.css">
+    <link rel="shortcut icon" href="/favicon.png" type="image/x-icon" />
+    <link href="http://deeeet.com//index.xml" rel="alternate" type="application/rss+xml" title="" />
+    <meta name="title" content="http://deeeet.com/writing/2014/04/01/serf-haproxy/">
+    <link rel="canonical" href="http://deeeet.com/writing/2014/04/01/serf-haproxy/">
+    
+    <meta property="og:title" content="SerfでHAProxyの更新 on Vagrant"/>
+    <meta property="og:url" content="http://deeeet.com/writing/2014/04/01/serf-haproxy/"/>
+  </head>
+  
+  <body>
+    <section class="site-nav">
+      <header>
+        <nav id="navigation">
+          <ul class="menu">
+            <li><a href="https://github.com/tcnksm/talks">Talks</a></li>
+            <li><a href="https://tcnksm.exposure.co/">Photos</a></li>
+          </ul>
+
+          <a class="name" href="/">SOTA</a>
+        </nav>        
+      </header>
+    </section>
+    
+
+
+<article>
+  <div class="container">
+    <header>
+      <div class="meta">
+        <time pubdate datetime="2014-04-01" title="2014-04-01">April 01, 2014</time>
+      </div>
+      <h1 class="title">SerfでHAProxyの更新 on Vagrant</h1>
+    </header>
+    
+    <section>
+      
+
+<p>Serfの典型的な使い方として紹介されることの多い，HAProxyの登録/更新をやってみた．これは既に何人かの方が試みているし，SerfのGithubのdemoページでも紹介されている．</p>
+
+<ul>
+<li><a href="https://github.com/hashicorp/serf/tree/master/demo/web-load-balancer">hashicorp/serf/demo/web-load-balancer</a></li>
+<li><a href="http://blog.glidenote.com/blog/2013/10/30/serf-haproxy/">&ldquo;Serf+HAProxyで作るAutomatic Load Balancer&rdquo;</a></li>
+<li><a href="http://blog.ryotarai.info/blog/2014/04/01/service-discovery-by-syanpse-with-serf/">&ldquo;Synapse と Serf でサービスディスカバリ&rdquo;</a></li>
+</ul>
+
+<p>これらが何をやっているかを簡単に書くと，1つのProxyサーバ（ロードバランサ）と複数のWebサーバという構成において，Webサーバの増減に応じてロードバランサの設定を自動で書き換えるというもの．</p>
+
+<p>これをVagrantで複数サーバを立ち上げて，自分で手を動しつつ触ってみた．</p>
+
+<p><a href="https://github.com/tcnksm/sample-serf-haproxy">tcnksm/sample-serf-haproxy</a></p>
+
+<p>Vagrantさえあれば誰でもすぐ試せるようになっている．</p>
+
+<h2 id="vagrantの準備:a4d3e4c93be0e2e889b4205a37c0cfc5">Vagrantの準備</h2>
+
+<p>以下のようなVagrantfileを準備する．</p>
+
+<pre><code class="language-ruby"># Serfのインストール
+# すべてのホストで実行する
+$script = &lt;&lt;SCRIPT
+sudo apt-get install -y unzip
+cd /tmp/
+wget https://dl.bintray.com/mitchellh/serf/0.5.0_linux_amd64.zip -O serf.zip
+
+unzip serf.zip
+chmod +x serf
+mv serf /usr/bin/serf
+
+SCRIPT
+
+Vagrant.configure(&quot;2&quot;) do |config|
+  config.vm.box = &quot;precise64&quot;
+  config.vm.box_url = &quot;http://files.vagrantup.com/precise64.box&quot;
+  config.vm.provision :shell, inline: $script
+
+  # proxyサーバのプロビジョニング
+  # (1) HAProxyのインストール
+  # (2) HAProxyの有効化
+  # (3) HAProxyの初期設定の書き出し
+  # (4) HAProxyの起動
+  config.vm.define :proxy do |proxy|
+      proxy.vm.network &quot;private_network&quot;, ip: &quot;172.20.20.10&quot;
+      proxy.vm.provision :shell, inline: &lt;&lt;SCRIPT
+apt-get -y install haproxy
+sed -i -e 's/ENABLED=0/ENABLED=1/' /etc/default/haproxy
+
+cat &lt;&lt;EOF &gt;/tmp/haproxy.cfg
+global
+    daemon
+    maxconn 256
+
+defaults
+    mode http
+    timeout connect 5000ms
+    timeout client 50000ms
+    timeout server 50000ms
+
+listen stats
+    bind *:9999
+    mode http
+    stats enable
+    stats uri /
+    stats refresh 1s
+
+listen http-in
+    bind *:80
+    balance roundrobin
+    option http-server-close
+EOF
+
+mv /tmp/haproxy.cfg /etc/haproxy/haproxy.cfg
+
+/etc/init.d/haproxy start
+
+SCRIPT
+  end
+
+  # webサーバのプロビジョニング
+  # (1) nginxのインストール
+  # (2) 初期画面の準備
+  # (3) nginxの起動
+  config.vm.define :web1 do |web|
+      web.vm.network &quot;private_network&quot;, ip: &quot;172.20.20.111&quot;
+      web.vm.provision :shell, inline: &lt;&lt;SCRIPT
+apt-get -y update
+apt-get -y install nginx
+echo '&lt;h1&gt;web1&lt;/h1&gt;' &gt; /usr/share/nginx/www/index.html
+/etc/init.d/nginx start
+SCRIPT
+  end
+
+  config.vm.define :web2 do |web|
+      web.vm.network &quot;private_network&quot;, ip: &quot;172.20.20.112&quot;
+      web.vm.provision :shell, inline: &lt;&lt;SCRIPT
+apt-get -y update
+apt-get -y install nginx
+echo '&lt;h1&gt;web2&lt;/h1&gt;' &gt; /usr/share/nginx/www/index.html
+/etc/init.d/nginx start
+SCRIPT
+  end
+end
+
+</code></pre>
+
+<p>ホストは全部で3つ立てる．ロードバランサ用のホスト<code>proxy</code>を172.20.20.10で，Webサーバ用のホスト<code>web1</code>と<code>web2</code>を172.20.20.111と172.20.20.112で立てる．Webサーバはどれだけ増やしてもよい．</p>
+
+<p>Serfは全てのホストにインストールする．<code>proxy</code>ではHAProxyのインストールと初期設定を，<code>web</code>ではnginxをインストールと初期画面の準備，設定を行う．</p>
+
+<p>起動する．</p>
+
+<pre><code class="language-bash">$ vagrant up
+</code></pre>
+
+<h2 id="serfの設定ファイルの準備:a4d3e4c93be0e2e889b4205a37c0cfc5">Serfの設定ファイルの準備</h2>
+
+<p>Serfを起動するたびにコマンドを打つのはめんどくさいので共通部分は設定ファイルにしておく．設定ファイルの書き方は<a href="http://www.serfdom.io/docs/agent/options.html">公式</a>を参考に．</p>
+
+<p>まず，Proxyサーバの設定ファイル．</p>
+
+<pre><code class="language-ruby"># proxy.json
+{
+    &quot;tags&quot;: {
+            &quot;role&quot;: &quot;lb&quot;
+    },
+
+    &quot;node_name&quot;: &quot;proxy&quot;,
+
+    &quot;bind&quot;: &quot;172.20.20.10&quot;,
+
+    &quot;event_handlers&quot;: [
+            &quot;ruby handler.rb&quot;
+    ]
+}
+</code></pre>
+
+<p>次に，Webサーバの設定ファイル．</p>
+
+<pre><code class="language-ruby"># web.json
+{
+    &quot;tags&quot;: {
+            &quot;role&quot;: &quot;web&quot;
+    },
+                
+    &quot;start_join&quot;: [
+            &quot;172.20.20.10&quot;
+    ]
+}
+</code></pre>
+
+<p>join先をProxyサーバにしておくと楽．</p>
+
+<h2 id="イベントハンドラの準備:a4d3e4c93be0e2e889b4205a37c0cfc5">イベントハンドラの準備</h2>
+
+<p>イベントハンドラがやることは単純に<code>/etc/haproxy/haproxy.cfg</code>の書き換え</p>
+
+<ol>
+<li><code>member-join</code>を受け取ったら，サーバの情報の追記</li>
+<li><code>member-leave</code>を受け取ったら，該当するサーバ情報の削除</li>
+</ol>
+
+<p>以下のようになる．</p>
+
+<pre><code class="language-ruby"># handler.rb
+
+require 'fileutils'
+
+# 設定ファイル
+CONFIGFILE = &quot;/etc/haproxy/haproxy.cfg&quot;
+TMP_CONFIGFILE = &quot;/tmp/haproxy.cfg&quot;
+
+exit 0 if ENV[&quot;SERF_TAG_ROLE&quot;] != &quot;lb&quot;
+
+# サーバ情報の取得
+def member_info
+  info = {}
+  STDIN.each_line do |line|
+    info[:node], info[:ip], info[:role], _ = line.split(' ')
+  end
+  info
+end
+
+info = member_info
+exit 0 if info[:role] != &quot;web&quot;
+
+case ENV[&quot;SERF_EVENT&quot;]
+
+# サーバ情報の追記
+when 'member-join'
+  File.open(CONFIGFILE,&quot;a&quot;) do |f|
+      f.puts &quot;    server #{info[:node]} #{info[:ip]}:80 check&quot;
+  end
+  
+# 該当サーバ情報の削除
+when 'member-leave'
+  target = &quot;    server #{info[:node]} #{info[:ip]}:80 check&quot;
+  FileUtils.rm(TMP_CONFIGFILE) if File.exist?(TMP_CONFIGFILE)
+  File.open(TMP_CONFIGFILE,&quot;w&quot;) do |f|
+    File.open(CONFIGFILE,&quot;r&quot;).each do |line|
+      next if line.chomp == target
+      f.write(line)
+    end
+  end
+  FileUtils.mv(TMP_CONFIGFILE, CONFIGFILE)
+end
+
+system(&quot;/etc/init.d/haproxy reload&quot;)
+</code></pre>
+
+<p>このイベントハンドラはProxyサーバのみで設定する．</p>
+
+<h2 id="動かしてみる:a4d3e4c93be0e2e889b4205a37c0cfc5">動かしてみる</h2>
+
+<p>実際に動かしてみる．</p>
+
+<p>まず，Proxyサーバで最初のAgentを立ち上げる．</p>
+
+<pre><code class="language-bash">$ vagrant ssh proxy
+$ cd /vagrant
+$ sudo serf agent -config-file=proxy.json
+</code></pre>
+
+<p><code>-config-file</code>に上で準備した設定ファイルを指定する．</p>
+
+<p>アクセスしてみる．</p>
+
+<pre><code class="language-bash">$ curl http://172.20.20.10/
+&lt;html&gt;&lt;body&gt;&lt;h1&gt;503 Service Unavailable&lt;/h1&gt;
+No server is available to handle this request.
+&lt;/body&gt;&lt;/html&gt;
+</code></pre>
+
+<p>まだ一つもバランシングされていない．</p>
+
+<p>次に，<code>web1</code>でAgentを立ち上げて，クラスタにjoinする．</p>
+
+<pre><code class="language-bash">$ vagrant ssh web1
+$ cd /vagrant
+$ serf agent -config-file=web.json -node web1 -bind 172.20.20.111
+</code></pre>
+
+<p>設定ファイルに加えて，ノード名とホストのIPを指定する．</p>
+
+<p>これで<code>web1</code>がバランシングされるようになる．</p>
+
+<pre><code class="language-bash">$ curl http://172.20.20.10/
+&lt;h1&gt;web1&lt;/h1&gt;
+$ curl http://172.20.20.10/
+&lt;h1&gt;web1&lt;/h1&gt;
+</code></pre>
+
+<p>さらに，<code>web2</code>でAgentを立ち上げて，クラスタにjoinする．</p>
+
+<pre><code class="language-bash">$ vagrant ssh web2
+$ cd /vagrant
+$ serf agent -config-file=web.json -node web2 -bind 172.20.20.112
+</code></pre>
+
+<p>これで<code>web2</code>にもバランシングされるようになる．</p>
+
+<pre><code class="language-bash">$ curl http://172.20.20.10/
+&lt;h1&gt;web1&lt;/h1&gt;
+$ curl http://172.20.20.10/
+&lt;h1&gt;web2&lt;/h1&gt;
+</code></pre>
+
+<p>このとき，<code>/etc/haproxy/haproxy.cfg</code>は以下のようになる．</p>
+
+<pre><code>...
+listen http-in
+    bind *:80
+    balance roundrobin
+    option http-server-close
+    server web1 172.20.20.111:80 check
+    server web2 172.20.20.112:80 check
+</code></pre>
+
+<p>クラスタから離脱してみる．<code>web1</code>を停止する．</p>
+
+<p>すると，<code>web1</code>にはバランシングされないようになる．</p>
+
+<pre><code class="language-bash">$ curl http://172.20.20.10/
+&lt;h1&gt;web2&lt;/h1&gt;
+$ curl http://172.20.20.10/
+&lt;h1&gt;web2&lt;/h1&gt;
+</code></pre>
+
+<p>最終的な<code>/etc/haproxy/haproxy.cfg</code>は以下のようになる．</p>
+
+<pre><code>...
+listen http-in
+    bind *:80
+    balance roundrobin
+    option http-server-close
+    server web2 172.20.20.112:80 check
+</code></pre>
+
+<p>文章ではなかなか伝わらないけど，実際に動かしてみると感動するので是非．</p>
+
+      <div class="social">
+  
+  
+  <a href="https://twitter.com/share" class="twitter-share-button" data-via="deeeet" data-count="none">Tweet</a>
+  
+  
+</div>
+
+    </section>
+
+    <footer>
+      <address>
+        
+        <img src="/images/bio.jpeg"/>
+        
+        <p>Written by <strong><a rel="author" href="https://twitter.com/deeeet" title="Taichi Nakashima" target="_blank">Taichi Nakashima</a></strong><br>
+          <span class="muted">A Tokyo based PaaS engineer. Please contact me via twitter.</span>
+        </p>
+      </address>
+
+    </footer>
+
+  </div>
+</article>
+
+<script type="text/javascript" src="//ajax.googleapis.com/ajax/libs/jquery/1.7.2/jquery.min.js"></script>
+<script type="text/javascript" src="/js/main.js"></script>
+
+<script>!function(d,s,id){var js,fjs=d.getElementsByTagName(s)[0],p=/^http:/.test(d.location)?'http':'https';if(!d.getElementById(id)){js=d.createElement(s);js.id=id;js.src=p+'://platform.twitter.com/widgets.js';fjs.parentNode.insertBefore(js,fjs);}}(document, 'script', 'twitter-wjs');</script>
+
+
+<script type="text/javascript">var HN=[];HN.factory=function(e){return function(){HN.push([e].concat(Array.prototype.slice.call(arguments,0)))};},HN.on=HN.factory("on"),HN.once=HN.factory("once"),HN.off=HN.factory("off"),HN.emit=HN.factory("emit"),HN.load=function(){var e="hn-button.js";if(document.getElementById(e))return;var t=document.createElement("script");t.id=e,t.src="//hn-button.herokuapp.com/hn-button.js";var n=document.getElementsByTagName("script")[0];n.parentNode.insertBefore(t,n)},HN.load();</script>
+
+
+  <script>
+  (function(i,s,o,g,r,a,m){i['GoogleAnalyticsObject']=r;i[r]=i[r]||function(){
+  (i[r].q=i[r].q||[]).push(arguments)},i[r].l=1*new Date();a=s.createElement(o),
+  m=s.getElementsByTagName(o)[0];a.async=1;a.src=g;m.parentNode.insertBefore(a,m)
+  })(window,document,'script','//www.google-analytics.com/analytics.js','ga');
+
+  ga('create', 'UA-45390253-1', 'auto');
+  ga('send', 'pageview');
+
+</script>
+
+
+
+<script>
+  $(document).ready(function() {
+  
+  $('p:has(img)').css('text-align', 'center');
+  $('iframe').css('style', 'display: block; margin: 0px auto;');
+  });
+</script>
+

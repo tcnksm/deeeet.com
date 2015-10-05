@@ -1,0 +1,199 @@
+<!doctype html>
+<html>
+  <head>
+    <meta http-equiv="content-type" content="text/html; charset=utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    
+    <title>Google Omegaとは何か? Kubernetesとの関連は? 論文著者とのQA（翻訳） | SOTA</title>
+    
+    <link href="https://fonts.googleapis.com/css?family=Lato%3a900" rel="stylesheet" type="text/css">
+    <link rel="stylesheet" href="/css/main.css">
+    <link rel="shortcut icon" href="/favicon.png" type="image/x-icon" />
+    <link href="http://deeeet.com//index.xml" rel="alternate" type="application/rss+xml" title="" />
+    <meta name="title" content="http://deeeet.com/writing/2015/09/17/qa-omega/">
+    <link rel="canonical" href="http://deeeet.com/writing/2015/09/17/qa-omega/">
+    
+    <meta property="og:title" content="Google Omegaとは何か? Kubernetesとの関連は? 論文著者とのQA（翻訳）"/>
+    <meta property="og:url" content="http://deeeet.com/writing/2015/09/17/qa-omega/"/>
+  </head>
+  
+  <body>
+    <section class="site-nav">
+      <header>
+        <nav id="navigation">
+          <ul class="menu">
+            <li><a href="https://github.com/tcnksm/talks">Talks</a></li>
+            <li><a href="https://tcnksm.exposure.co/">Photos</a></li>
+          </ul>
+
+          <a class="name" href="/">SOTA</a>
+        </nav>        
+      </header>
+    </section>
+    
+
+
+<article>
+  <div class="container">
+    <header>
+      <div class="meta">
+        <time pubdate datetime="2015-09-17" title="2015-09-17">September 17, 2015</time>
+      </div>
+      <h1 class="title">Google Omegaとは何か? Kubernetesとの関連は? 論文著者とのQA（翻訳）</h1>
+    </header>
+    
+    <section>
+      
+
+<p>エンタープライズ向けのKubernetesサポートを行っている<a href="[https://kismatic.com/">kismatic Inc.</a>による<a href="https://blog.kismatic.com/qa-with-malte-schwarzkopf-on-distributed-systems-orchestration-in-the-modern-data-center/">&ldquo;Omega, and what it means for Kubernetes: a Q&amp;A about cluster scheduling&rdquo;</a>が非常に良いインタビュー記事だった．Google Omegaとは何か? 今までのスケジューリングと何が違うのか? 何を解決しようとしているのか? 今後クラスタのスケジューリングにはどうなっていくのか? をとてもクリアに理解することができた．</p>
+
+<p>自分にとってスケジューリングは今後大事になる分野であるし，勉強していきたい分野であるのでKismaticの<a href="https://twitter.com/asynchio">@asynchio</a>氏と論文の共著者である<a href="http://www.cl.cam.ac.uk/~ms705/">Malte Schwarzkopf</a>氏に許可をもらい翻訳させてもらった．</p>
+
+<h2 id="tl-dr:9e8c8bac5565c2c745e22ca4948c6327">TL;DR</h2>
+
+<p>2013年に発表された<a href="http://www.cl.cam.ac.uk/research/srg/netos/papers/2013-omega.pdf">Omega論文</a>の共著者である<a href="http://www.cl.cam.ac.uk/~ms705/">Malte Schwarzkopf</a>がGoogle OmegaのShared-stateモデルの主な目的がScalabilityよりもむしろソフトウェア開発における柔軟性であったことを説明する．Shared-stateモデルによるスケジューリングは優先度をもったプリエンプションや競合を意識したスケジューリングを可能にする．</p>
+
+<p>今までのTwo-levelモデルのスケジューラー（例えば<a href="http://hadoop.apache.org/docs/current/hadoop-yarn/hadoop-yarn-site/YARN.html">YARN</a>や<a href="http://mesos.apache.org/">Mesos</a>）も同様の柔軟さを提供するが，Omega論文が発表された当時は，すべての状態がクラスタから観測できない問題（information hiding）や<a href="https://en.wikipedia.org/wiki/Gang_scheduling">Gang Scheduling</a>におけるhoardingの問題に苦しんでいた．またなぜGoogleがShare-stateモデルを選択したのか，なぜGoogleは（Mesosのような）厳格な公平性をもったリソース配分を行わないのかについてもコメントする．</p>
+
+<p>最後にMesosや<a href="http://kubernetes.io/">kubernetes</a>のようにスケジューラーのモジュール化をサポートすることでいかにOSSのクラスター管理にOmegaの利点を持ち込むことができるのかを議論する．そしてより賢いスケジューリングを実現することでユーザはGoogleのインフラと同様の効率性を獲得できること提案する．</p>
+
+<p><strong>2013年の論文の発表時と比べて何が変わったか? 何が変わらないか?</strong></p>
+
+<p>クラスタのオーケストレーションは動きの早い分野である．しかしOmegaの中心となる原則はむしろよりタイムリーでとても重要であると思う．</p>
+
+<p>2013年以来の大きな変化として，とりわけKubernetesやMesosのおかげで，Omegaのようなクラスタでインフラを運用するのが一般的になってきたことが挙げられる．2011年や2012年に立ち返ってみるとOmegaのShared-stateモデルによるスケジューリングの基礎となる仮説をGoogle以外の環境で実証するのはなかなかトリッキーなことだとみなされていた．しかし今日では，既存のモジュラーなスケジューラーをハックして新しい手法を試したり，<a href="https://github.com/google/cluster-data">Google cluster trace</a>の公開されたTrace結果を使うことでより簡単にそれができる．</p>
+
+<p>さらにOmegaで挑んだ，いかにクラスタ内で異なるタイプのタスクを効率良くスケジューリングするのか，いかに異なるチームがクラスタの全ての状態にアクセスし彼ら自身のスケジューラーを実装するのか，といった問題は業界で広く認識されてきた．コンテナにより多くの異なるタイプのアプリケーションを共有クラスタ内にデプロイすることが可能になり，開発者たちは全てのタスクを同じようにスケジューリングすることはできない/するべきではないことを認識し始めた．そしてオーケストレーション（例えばZookeeperやetcd）は共有された分散状態を管理する問題であるであるとみなされるようになった．</p>
+
+<p>Omegaのコアにある考え方，つまりジョブのスケジューリングのモデリングとShared-stateモデルに基づくより概括的なクラスタのオペレーションは，まだ適切であると信じている．実際Kubernetesの中心にある考え方，ユーザが望むべき状態を指定しKubernetesがクラスタをそのゴールの状態に移行させること，はまさにOmegaにおいてスケジューラーが次の望むべき状態にクラスタの状態の変更を提案するときに起こっていることと全く同じである．</p>
+
+<p><strong>なぜOmegaのShared-stateモデルは柔軟性があり様々な異なるタスクのリソース管理を効率的に行うことができるのか?</strong></p>
+
+<p>数年前多くの組織が運用していたインフラ環境について考えてみる．例えば1つのHadoopクラスタで複数のユーザによるMapReduceジョブが走っていた．それは非常に簡単なスケジューリングである．全てのマシンにMapReduce worker用にn個のスロットがあり，スケジューラーはmapとreduceタスクを，その全てのスロットが埋まるまでもしくは全てのタスクがなくなるまで，ワーカーに割り当てる．</p>
+
+<p>しかし，このスロットという単位は非常に荒いスケジューリングの単位である．全てのMapReduceジョブが同じ量のリソースが必要であるわけではなく，全てのジョブが与えられたリソースを使い切るわけではない．実際クラスタのいくつかのサーバーではMapReduce以外のプロセスが動いている場合もある．そのためスロットという単位で静的にマシンのリソースを区切るのではなく，タスクを<a href="https://en.wikipedia.org/wiki/Bin_packing_problem">Bin-pack</a>してリソースを最適化させるのはより良い考え方である．現代のほとんどのスケジューラーはこれを実現している．</p>
+
+<p>複数のリソース状況に基づく（複数次元の）Bin-packingは非常に難しい（NP完全問題である）．さらに異なるタイプのタスクはそれぞれ別のBin-packingの方法を好むため問題はより難しくなる．例えば，ネットワーク帯域が70%使われているマシンにMapReduceのジョブを割り当てるのは全く問題ないが，webサーバーのジョブをそのマシンに割り当てるのは好ましくない&hellip;</p>
+
+<p>Omegaではそれぞれのスケジューラーは全ての利用可能なリソース，すでに動いているタスク，クラスタの負荷状況を見ることができ，それに基づきスケジューリングを行うことができる（Shared-stateモデル）．言い方を変えると，それぞれのスケジューラーは好きなBin-packingアルゴリズムを使うことができ，かつ全て同様の情報を共有している．</p>
+
+<p><strong>BorgはScalabilityに制限があるのか? OmegaはBorgの置き換えなのか?</strong></p>
+
+<p>違う．論文でそれをよりクリアにできたらと思う．多くのフォローアップで「中央集権型のスケジューラーは巨大なクラスタに対してスケールできないため分散スケジューラーに移行するべきである」と述べられてきた．しかしOmegaの開発の主な目的はScalabilityではなくより柔軟なエンジニアリングにある．Omegaのゴールは，様々なチームが独立してスケジューラーを実装できることにあり，これはScalabilityよりも重要な側面だった．スケジューラーの並列化がもたらすScalabilityは付属の利点にすぎない．実際のところちゃんと開発された中央集権型のスケジューラーは巨大なクラスタとタスクを扱えるまでにスケールできる．Borg論文は実際この点について書いている．</p>
+
+<p>分散スケジューラーが必須になるニッチな状況もある．例えば，既存のワーカーに対して，レイテンシにセンシティブな短いリクエストを送るジョブを高速に配置する必要があるとき．これは<a href="http://dl.acm.org/citation.cfm?id=2517349.2522716">Sparrow scheduler</a>のターゲットであり分散デザインが適切になる．しかしタスクがレイテンシにセンシティブ，もしくはタスクを秒間に数万回も配置する必要がなければ，中央集権型のスケジューラーであっても1万台のマシンを超えても問題ない．</p>
+
+<p><strong>Omega論文内で指摘しているMesosのTwo-levelモデルのスケジューリングの欠点は何か?</strong></p>
+
+<p>まずOmega論文におけるMesosの説明は2012年当時のMesosに基づいている．それから数年が経っており，論文でのいくつかの指摘はすでに取組まれており，同じように語ることはできない．</p>
+
+<p>オファーベースのモデル，もしくは別のスケジューラーに対してクラスタ状態のサブセットのみを公開するモデルには大きく2つの欠点がある．これは例えばYARNのようなリクエストベースのデザインにも同様のことが言える．</p>
+
+<p>まず1つ目はスケジューラーが割り当てらてた/提供されたリソースのみを見ることができることに関連する．Mesosのオファーシステムにおいて，リソースマネージャーはアプケーションスケジューラーに対して「これだけのリソースがあるよ．どれが使いたい?」と尋ね，アプリケーションスケジューラーはその中から選択を行う．しかしそのときアプリケーションスケジューラーはに別の関連する情報を知ることができない．例えば，自分には提供されなかったリソースは誰が使っているのか，より好ましいリソースがあるのか（そのために提供されたリソースを拒否してより良いリソースを待ったほうがよいのか）という情報を知ることができない．これが<strong>information hiding</strong>の問題である．information hidingによって問題になる他の例には優先度をもったプリエンプションがある．もし優先度の高いタスクが優先度の低いタスクを追い出すことができる必要があるとき，優先度の低いタスクが配置されるどの場所もまた効率的なリソースのオファーがある，がスケジューラーはそれをみることができない．</p>
+
+<p>もちろんこれは解くことができる問題である．例えばMesosは優先度の低いタスクに利用されているリソースを優先度の高いタスクに提供することができる．もしくはスケジューラーのフィルターでプリエンプション可能なリソースを指定することもできる．しかしこれはリソースマネージャーのAPIとロジックが複雑になる．</p>
+
+<p>2つ目は<strong>hoarding</strong>の問題．これは特に<a href="https://en.wikipedia.org/wiki/Gang_scheduling">Gang Sheduling</a>によりスケジューリングされたジョブに影響を与える．このようなジョブは他のジョブが起動する前にリクエストした全てのリソースを獲得しておかなければならない．例えばこのようなジョブにはMPIがあるが，他にもstatefulなストリーム処理は起動するためにパイプライン全体が確保されている必要がある．MesosのようなTwo-levelモデルではこれらのジョブには問題が生じる．アプリケーションスケジューラーは要求したリソースが全て揃うまで待つ（揃わないかもしれない）こともできるし，十分なリソースを蓄積するため少量のオファーを順番に受け入れることもできる．もし後者なら，しばらくの間他のジョブ（例えば優先度の低いMapReduceのジョブなど）に効率良く利用できる可能性があるのにも関わらず，十分な量のリクエストが受け入れられるまでリソースは使われることなく蓄積（hoarding）される．</p>
+
+<p>最近MesosphereでMesosの開発をしているBen Hindmanとこの問題ついて話したが，彼らはこれらを解決する並列のリソースオファー/予約が可能になるようにコアのオファーモデルを変更する計画があると話していた．例えば，Mesosは複数のスケジューラーに対して同じリソースを<a href="https://issues.apache.org/jira/browse/MESOS-1607">Optimistic</a>に提供し，消失したスケジューラーのオファーを「無効にする」ことが可能になる．これはOmegaと同じ競合の解決が必要になる．その時点で2つのモデルは同じところに到達する．もしMesosがクラスタの全てのリソースをスケジューラーに提供するならそのスケジューラーはOmegaと同じ視点をもつことになる（詳しくは<a href="https://issues.apache.org/jira/secure/attachment/12656071/optimisitic-offers.pdf">&ldquo;proposal: Mesos is isomorphic to Omega if makes offers for everything available&rdquo;</a>）．しかしまだ実装は初期段階にある．</p>
+
+<p><strong>MesosのTwo-levelモデルのスケジューリングはGoogleには適していないのか? クラスタの全てのリソースを全てのスケジューラーに共有するのはなぜ良いのか?</strong></p>
+
+<p>上で挙げた優先度をもったプリエンプションを例に考えてみる．Googleではより重要なタスクのために低い優先度のタスクが停止されるのは普通である．実際，巨大なMapReduceジョブを起動するといくつかのworkerがプリエンプションで失敗する．これは新しいより重要なジョブがあったか，もしくはそのジョブで利用されていた特定のリソースを他のタスクが必要とし（例えばGmailのようなサービスでスパイクがあり）Borgスケジューラーがそのタスクをプリエンプションの対象として選んだためである．しかしタスクを立ち退かせるためにはスケジューラーはそれらの状態を見る必要がある．例えばTwitterのHeronインスタンスは異なるフレームワークであってもHadoopやSparkのジョブを立ち退かせるということをしたい．</p>
+
+<p>Omega論文で述べた別の例を挙げると，静的にMapReduceジョブを分割するのではなくてクラスタのロードが低いときに動的に割り当てるリソースを増やしたい．なぜそのジョブはしっかり100のworkerを使う必要があるのか? それは単に人間が指定した数にすぎない．スケジューラーはある時間にどれだけの数のworkerを起動するべきがより良く理解できる．実際他のシステムも同様のアイディアを実現してきた．例えばMicrosoftの<a href="https://kismatic.com/company/qa-with-malte-schwarzkopf-on-distributed-systems-orchestration-in-the-modern-data-center/">Apolloスケジューラー</a>はOpportunisticなタスクをサポートしており，<a href="http://dl.acm.org/citation.cfm?id=2168847">Jockey</a>や<a href="http://dl.acm.org/citation.cfm?id=2541941">Quasar</a>のようなresearch systemはAuto-sacalingは非常に大きな違いを生じさせることを示した．しかしそのような決定ができるためには，スケジューラーはクラスタ全体の状態がどうなっているかが見える必要がある．そのためオファーベースでTwo-levelモデルのデザインはGoogleでの要件に合わなかった．</p>
+
+<p><strong>MesosのDominant Resource Fairness（DRF）アルゴリズムについてはどう思うか? なぜGoogleは異なるアプローチを選択したのか?</strong></p>
+
+<p>(DRFアルゴリズムは非常に速くスケジューラーに対して1ms以下でリソースを提供することができMesosで使われている)</p>
+
+<p>GoogleがDRFアルゴリズムを採用していないのはアルゴリズムの複雑さやパフォーマンスとは全く関係ない．単にしっかりとした公平なリソース配分がGoogleの環境には必要ないだけである．より多くのタスクを終わらせ全体の最適化を行うためにリソースの配分を一時的に不公平にできる柔軟性をGoogleは評価している．もちろん偶然（もしくは故意に）大量のリソースを使って他のタスクが不利になることがないようにはしている．</p>
+
+<p>これは割り当てシステム（quota system）によって行われる．仮想的な通貨がリソースの購入と予算に使われる．もし高い優先度をもつ100のタスクをそれぞれ20GBのメモリを使って1時間稼働させたとすると，チームの口座から2000GB/hourが借りられることになる．もし貯金を使い果たすとチームは人に頼んで通貨を増やしてもらうか，タスクを終了させる方法を見つけなればならない．つまり1日で1月分の配分を使い果たすのは良い考えではなく，しんどくなる．Borg論文がこのquota systemについて詳しく解説している．</p>
+
+<p>しかしこのやり方はリソース配分の公平性についてより根本的な疑問を呈した．厳格な公平性をもつが使われていないリソースを放置するのか，より良い最適化やタスクのよりスムーズな終了が持ち込まれたときに一時的な不公平を許容するのか．答えは組織やタスクの種類による．Googleでは効率が厳格な公平性に勝った．</p>
+
+<p><strong>Omegaのような実装がOSSとして公開されることはあるのか?</strong></p>
+
+<p>今すぐにはない．上で述べたようにOmegaはいくつかのOSSのプロジェクトに影響を与えている．第一にそしてより重要なのはもちろんKubernetesであり，BorgとOmega両方の影響を受けている．Kubernetesにおける重要なアイディアは，ユーザが自分のクラスタの望むべき状態を指定してクラスタマネージャーにそれを託すこと．これはOmegaのアプローチに非常に似ている．その意味でKubernetesはOmegaスタイルのスケジューラーを載せるのには理想的なプラットフォームであると言える．実際Kubernetesのスケジューラーはpluggableなコンポーネントになっているので実現性は高い．<a href="https://github.com/kubernetes/kubernetes/blob/master/docs/design/architecture.md">ドキュメント</a>には開発者は「将来的に複数のクラスタスケジューラーとユーザによるスケジューラーをサポートすることを期待している」とある．Kubernetesは完全にコンポーネント化されているので，複数のマスターコントローラーが複数のスケジューラーとやりとりする，もしくはアプリケーションに特化したReplication Controllerがアプリケーションに特化したスケジューラーにリクエストを投げるといった方法が想像できる．</p>
+
+<p>Omegaの影響を受けたスケジューラーは他にも存在する．例えばMicrosoft Researchは<a href="http://msr-waypoint.com/pubs/238833/mercury-tr.pdf">Mercury</a>を作った．これは，もしかすると古いかもしれない情報に基づき分散で決定をするのか，正確な情報をもとに中央集権的に決定をするのかをタスクが選べるというハイブリッドなスケジューラーである．そのコードはYARNのupstreamに統合されている．</p>
+
+<p><strong>OmegaのようなShared-stateモデルのスケジューラーはkubernetesクラスタにおいても柔軟性や効率を改善することができるのか?</strong></p>
+
+<p>最近KubernetesとMesosをスケジューラーの観点から見てみたが，正直に言うと，GoogleがOmegaやBorgでやっているのと比較するととても単純である．しかしplugabbleなスケジューラーAPIにより最新かつより良いものに改良することができる．基礎はあるのでいろいろなことができる．</p>
+
+<p>例えばCambridgeでは本格的なスケジューラーマネージャーである<a href="http://www.cl.cam.ac.uk/research/srg/netos/camsas/firmament/">Firmament</a>を研究のために開発した．それによりとても良い結果を得ることができたが，Kubernetesに組み込むことでその研究の成果は他の人たちにも簡単に利用可能になる．</p>
+
+<p>Share-stateなアプローチはKubernetesクラスタをさらに助けることになると思う．異なるタイプのアプリケーション異なるタイプのPodは異なった方法で配置する必要があり，それらを全てをkube-schdulerに統合するのは悪夢のようだ．そうではなく特別な目的をもった複数のスケジューラーを走らせることができればKubernetesにとって良いオプションになると思う．つまりより良い決定が可能になり，コードを綺麗にかつモジュール化することができる．</p>
+
+<p><strong>クラスタのスケジューラーにおける他の課題は何か? 次に解くべき困難な問題は何か?</strong></p>
+
+<p>コンテナもまた異なるタイプのクラスタを作ってきた．Kubernetesや他のコンテナオーケストレーションプラットフォーム（例えばMesosや<a href="https://tectonic.com/">Tectonic</a>，<a href="https://github.com/docker/machine">Docker Machine</a>）によって，MapReduceでmapタスクからネイティブプロセスを起動したり，特定のAPIのためにアプリケーションを再ビルドするといったことを複雑ことをせずに，異なるアプリケーションを同じクラスタ上で動かすことができるようになった．この結果として人々がより賢いスケジューリングに集中し始めることを期待している．今のところOSSではほとんどのプロジェクトがとにかく動かすということをやってきた．これはスケールするのは難しい．より良いスケジューリングの実現が次のハードルであると思う．</p>
+
+<p>いくつかの困難な課題を挙げる，</p>
+
+<ul>
+<li>負荷の高いマシンで<strong>co-location interferenceを避ける</strong>のはとても重要である．貧弱なスケジューリングで特定のマシンのリソース（例えばディスクやネットワーク，L3キャッシュなど）を圧迫するとバッチタスクのパフォーマンスは簡単に悪化する．user-facingのサービスはより被害を被る（例えばレイテンシが非常に大きくなる）．コンテナはCPUやメモリの隔離を可能にするが，基本的にはまだ多くのリソースをk共有している．そのため，どのタスクが同居してよいか，どのタスクか別々になるべきかをよりうまく予測できる必要がある．</li>
+<li>Googleが<strong>&ldquo;resource reclamation&rdquo;</strong>と呼んでいること，確保ししたが実際には使わなかった余剰のリソースを返還すること，をよりうまくできる必要がある．人間が慎重になりすぎること，アプリケーションに必要になるリソースを過度に見積もってしまうのはよく知られている．しかし良いスケジューラーであれば，あまり使われていないリソースを他の優先度の低いタスクに再配布することができる．</li>
+<li><strong>柔軟性を高める</strong>ことができると良い．スケジューラーにコンテナを停止させる，移動させる，そして自動的にスケールさせる．例えば，CPUが必要な他のコンテナに場所を譲るためにコンテナをプリエンプションして破棄するのではなくて，効率よく停止させるために優先度の低いコンテナを抑制することもできるが，メモリが圧迫されてなければRAMに状態を保持することもできる．</li>
+<li>スクラッチで自分用のスケジューラーを実装するのではなくて<strong>user-specifiedなスケジューリングポリシー</strong>を簡単に持てると良い．現実的にはほとんどの組織，小さいもしくは伝統的な組織，にはpluggableのAPIが提供されていたとしてもスケジューラーを書くためのリソースはない．タスクやその組織のためのスケジューリングポリシーを考えることができるSREやDevOps的なエンジニアが必要である．そしてスケジューラーはリソース配分やContainer配置のAPIというよりも，そのポリシーを表現するためのプラットフォームにならなければならない．</li>
+</ul>
+
+<p>上述した<a href="http://camsas.org/firmament">Firmament</a>においてこれらの課題のいくつかに挑んだ．例えばそのpluggableなコストモデルにより直感的な方法でスケジューリングのポリシーを簡単に指定することができる．そしてco-location interferenceが発生する前にそれをを避けるコストモデルも開発した．さらに巨大なスケール（数万台のマシン）でも特定のスケジューリングポリシーの最適な決定を非常に速く行うことができる可能性も示した．これらは非常に良いな結果であり，近い将来これについては詳しく述べる．しかし「Google&rsquo;s infrastructure for everyone else」を実現するには多くのひとそして多くの素晴らしいアイディアが必要になる．</p>
+
+      <div class="social">
+  
+  
+  <a href="https://twitter.com/share" class="twitter-share-button" data-via="deeeet" data-count="none">Tweet</a>
+  
+  
+</div>
+
+    </section>
+
+    <footer>
+      <address>
+        
+        <img src="/images/bio.jpeg"/>
+        
+        <p>Written by <strong><a rel="author" href="https://twitter.com/deeeet" title="Taichi Nakashima" target="_blank">Taichi Nakashima</a></strong><br>
+          <span class="muted">A Tokyo based PaaS engineer. Please contact me via twitter.</span>
+        </p>
+      </address>
+
+    </footer>
+
+  </div>
+</article>
+
+<script type="text/javascript" src="//ajax.googleapis.com/ajax/libs/jquery/1.7.2/jquery.min.js"></script>
+<script type="text/javascript" src="/js/main.js"></script>
+
+<script>!function(d,s,id){var js,fjs=d.getElementsByTagName(s)[0],p=/^http:/.test(d.location)?'http':'https';if(!d.getElementById(id)){js=d.createElement(s);js.id=id;js.src=p+'://platform.twitter.com/widgets.js';fjs.parentNode.insertBefore(js,fjs);}}(document, 'script', 'twitter-wjs');</script>
+
+
+<script type="text/javascript">var HN=[];HN.factory=function(e){return function(){HN.push([e].concat(Array.prototype.slice.call(arguments,0)))};},HN.on=HN.factory("on"),HN.once=HN.factory("once"),HN.off=HN.factory("off"),HN.emit=HN.factory("emit"),HN.load=function(){var e="hn-button.js";if(document.getElementById(e))return;var t=document.createElement("script");t.id=e,t.src="//hn-button.herokuapp.com/hn-button.js";var n=document.getElementsByTagName("script")[0];n.parentNode.insertBefore(t,n)},HN.load();</script>
+
+
+  <script>
+  (function(i,s,o,g,r,a,m){i['GoogleAnalyticsObject']=r;i[r]=i[r]||function(){
+  (i[r].q=i[r].q||[]).push(arguments)},i[r].l=1*new Date();a=s.createElement(o),
+  m=s.getElementsByTagName(o)[0];a.async=1;a.src=g;m.parentNode.insertBefore(a,m)
+  })(window,document,'script','//www.google-analytics.com/analytics.js','ga');
+
+  ga('create', 'UA-45390253-1', 'auto');
+  ga('send', 'pageview');
+
+</script>
+
+
+
+<script>
+  $(document).ready(function() {
+  
+  $('p:has(img)').css('text-align', 'center');
+  $('iframe').css('style', 'display: block; margin: 0px auto;');
+  });
+</script>
+

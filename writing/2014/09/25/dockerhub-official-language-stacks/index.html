@@ -1,0 +1,257 @@
+<!doctype html>
+<html>
+  <head>
+    <meta http-equiv="content-type" content="text/html; charset=utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    
+    <title>DockerHub公式の言語Stack | SOTA</title>
+    
+    <link href="https://fonts.googleapis.com/css?family=Lato%3a900" rel="stylesheet" type="text/css">
+    <link rel="stylesheet" href="/css/main.css">
+    <link rel="shortcut icon" href="/favicon.png" type="image/x-icon" />
+    <link href="http://deeeet.com//index.xml" rel="alternate" type="application/rss+xml" title="" />
+    <meta name="title" content="http://deeeet.com/writing/2014/09/25/dockerhub-official-language-stacks/">
+    <link rel="canonical" href="http://deeeet.com/writing/2014/09/25/dockerhub-official-language-stacks/">
+    
+    <meta property="og:title" content="DockerHub公式の言語Stack"/>
+    <meta property="og:url" content="http://deeeet.com/writing/2014/09/25/dockerhub-official-language-stacks/"/>
+  </head>
+  
+  <body>
+    <section class="site-nav">
+      <header>
+        <nav id="navigation">
+          <ul class="menu">
+            <li><a href="https://github.com/tcnksm/talks">Talks</a></li>
+            <li><a href="https://tcnksm.exposure.co/">Photos</a></li>
+          </ul>
+
+          <a class="name" href="/">SOTA</a>
+        </nav>        
+      </header>
+    </section>
+    
+
+
+<article>
+  <div class="container">
+    <header>
+      <div class="meta">
+        <time pubdate datetime="2014-09-25" title="2014-09-25">September 25, 2014</time>
+      </div>
+      <h1 class="title">DockerHub公式の言語Stack</h1>
+    </header>
+    
+    <section>
+      
+
+<p><a href="https://blog.docker.com/2014/09/docker-hub-official-repos-announcing-language-stacks/">DockerHub Official Repos: Announcing Language Stacks | Docker Blog</a></p>
+
+<p>DockerHubには<a href="https://registry.hub.docker.com/search?q=library&amp;f=official">公式のレポジトリ</a>がある．そこにはUbuntuやCentos，MySQLやPostgres，MongoといったDockerイメージがコミュニティーベースで，つまりより汎用的に使える形で開発され集められており，ベースイメージとして簡単に使えるようになっている．</p>
+
+<p>今までは，OSのディストリビューションや，Webサーバ，DBなどがメインだったが，公式として各種プログラミング言語のベースイメージも公開された．現状（2014年9月時点）では，<a href="https://registry.hub.docker.com/_/gcc/">c/c++(gcc)</a>，<a href="https://registry.hub.docker.com/_/clojure/">clojure</a>，<a href="https://registry.hub.docker.com/_/golang/">golang</a>，<a href="https://registry.hub.docker.com/_/hylang/">hylang</a>，<a href="https://registry.hub.docker.com/_/java/">java</a>，<a href="https://registry.hub.docker.com/_/node/">node</a>，<a href="https://registry.hub.docker.com/_/perl/">perl</a>，<a href="https://registry.hub.docker.com/_/php/">PHP</a>，<a href="https://registry.hub.docker.com/_/python/">python</a>，<a href="https://registry.hub.docker.com/_/rails/">rails</a>，<a href="https://registry.hub.docker.com/_/ruby/">ruby</a>がある．</p>
+
+<h2 id="特徴:a43e5633ef9ac367236908013de3f376">特徴</h2>
+
+<p>この公式の言語stackには以下の3つの特徴がある．</p>
+
+<ul>
+<li><a href="https://registry.hub.docker.com/_/buildpack-deps/">buildpack-depsイメージ</a>をベースにしている</li>
+<li>各Versionをサポートしている</li>
+<li><a href="http://docs.docker.com/reference/builder/#onbuild">ONBUILD</a>をイメージもサポートしている</li>
+</ul>
+
+<p>これらを簡単に説明する．</p>
+
+<h3 id="buildpack-deps:a43e5633ef9ac367236908013de3f376">Buildpack-deps</h3>
+
+<p><a href="https://registry.hub.docker.com/_/buildpack-deps/">buildpack-depsイメージ</a>というのは，<a href="https://github.com/heroku/stack-images/blob/master/bin/cedar.sh">HerokuのStack</a>のようなイメージで，各言語を動かすために必要な基本的な依存関係等がインストールされている．</p>
+
+<p>Dockerfileは以下．</p>
+
+<pre><code class="language-bash">FROM debian:wheezy
+
+RUN apt-get update &amp;&amp; apt-get install -y \
+    autoconf \
+    build-essential \
+    imagemagick \
+    libbz2-dev \
+    libcurl4-openssl-dev \
+    libevent-dev \
+    libffi-dev \
+    libglib2.0-dev \
+    libjpeg-dev \
+    libmagickcore-dev \
+    libmagickwand-dev \
+    libmysqlclient-dev \
+    libncurses-dev \
+    libpq-dev \
+    libpq-dev \
+    libreadline-dev \
+    libsqlite3-dev \
+    libssl-dev \
+    libxml2-dev \
+    libxslt-dev \
+    libyaml-dev \
+    zlib1g-dev \
+    &amp;&amp; rm -rf /var/lib/apt/lists/*
+
+RUN apt-get update &amp;&amp; apt-get install -y \
+    bzr \
+    cvs \
+    git \
+    mercurial \
+    subversion \
+    &amp;&amp; rm -rf /var/lib/apt/lists/*
+</code></pre>
+
+<p>よく言語をインストールする際に依存で入れるべきものが揃っている．これを元に各言語スタックは作成されるので，これらの依存のインストールし忘れなどを防ぐことができる．</p>
+
+<h3 id="version:a43e5633ef9ac367236908013de3f376">Version</h3>
+
+<p>各言語スタックは適切にバージョンがタグとして付加されているため，使いたいバージョンを選んで使うことができる．例えば，rubyのv2.1.3を使いたければ<a href="https://github.com/docker-library/ruby/blob/50295f3a139273601b5f2df29060ee2788f067d3/2.1/Dockerfile">ruby:2.1.3イメージ</a>を，pythonの3.4.1を使いたければ<a href="https://github.com/docker-library/python/blob/a30ed3056ee58ca3df4fd5b51e3d30849dcb7e32/3.4/Dockerfile">python:3.4.1イメージ</a>を選択できる．</p>
+
+<h3 id="onbuild:a43e5633ef9ac367236908013de3f376">ONBUILD</h3>
+
+<p>言語スタックでは，普通のイメージに加えて，<code>ONBUILD</code>イメージもサポートされている．</p>
+
+<p><code>ONBUILD</code>はDockerfileのコマンドで，これに続いて別のDockerfileコマンドを記述する．そして，そのDockerfileを元にビルドされたイメージをFROMとしてDockerfileを新たに作成し，ビルドを実行すると，上で<code>ONBUILD</code>と共に記述したコマンドが実行される．つまり，Dockerfileに親子関係を持たせることができる（詳しくは，<a href="http://deeeet.com/writing/2014/03/21/docker-onbuild/">&ldquo;DockerfileのONBUILD&rdquo;</a>に書いた）．</p>
+
+<p>これは結構良くて，言語スタックでは，依存関係ファイルの<code>ADD</code>とインストールの実行，アプリの<code>ADD</code>に使われている．例えば，RailsのONBUILDイメージの場合は，GemfileとGemfile.lockの<code>ADD</code>，Railsアプリの<code>ADD</code>が記述されている．つまり，RailsのONBUILDイメージを使えば，特殊なことをしていない限りDockerfileにほとんど何も書かなくて良い．</p>
+
+<p>また，ここにはコミュニティ開発の良さも含まれていて，例えば，<a href="http://wazanova.jp/items/901">&ldquo;RailsアプリをDockerにデプロイするときにGemfileを変更してなければBundle Installをスキップする方法&rdquo;</a>といった，Dockerfileのベストプラクティスがちゃんと含まれている．</p>
+
+<h2 id="使ってみる:a43e5633ef9ac367236908013de3f376">使ってみる</h2>
+
+<p>とりあえず，いくつか軽く使ってみる．</p>
+
+<h3 id="rails:a43e5633ef9ac367236908013de3f376">rails</h3>
+
+<p>まず，railsイメージ．<a href="https://github.com/docker-library/ruby/blob/50295f3a139273601b5f2df29060ee2788f067d3/2.1/Dockerfile">ruby:2.1.2イメージ</a>を元に作られた<a href="https://github.com/docker-library/rails/blob/7bb6ade7f97129cc58967d7d0ae17f4b62ae52eb/onbuild/Dockerfile">onbuildイメージ</a>を使う．このイメージは以下のDockerfileで作成されている．いくつかの<code>ONBUILD</code>と，Railsを動かすのに必要なnodeのインストールなどが記述されている．</p>
+
+<pre><code class="language-bash">FROM ruby:2.1.2
+
+RUN mkdir -p /usr/src/app
+WORKDIR /usr/src/app
+
+ONBUILD ADD Gemfile /usr/src/app/
+ONBUILD ADD Gemfile.lock /usr/src/app/
+ONBUILD RUN bundle install --system
+
+ONBUILD ADD . /usr/src/app
+
+RUN apt-get update &amp;&amp; apt-get install -y nodejs --no-install-recommends &amp;&amp; rm -rf /var/lib/apt/lists/*
+
+EXPOSE 3000
+CMD [&quot;rails&quot;, &quot;server&quot;]
+</code></pre>
+
+<p>これを使うのは簡単．実際にサンプルアプリを作って動かしてみる．まず，以下でDockerイメージをbuildする．</p>
+
+<pre><code class="language-bash">$ rails new sample-app
+$ cd sample-app
+$ echo 'FROM rails:onbuild' &gt; Dockerfile
+$ docker build -t tcnksm/sample-rails .
+</code></pre>
+
+<p>1行のDockerfileを作るだけで良い．それをbuildすると<code>ONBUILD</code>により，<code>Gemfile</code>と<code>Gemfile.lock</code>の<code>ADD</code>と<code>bundle install</code>が実行される．そして，カレントディレクトリのアプリケーションが<code>ADD</code>される．</p>
+
+<p>後は以下を実行すれば，親Dockerfileの<code>CMD</code>に記述された<code>rails server</code>で，コンテナが起動する．</p>
+
+<pre><code class="language-bash">$ docker run -d -p 3000:3000 tcnksm/sample-app
+$ curl http://&lt;container-ip&gt;:3000
+</code></pre>
+
+<h3 id="golang:a43e5633ef9ac367236908013de3f376">golang</h3>
+
+<p>golangだとアプリケーションを動かすより，コンテナによるクリーンな環境でのコンパイルに使うのが良さそう．それも簡単にできる．</p>
+
+<p>例えば，<a href="https://github.com/tcnksm/ghr">tcnksm/ghr</a>を<a href="https://github.com/docker-library/golang/blob/9ff2ccca569f9525b023080540f1bb55f6b59d7f/1.3/Dockerfile">go-1.3.1イメージ</a>でコンパイルする．</p>
+
+<pre><code class="language-bash">$ git clone https://github.com/tcnksm/ghr
+$ cd ghr
+$ docker run --rm -v &quot;$(pwd)&quot;:/usr/src/ghr -w /usr/src/ghr golang:1.3.1 bash -c 'go get -d ./... &amp;&amp; go build -v'
+</code></pre>
+
+<p><a href="https://github.com/docker-library/golang/blob/9ff2ccca569f9525b023080540f1bb55f6b59d7f/1.2/Dockerfile">go-1.2イメージ</a>でコンパイルする．</p>
+
+<pre><code class="language-bash">$ docker run --rm -v &quot;$(pwd)&quot;:/usr/src/ghr -w /usr/src/ghr golang:1.2 go build -v
+</code></pre>
+
+<p><a href="https://github.com/docker-library/golang/blob/40bd84e4bcc278281595174a60e7b4451d972dee/1.3/cross/Dockerfile">go-1.3.1のクロスコンパイル用イメージ</a>で<code>windows/386</code>にクロスコンパイルする．</p>
+
+<pre><code class="language-bash">$ docker run --rm -v &quot;$(pwd)&quot;:/usr/src/ghr -w /usr/src/ghr -e GOOS=windows -e GOARCH=386 golang:1.3.1-cross go build -v
+</code></pre>
+
+<h2 id="コントリビュートしたい:a43e5633ef9ac367236908013de3f376">コントリビュートしたい</h2>
+
+<p>プロジェクトを作って<a href="mailto:partners@docker.com">partners@docker.com</a>にメールすれば，公式のDockerHubレポジトリとして取り込んでもらえる可能性もある．</p>
+
+<p>以下のガイドラインに従う．</p>
+
+<ul>
+<li><a href="https://docs.docker.com/docker-hub/official_repos/">Guidelines for Creating and Documenting Official Repositories</a></li>
+<li><a href="https://docs.docker.com/articles/dockerfile_best-practices/">Best Practices for Writing Dockerfile</a></li>
+</ul>
+
+<h2 id="まとめ:a43e5633ef9ac367236908013de3f376">まとめ</h2>
+
+<p>Dockerが出たときって，Dockerfileを書くのは時代に逆行しているから自動生成しようといった意見やツールを見た．実際，自分でも<a href="http://deeeet.com/writing/2014/03/06/rbdock/">&ldquo;rbdockというRuby/Rails/Sinatra用のDockerfileを生成するgem&rdquo;</a>をつくったりした．でも，DockerHubのおかげで良いDockerfileを<strong>みんなで作って</strong>，そのイメージを使えるだけにしようという流れになっている．どんどん簡単になっていく．</p>
+
+<p>ただ，いきなり使うのは危険で，例えばONBUILDとか何が仕込まれてるかbuildしないとわからい．ので，使う前にちゃんとDockerfileに一度目を通すのが大事かなと．その辺はOSSのツールを使うときと同じ．</p>
+
+      <div class="social">
+  
+  
+  <a href="https://twitter.com/share" class="twitter-share-button" data-via="deeeet" data-count="none">Tweet</a>
+  
+  
+</div>
+
+    </section>
+
+    <footer>
+      <address>
+        
+        <img src="/images/bio.jpeg"/>
+        
+        <p>Written by <strong><a rel="author" href="https://twitter.com/deeeet" title="Taichi Nakashima" target="_blank">Taichi Nakashima</a></strong><br>
+          <span class="muted">A Tokyo based PaaS engineer. Please contact me via twitter.</span>
+        </p>
+      </address>
+
+    </footer>
+
+  </div>
+</article>
+
+<script type="text/javascript" src="//ajax.googleapis.com/ajax/libs/jquery/1.7.2/jquery.min.js"></script>
+<script type="text/javascript" src="/js/main.js"></script>
+
+<script>!function(d,s,id){var js,fjs=d.getElementsByTagName(s)[0],p=/^http:/.test(d.location)?'http':'https';if(!d.getElementById(id)){js=d.createElement(s);js.id=id;js.src=p+'://platform.twitter.com/widgets.js';fjs.parentNode.insertBefore(js,fjs);}}(document, 'script', 'twitter-wjs');</script>
+
+
+<script type="text/javascript">var HN=[];HN.factory=function(e){return function(){HN.push([e].concat(Array.prototype.slice.call(arguments,0)))};},HN.on=HN.factory("on"),HN.once=HN.factory("once"),HN.off=HN.factory("off"),HN.emit=HN.factory("emit"),HN.load=function(){var e="hn-button.js";if(document.getElementById(e))return;var t=document.createElement("script");t.id=e,t.src="//hn-button.herokuapp.com/hn-button.js";var n=document.getElementsByTagName("script")[0];n.parentNode.insertBefore(t,n)},HN.load();</script>
+
+
+  <script>
+  (function(i,s,o,g,r,a,m){i['GoogleAnalyticsObject']=r;i[r]=i[r]||function(){
+  (i[r].q=i[r].q||[]).push(arguments)},i[r].l=1*new Date();a=s.createElement(o),
+  m=s.getElementsByTagName(o)[0];a.async=1;a.src=g;m.parentNode.insertBefore(a,m)
+  })(window,document,'script','//www.google-analytics.com/analytics.js','ga');
+
+  ga('create', 'UA-45390253-1', 'auto');
+  ga('send', 'pageview');
+
+</script>
+
+
+
+<script>
+  $(document).ready(function() {
+  
+  $('p:has(img)').css('text-align', 'center');
+  $('iframe').css('style', 'display: block; margin: 0px auto;');
+  });
+</script>
+

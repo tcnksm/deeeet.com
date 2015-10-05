@@ -1,0 +1,341 @@
+<!doctype html>
+<html>
+  <head>
+    <meta http-equiv="content-type" content="text/html; charset=utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    
+    <title>Docker&#43;Serf&#43;HAproxy (&#43;Supervisor) | SOTA</title>
+    
+    <link href="https://fonts.googleapis.com/css?family=Lato%3a900" rel="stylesheet" type="text/css">
+    <link rel="stylesheet" href="/css/main.css">
+    <link rel="shortcut icon" href="/favicon.png" type="image/x-icon" />
+    <link href="http://deeeet.com//index.xml" rel="alternate" type="application/rss+xml" title="" />
+    <meta name="title" content="http://deeeet.com/writing/2014/04/08/docker-serf-haproxy/">
+    <link rel="canonical" href="http://deeeet.com/writing/2014/04/08/docker-serf-haproxy/">
+    
+    <meta property="og:title" content="Docker&#43;Serf&#43;HAproxy (&#43;Supervisor)"/>
+    <meta property="og:url" content="http://deeeet.com/writing/2014/04/08/docker-serf-haproxy/"/>
+  </head>
+  
+  <body>
+    <section class="site-nav">
+      <header>
+        <nav id="navigation">
+          <ul class="menu">
+            <li><a href="https://github.com/tcnksm/talks">Talks</a></li>
+            <li><a href="https://tcnksm.exposure.co/">Photos</a></li>
+          </ul>
+
+          <a class="name" href="/">SOTA</a>
+        </nav>        
+      </header>
+    </section>
+    
+
+
+<article>
+  <div class="container">
+    <header>
+      <div class="meta">
+        <time pubdate datetime="2014-04-08" title="2014-04-08">April 08, 2014</time>
+      </div>
+      <h1 class="title">Docker&#43;Serf&#43;HAproxy (&#43;Supervisor)</h1>
+    </header>
+    
+    <section>
+      
+
+<ul>
+<li><a href="http://deeeet.com/writing/2014/03/31/docker-serf/">SerfでDockerコンテナのクラスタを形成する</a></li>
+<li><a href="http://deeeet.com/writing/2014/04/01/serf-haproxy/">SerfでHAProxyの更新 on Vagrant</a></li>
+</ul>
+
+<p>でやったことを融合した．つまり，HAProxy（ロードバランサ）コンテナとWebサーバコンテナを立てて，Serfでそれらのクラスタを形成する．そしてWebサーバコンテナの増減に応じてHAProxyコンテナの設定を書き換えるということをやってみた．</p>
+
+<p>基本的には，上でやったことをDockerのコンテナに移行するだけだが，Dockerは1コンテナで1プロセスが普通であるため，複数プロセス（サービス）をどう扱うかが問題になる．</p>
+
+<p>Dockerで複数プロセスを扱うときには，<a href="http://supervisord.org/">Supervisor</a>という選択肢がある．この方法は，<a href="http://docs.docker.io/en/latest/examples/using_supervisord/">公式</a>で紹介されていたり，Foot Fightの<a href="http://foodfightshow.org/2013/11/docker-in-practice.html">&ldquo;Docker in Practice&rdquo;</a>で言及されてたり，CenturyLink Labsが<a href="http://www.centurylinklabs.com/auto-loadbalancing-with-fig-haproxy-and-serf/">試みて</a>いたりする．</p>
+
+<p>ということで，SupervisordとSerf，HAproxyによるDockerコンテナのディスカバリをやってみた．</p>
+
+<p><a href="https://github.com/tcnksm/docker-serf-haproxy">tcnksm/docker-serf-haproxy</a></p>
+
+<h2 id="準備:84e114c660e2288c965bfe012faed1ad">準備</h2>
+
+<p>OSX+boot2dockerで行う．あらかじめboot2docker-vmのport forwardingの設定だけしておく．</p>
+
+<pre><code class="language-bash">$ boot2docker init
+$ VBoxManage modifyvm &quot;boot2docker-vm&quot; --natpf1 &quot;tcp-port8080,tcp,,8080,,8080&quot;
+$ boot2docker up
+</code></pre>
+
+<h2 id="haproxy-serfコンテナ:84e114c660e2288c965bfe012faed1ad">HAProxy+Serfコンテナ</h2>
+
+<p>Dockerfileは以下．</p>
+
+<pre><code class="language-bash">FROM ubuntu
+
+# Install serf
+RUN apt-get install -y unzip wget
+RUN wget --no-check-certificat https://dl.bintray.com/mitchellh/serf/0.5.0_linux_amd64.zip -O serf.zip
+RUN unzip serf.zip
+RUN chmod +x serf
+RUN mv serf /usr/bin/serf
+
+# Install HAProxy
+RUN apt-get -y install haproxy
+RUN sed -i -e 's/ENABLED=0/ENABLED=1/' /etc/default/haproxy
+
+# Install supervisor
+RUN apt-get install -qy supervisor
+
+# Install basic packages for ruby
+RUN apt-get -y update
+RUN apt-get install -y build-essential git
+RUN apt-get install -y zlib1g-dev libssl-dev libreadline-dev libyaml-dev libxml2-dev libxslt-dev
+RUN apt-get clean
+
+# Install ruby-build
+RUN git clone https://github.com/sstephenson/ruby-build.git .ruby-build
+RUN .ruby-build/install.sh
+RUN rm -fr .ruby-build
+
+# Install ruby-2.1.0
+RUN ruby-build 2.1.0 /usr/local
+
+# Add Handler
+ADD default_haproxy.cfg /etc/haproxy/haproxy.cfg
+ADD supervisord-haproxy.conf /etc/supervisor/conf.d/supervisord-haproxy.conf
+ADD handler.rb /handler.rb
+
+EXPOSE 80
+CMD [&quot;supervisord&quot;, &quot;-n&quot;]
+</code></pre>
+
+<p>やっているのは，</p>
+
+<ul>
+<li>Serfのインストール</li>
+<li>HAProxyのインストール</li>
+<li>Supervisorのインストール</li>
+<li>Rubyのインストール</li>
+<li>設定ファイル，イベントハンドラスクリプトの追加</li>
+</ul>
+
+<p>Rubyをインストールしているのは，HAProxyの設定を書き換えるためのイベントハンドラをRubyで書いたためで，これはシェルスクリプトでも全然できる（Serfレポジトリの<a href="https://github.com/hashicorp/serf/tree/master/demo/web-load-balancer">デモページ</a>を参照）．余談だが，キャッシュが効くように変更が入りうる設定ファイル等の<code>ADD</code>はなるべく最後の方に記述するようにしたほうがよい．</p>
+
+<p>HAProxyのデフォルトの設定ファイルは<a href="https://github.com/tcnksm/docker-serf-haproxy/blob/master/haproxy/default_haproxy.cfg">default_haproxy.cfg</a>で，イベントハンドラでこれを書き換える．</p>
+
+<p>イベントハンドラは<a href="https://github.com/tcnksm/docker-serf-haproxy/blob/master/haproxy/handler.rb">handler.rb</a>で，roleがwebのメンバーが参加したらそのメンバーのIPをhaproxy.cfgに追記，離脱したら設定を削除する．</p>
+
+<p>Supervisorの設定ファイルは以下．</p>
+
+<pre><code># supervisord-haproxy.conf
+[supervisord]
+nodaemon=true
+
+[program:haproxy]
+command=service haproxy start
+numprocs=1
+autostart=true
+autorestart=true
+
+[program:serf]
+command=serf agent -tag role=lb -node proxy -event-handler 'ruby /handler.rb'
+</code></pre>
+
+<p>あとは，起動コマンドに<code>[&quot;supervisord&quot;,&quot;-n&quot;]</code>を指定しておけば，コンテナを立ち上げたときに，HAProxyとSerfが両方起動する．</p>
+
+<p>イメージをビルドしておく．</p>
+
+<pre><code class="language-bash">$ docker build -t tcnksm/haproxy .
+</code></pre>
+
+<h2 id="nginx-serfコンテナ:84e114c660e2288c965bfe012faed1ad">Nginx+Serfコンテナ</h2>
+
+<p>Webサーバには，nginxを利用する．Dockerfileは以下．</p>
+
+<pre><code class="language-bash">FROM ubuntu
+
+# Install serf
+RUN apt-get install -y unzip wget
+RUN wget --no-check-certificat https://dl.bintray.com/mitchellh/serf/0.5.0_linux_amd64.zip -O serf.zip
+RUN unzip serf.zip
+RUN chmod +x serf
+RUN mv serf /usr/bin/serf
+
+# Install nginx
+RUN apt-get -y update
+RUN apt-get -y install nginx
+
+# Install supervisor
+RUN apt-get install -qy supervisor
+
+# Supervisord config
+ADD supervisord-nginx.conf /etc/supervisor/conf.d/supervisord-nginx.conf
+
+# Default page
+ADD index.html /usr/share/nginx/www/index.html
+
+# Startup script (We need this to use environmetal variables with --link)
+ADD start-serf.sh /start-serf.sh
+RUN chmod 755 /start-serf.sh
+
+EXPOSE 80
+CMD [&quot;supervisord&quot;, &quot;-n&quot;]
+</code></pre>
+
+<p>やっているのは，</p>
+
+<ul>
+<li>Serfのインストール</li>
+<li>Nginxのインストール</li>
+<li>Supervisorのインストール</li>
+<li>設定ファイル，デフォルトページ，Serf起動スクリプトの追加</li>
+</ul>
+
+<p>Supervisorの設定ファイルは以下．</p>
+
+<pre><code class="language-bash"># supervisord-nginx.conf
+[supervisord]
+nodaemon=true
+
+[program:nginx]
+command=/usr/sbin/nginx -g &quot;daemon off;&quot;
+numprocs=1
+autostart=true
+autorestart=true
+
+[program:serf]
+command=/start-serf.sh
+numprocs=1
+autostart=true
+autorestart=true
+</code></pre>
+
+<p>HAProxyコンテナと同様に，起動コマンドに[&ldquo;supervisord&rdquo;,&ldquo;-n&rdquo;]を指定しておけば，コンテナを立ち上げたときに，NginxとSerfが両方起動する．</p>
+
+<p>Serfの起動スクリプトは，以下．</p>
+
+<pre><code class="language-bash">#!/bin/bash
+
+exec serf agent \
+    -tag role=web \
+    -join $SERF_PORT_7946_TCP_ADDR:$SERF_PORT_7946_TCP_PORT
+</code></pre>
+
+<p>クラスタに参入するときに必要となる，メンバーのIPはDockerのLink機能を利用して取得する（Link機能については，<a href="http://deeeet.com/writing/2014/03/20/docker-link-container/">&ldquo;Dockerコンテナ間のlink，database.ymlの書き方&rdquo;</a>に書いた）．</p>
+
+<p>バランシングされていることを確認するために，異なるデフォルトページを持つ2つのイメージを作成しておく．</p>
+
+<pre><code class="language-bash">$ echo '&lt;h1&gt;web1&lt;/h1&gt;' &gt; index.html
+$ docker build -t tcnksm/web1 .
+$ echo '&lt;h1&gt;web2&lt;/h1&gt;' &gt; index.html
+$ docker build -t tcnksm/web2 .
+</code></pre>
+
+<h2 id="動かしてみる:84e114c660e2288c965bfe012faed1ad">動かしてみる</h2>
+
+<p>まず，HAProxyコンテナを起動する．</p>
+
+<pre><code class="language-bash">$ docker run -d -t -p 8080:80 -p 7946 --name haproxy tcnksm/haproxy
+</code></pre>
+
+<p>起動の確認には，<code>docker logs $(docker ps -l -q)</code>する．</p>
+
+<p>次に，Nginxコンテナを起動する．</p>
+
+<pre><code class="language-bash">$ docker run -d -t --link haproxy:serf tcnksm/web1
+$ docker run -d -t --link haproxy:serf tcnksm/web2
+</code></pre>
+
+<p>バランシングされているのを確認する．</p>
+
+<pre><code class="language-bash">$ curl http://0.0.0.0:8080
+</code></pre>
+
+<p>余談．ホスト（OSX）側からserfのメンバーに参入してクラスタのメンバの確認をする．</p>
+
+<pre><code class="language-bash">$ serf agent -bind 127.0.0.1 -join $(docker port proxy 7946)
+$ serf members
+OSX             127.0.0.1:7946   alive
+71bb31bdb656    172.17.0.3:7946  alive  role=web
+042494b4df57    172.17.0.4:7946  alive  role=web
+haproxy         172.17.0.2:7946  alive  role=lb
+</code></pre>
+
+<p>事前に<code>$(docker port proxy 7967)</code>のportにホスト側からアクセスできるようにboot2docker-vmのport forwardingをやっておくこと．<code>haproxy</code>コンテナ以外には接続できないので，ゴシップが送れないため，あくまで一時的なデバッグ用．</p>
+
+<h2 id="雑感:84e114c660e2288c965bfe012faed1ad">雑感</h2>
+
+<p>やってみると案外簡単だった．ただ，これはDockerのLink機能を使ってるため，同一ホスト内でしか利用できない手法になる．負荷を考えるとしんどそう．異なるホスト間でもSerf+Dockerで連携できるようにしたい（既にCenturyLink Labsの<a href="http://www.centurylinklabs.com/linking-docker-containers-with-a-serf-ambassador/">&ldquo;Linking Docker Containers with a Serf Ambassador&rdquo;</a>がある）．</p>
+
+<p>ただ，SupervisorつかってDockerで複数プロセスを動かすときとかの参考になればと．</p>
+
+<h3 id="参考:84e114c660e2288c965bfe012faed1ad">参考</h3>
+
+<ul>
+<li><a href="http://foodfightshow.org/2013/11/docker-in-practice.html">Docker in Practice - Food Fight</a></li>
+<li><a href="http://www.centurylinklabs.com/auto-loadbalancing-with-fig-haproxy-and-serf/">Auto-Loadbalancing Docker with Fig, HAProxy and Serf</a></li>
+<li><a href="http://docs.docker.io/en/latest/examples/using_supervisord/">Using Supervisor with Docker</a></li>
+<li><a href="http://blog.glidenote.com/blog/2013/10/30/serf-haproxy/">Serf+HAProxyで作るAutomatic Load Balancer</a></li>
+<li><a href="http://blog.ryotarai.info/blog/2014/04/01/service-discovery-by-syanpse-with-serf/">Synapse と Serf でサービスディスカバリ</a></li>
+<li><a href="https://github.com/hashicorp/serf/tree/master/demo/web-load-balancer">Serf Demo: Web Servers + Load Balancer</a></li>
+<li><a href="http://pocketstudio.jp/log3/2014/03/29/serf_configuration_quick_guide/">Serf設定オプションまとめ</a></li>
+</ul>
+
+      <div class="social">
+  
+  
+  <a href="https://twitter.com/share" class="twitter-share-button" data-via="deeeet" data-count="none">Tweet</a>
+  
+  
+</div>
+
+    </section>
+
+    <footer>
+      <address>
+        
+        <img src="/images/bio.jpeg"/>
+        
+        <p>Written by <strong><a rel="author" href="https://twitter.com/deeeet" title="Taichi Nakashima" target="_blank">Taichi Nakashima</a></strong><br>
+          <span class="muted">A Tokyo based PaaS engineer. Please contact me via twitter.</span>
+        </p>
+      </address>
+
+    </footer>
+
+  </div>
+</article>
+
+<script type="text/javascript" src="//ajax.googleapis.com/ajax/libs/jquery/1.7.2/jquery.min.js"></script>
+<script type="text/javascript" src="/js/main.js"></script>
+
+<script>!function(d,s,id){var js,fjs=d.getElementsByTagName(s)[0],p=/^http:/.test(d.location)?'http':'https';if(!d.getElementById(id)){js=d.createElement(s);js.id=id;js.src=p+'://platform.twitter.com/widgets.js';fjs.parentNode.insertBefore(js,fjs);}}(document, 'script', 'twitter-wjs');</script>
+
+
+<script type="text/javascript">var HN=[];HN.factory=function(e){return function(){HN.push([e].concat(Array.prototype.slice.call(arguments,0)))};},HN.on=HN.factory("on"),HN.once=HN.factory("once"),HN.off=HN.factory("off"),HN.emit=HN.factory("emit"),HN.load=function(){var e="hn-button.js";if(document.getElementById(e))return;var t=document.createElement("script");t.id=e,t.src="//hn-button.herokuapp.com/hn-button.js";var n=document.getElementsByTagName("script")[0];n.parentNode.insertBefore(t,n)},HN.load();</script>
+
+
+  <script>
+  (function(i,s,o,g,r,a,m){i['GoogleAnalyticsObject']=r;i[r]=i[r]||function(){
+  (i[r].q=i[r].q||[]).push(arguments)},i[r].l=1*new Date();a=s.createElement(o),
+  m=s.getElementsByTagName(o)[0];a.async=1;a.src=g;m.parentNode.insertBefore(a,m)
+  })(window,document,'script','//www.google-analytics.com/analytics.js','ga');
+
+  ga('create', 'UA-45390253-1', 'auto');
+  ga('send', 'pageview');
+
+</script>
+
+
+
+<script>
+  $(document).ready(function() {
+  
+  $('p:has(img)').css('text-align', 'center');
+  $('iframe').css('style', 'display: block; margin: 0px auto;');
+  });
+</script>
+

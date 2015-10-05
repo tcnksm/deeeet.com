@@ -1,0 +1,221 @@
+<!doctype html>
+<html>
+  <head>
+    <meta http-equiv="content-type" content="text/html; charset=utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    
+    <title>Go言語でCPU数に応じて並列処理数を制限する | SOTA</title>
+    
+    <link href="https://fonts.googleapis.com/css?family=Lato%3a900" rel="stylesheet" type="text/css">
+    <link rel="stylesheet" href="/css/main.css">
+    <link rel="shortcut icon" href="/favicon.png" type="image/x-icon" />
+    <link href="http://deeeet.com//index.xml" rel="alternate" type="application/rss+xml" title="" />
+    <meta name="title" content="http://deeeet.com/writing/2014/07/30/golang-parallel-by-cpu/">
+    <link rel="canonical" href="http://deeeet.com/writing/2014/07/30/golang-parallel-by-cpu/">
+    
+    <meta property="og:title" content="Go言語でCPU数に応じて並列処理数を制限する"/>
+    <meta property="og:url" content="http://deeeet.com/writing/2014/07/30/golang-parallel-by-cpu/"/>
+  </head>
+  
+  <body>
+    <section class="site-nav">
+      <header>
+        <nav id="navigation">
+          <ul class="menu">
+            <li><a href="https://github.com/tcnksm/talks">Talks</a></li>
+            <li><a href="https://tcnksm.exposure.co/">Photos</a></li>
+          </ul>
+
+          <a class="name" href="/">SOTA</a>
+        </nav>        
+      </header>
+    </section>
+    
+
+
+<article>
+  <div class="container">
+    <header>
+      <div class="meta">
+        <time pubdate datetime="2014-07-30" title="2014-07-30">July 30, 2014</time>
+      </div>
+      <h1 class="title">Go言語でCPU数に応じて並列処理数を制限する</h1>
+    </header>
+    
+    <section>
+      
+
+<p>負荷のかかる処理を制限なしに並列化しても意味ない．処理の並列数を予測可能な場合は，当たりをつけて最適化するのもよいが，不明確な場合は，CPU数による制限が単純な1つの解になる．</p>
+
+<h2 id="tl-dr:9e9b903938f825eaad6b5d0607a91478">TL;DR</h2>
+
+<p>CPU数に応じたバッファ長のChannelを使って<a href="http://ja.wikipedia.org/wiki/%E3%82%BB%E3%83%9E%E3%83%95%E3%82%A9">セマフォ</a>を実装する．</p>
+
+<h2 id="実例:9e9b903938f825eaad6b5d0607a91478">実例</h2>
+
+<ul>
+<li><a href="https://github.com/mitchellh/gox">mitchellh/gox</a></li>
+</ul>
+
+<p><code>gox</code>はGo言語製のツールを並列コンパイルするツール．コンパイルの処理は重いため，デフォルトで並列処理数をCPU数で制限している．</p>
+
+<h2 id="簡単な例:9e9b903938f825eaad6b5d0607a91478">簡単な例</h2>
+
+<p>例えば，以下のような単純な並列処理を考える．<code>heavy()</code>（重い処理）を並列で実行する．</p>
+
+<pre><code class="language-go">package main
+
+import (
+        &quot;fmt&quot;
+        &quot;sync&quot;
+        &quot;time&quot;
+)
+
+func heavy(i int) {
+        fmt.Println(i)
+        time.Sleep(5 * time.Second)
+}
+
+func main() {
+        var wg sync.WaitGroup    
+        for i := 0; i &lt;= 100; i++ {
+            wg.Add(1)
+            go func(i int) {
+                defer wg.Done()
+                heavy(i)
+            }(i)
+        }
+        wg.Wait()
+}
+</code></pre>
+
+<p>この並列処理の同時実行数をCPU数で制限する．</p>
+
+<p>まず，利用可能なCPUのコア数は，<a href="http://golang.org/pkg/runtime/">runtime</a>パッケージの<code>NumCPU()</code>で取得できる．</p>
+
+<pre><code class="language-go">func NumCPU() int
+</code></pre>
+
+<p>次に，CPU数をバッファ長としたChannelを作成する．</p>
+
+<pre><code class="language-go">cpus := runtime.NumCPU()
+semaphore := make(chan int, cpus)
+</code></pre>
+
+<p>後は，<code>heavy()</code>をChannelへの送受信で囲む．これで，CPU数だけバッファが溜まると，Channelへの送信がブロックされ，新しい並列処理の開始もブロックされる．</p>
+
+<p>最終的な実装は以下のようになる．</p>
+
+<pre><code class="language-go">package main
+
+import (
+        &quot;fmt&quot;
+        &quot;sync&quot;
+        &quot;time&quot;
+        &quot;runtime&quot;
+)
+
+func heavy(i int) {
+        fmt.Println(i)
+        time.Sleep(5 * time.Second)
+}
+
+func main() {
+        var wg sync.WaitGroup
+        cpus := runtime.NumCPU()
+        semaphore := make(chan int, cpus)
+        for i := 0; i &lt;= 100; i++ {
+            wg.Add(1)
+            go func(i int) {
+                defer wg.Done()
+                semaphore &lt;- 1
+                heavy(i)
+                &lt;-semaphore
+            }(i)
+        }
+        wg.Wait()
+}
+</code></pre>
+
+<h2 id="マルチコアで実行する:9e9b903938f825eaad6b5d0607a91478">マルチコアで実行する</h2>
+
+<p>最後にちょっとCPU関連で別の話題．現状，goroutineのスケジューラはマルチコアを最適に使うようになっていないらしい（<a href="http://golang.org/doc/faq#Why_GOMAXPROCS">&ldquo;Why does using GOMAXPROCS &gt; 1 sometimes make my program slower?&rdquo;</a>）．そのため，デフォルトの設定では使用するCPUのコア数は1になっている．</p>
+
+<p>これを変更するには，runtimeパッケージの<code>GOMAXPROCS()</code>を使う，もしくは環境変数 (<code>GOMAXPROCS</code>) を設定する．</p>
+
+<pre><code class="language-go">func GOMAXPROCS(n int) int
+</code></pre>
+
+<p>利用可能なCPUを全て使って処理を実行するには，以下のようにする．</p>
+
+<pre><code class="language-go">cpus := runtime.NumCPU()
+runtime.GOMAXPROCS(cpus)
+</code></pre>
+
+<p>将来的には，スケジューラがいい感じにしてくれるっぽい．</p>
+
+<h3 id="参考:9e9b903938f825eaad6b5d0607a91478">参考</h3>
+
+<ul>
+<li><a href="http://jxck.hatenablog.com/entry/20130414/1365960707">Go の並行処理 - Block Rockin’ Code</a></li>
+<li><a href="http://d.hatena.ne.jp/sfujiwara/20091201/1259681707">GOMAXPROCS でマルチコアCPUを有効に使う - 酒日記 はてな支店</a></li>
+<li><a href="http://www.goinggo.net/2014/01/concurrency-goroutines-and-gomaxprocs.html">Going Go Programming: Concurrency, Goroutines and GOMAXPROCS</a></li>
+<li><a href="http://stackoverflow.com/questions/17853831/what-is-the-gomaxprocs-default-value">runtime - what is the GOMAXPROCS default value - Stack Overflow</a></li>
+<li><a href="http://deeeet.com/writing/2014/07/29/ghr/">高速に自作パッケージをGithubにリリースするghrというツールをつくった</a></li>
+</ul>
+
+      <div class="social">
+  
+  
+  <a href="https://twitter.com/share" class="twitter-share-button" data-via="deeeet" data-count="none">Tweet</a>
+  
+  
+</div>
+
+    </section>
+
+    <footer>
+      <address>
+        
+        <img src="/images/bio.jpeg"/>
+        
+        <p>Written by <strong><a rel="author" href="https://twitter.com/deeeet" title="Taichi Nakashima" target="_blank">Taichi Nakashima</a></strong><br>
+          <span class="muted">A Tokyo based PaaS engineer. Please contact me via twitter.</span>
+        </p>
+      </address>
+
+    </footer>
+
+  </div>
+</article>
+
+<script type="text/javascript" src="//ajax.googleapis.com/ajax/libs/jquery/1.7.2/jquery.min.js"></script>
+<script type="text/javascript" src="/js/main.js"></script>
+
+<script>!function(d,s,id){var js,fjs=d.getElementsByTagName(s)[0],p=/^http:/.test(d.location)?'http':'https';if(!d.getElementById(id)){js=d.createElement(s);js.id=id;js.src=p+'://platform.twitter.com/widgets.js';fjs.parentNode.insertBefore(js,fjs);}}(document, 'script', 'twitter-wjs');</script>
+
+
+<script type="text/javascript">var HN=[];HN.factory=function(e){return function(){HN.push([e].concat(Array.prototype.slice.call(arguments,0)))};},HN.on=HN.factory("on"),HN.once=HN.factory("once"),HN.off=HN.factory("off"),HN.emit=HN.factory("emit"),HN.load=function(){var e="hn-button.js";if(document.getElementById(e))return;var t=document.createElement("script");t.id=e,t.src="//hn-button.herokuapp.com/hn-button.js";var n=document.getElementsByTagName("script")[0];n.parentNode.insertBefore(t,n)},HN.load();</script>
+
+
+  <script>
+  (function(i,s,o,g,r,a,m){i['GoogleAnalyticsObject']=r;i[r]=i[r]||function(){
+  (i[r].q=i[r].q||[]).push(arguments)},i[r].l=1*new Date();a=s.createElement(o),
+  m=s.getElementsByTagName(o)[0];a.async=1;a.src=g;m.parentNode.insertBefore(a,m)
+  })(window,document,'script','//www.google-analytics.com/analytics.js','ga');
+
+  ga('create', 'UA-45390253-1', 'auto');
+  ga('send', 'pageview');
+
+</script>
+
+
+
+<script>
+  $(document).ready(function() {
+  
+  $('p:has(img)').css('text-align', 'center');
+  $('iframe').css('style', 'display: block; margin: 0px auto;');
+  });
+</script>
+

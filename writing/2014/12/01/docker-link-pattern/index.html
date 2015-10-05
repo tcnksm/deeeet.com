@@ -1,0 +1,372 @@
+<!doctype html>
+<html>
+  <head>
+    <meta http-equiv="content-type" content="text/html; charset=utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    
+    <title>Dockerコンテナ接続パターン (2014年冬) | SOTA</title>
+    
+    <link href="https://fonts.googleapis.com/css?family=Lato%3a900" rel="stylesheet" type="text/css">
+    <link rel="stylesheet" href="/css/main.css">
+    <link rel="shortcut icon" href="/favicon.png" type="image/x-icon" />
+    <link href="http://deeeet.com//index.xml" rel="alternate" type="application/rss+xml" title="" />
+    <meta name="title" content="http://deeeet.com/writing/2014/12/01/docker-link-pattern/">
+    <link rel="canonical" href="http://deeeet.com/writing/2014/12/01/docker-link-pattern/">
+    
+    <meta property="og:title" content="Dockerコンテナ接続パターン (2014年冬)"/>
+    <meta property="og:url" content="http://deeeet.com/writing/2014/12/01/docker-link-pattern/"/>
+  </head>
+  
+  <body>
+    <section class="site-nav">
+      <header>
+        <nav id="navigation">
+          <ul class="menu">
+            <li><a href="https://github.com/tcnksm/talks">Talks</a></li>
+            <li><a href="https://tcnksm.exposure.co/">Photos</a></li>
+          </ul>
+
+          <a class="name" href="/">SOTA</a>
+        </nav>        
+      </header>
+    </section>
+    
+
+
+<div class="container">
+  <div class="article-cover">
+    <div>
+      <img src="/images/docker.jpg" class="image">
+    </div>
+  </div>
+</div>
+
+<article>
+  <div class="container">
+    <header>
+      <div class="meta">
+        <time pubdate datetime="2014-12-01" title="2014-12-01">December 01, 2014</time>
+      </div>
+      <h1 class="title">Dockerコンテナ接続パターン (2014年冬)</h1>
+    </header>
+    
+    <section>
+      
+
+<p>本記事は<a href="http://qiita.com/advent-calendar/2014/docker">Docker Advent Calendar 2014</a>の1日目の記事です．</p>
+
+<p>Dockerによるコンテナ化はリソース隔離として素晴らしい技術である．しかし，通常は1つのコンテナに全ての機能を詰め込むようなことはしない．マイクロサービス的にコンテナごとに役割を分け，それらを接続し，協調させ，全体として1つのサービスを作り上げるのが通常の使い方になっている．</p>
+
+<p>コンテナ同士の接続と言っても，シングルホスト内ではどうするのか，マルチホストになったときにどうするのかなど様々なパターンが考えられる．Dockerが注目された2014年だけでも，とても多くの手法や考え方が登場している．</p>
+
+<p>僕の観測範囲で全てを追いきれているかは分からないが，現状見られるDockerコンテナの接続パターンを実例と共にまとめておく．</p>
+
+<p>なお今回利用するコードは全て以下のレポジトリをcloneして自分で試せるようになっている．</p>
+
+<ul>
+<li><a href="https://github.com/tcnksm/docker-link-pattern">tcnksm/docker-link-pattern</a></li>
+</ul>
+
+<h2 id="概要:dd1899745c6eab0d377eaa9661f859e7">概要</h2>
+
+<p>本記事では以下について説明する．</p>
+
+<ul>
+<li>link機能（シングルホスト）</li>
+<li>fig（シングルホスト）</li>
+<li>Ambassadorパターン（マルチホスト）</li>
+<li>動的Ambassadorパターン（マルチホスト）</li>
+<li>weaveによる独自ネットワークの構築（マルチホスト）</li>
+<li>Kubernetes（マルチホスト）</li>
+</ul>
+
+<h2 id="事前知識:dd1899745c6eab0d377eaa9661f859e7">事前知識</h2>
+
+<p>事前知識として，Dockerがそのネットワークをどのように制御しているかを知っていると良い．それに関しては以下で書いた．</p>
+
+<ul>
+<li><a href="http://deeeet.com/writing/2014/05/11/docker-network/">Dockerのネットワークの基礎 | SOTA</a></li>
+</ul>
+
+<h2 id="利用する状況:dd1899745c6eab0d377eaa9661f859e7">利用する状況</h2>
+
+<p>以下ではすべてのパターンを，同じ状況で説明する．redisコンテナ（<code>crosbymichael/redis</code>）を立て．それにresdis-cliコンテナ（<code>relateiq/redis-cli</code>）で接続するという状況を考える．</p>
+
+<h2 id="link機能-シングルホスト:dd1899745c6eab0d377eaa9661f859e7">link機能（シングルホスト）</h2>
+
+<p>まず，基礎．DockerはLinksというコンテナ同士の連携を簡単に行う仕組みを標準でもっている．これは，<code>--link &lt;連携したいコンテナ名&gt;:&lt;エイリアス名&gt;</code>オプションで新しいコンテナを起動すると，そのコンテナ内で連携したいコンテナのポート番号やIPを環境変数として利用できるという機能である．</p>
+
+<p>今回の例でいうと，まず，<code>redis</code>という名前でredisコンテナを立てておく．</p>
+
+<pre><code class="language-bash">$ docker run -d --name redis crosbymichael/redis
+</code></pre>
+
+<p>これに接続するには，以下のようにする．</p>
+
+<pre><code class="language-bash">$ docker run -it --rm --link redis:redis relateiq/redis-cli
+redis 172.17.0.42:6379&gt; ping
+PONG
+</code></pre>
+
+<p><code>relateiq/redis-cli</code>コンテナの起動スクリプトは以下のようになっている．</p>
+
+<pre><code class="language-bash"># !/bin/bash
+
+if [ $# -eq 0 ]; then
+/redis/src/redis-cli -h $REDIS_PORT_6379_TCP_ADDR -p $REDIS_PORT_6379_TCP_PORT
+else
+/redis/src/redis-cli &quot;$@&quot;
+fi
+</code></pre>
+
+<p>引数なしで起動すると，<code>relateiq/redis-cli</code>は環境変数，<code> $REDIS_PORT_6379_TCP_ADDR</code>に接続しようとする．<code>--link redis:redis</code>でこれを起動することで，この環境変数が設定され，接続できる．</p>
+
+<p>link機能については以下に詳しく書いた．</p>
+
+<ul>
+<li><a href="http://deeeet.com/writing/2014/03/20/docker-link-container/">Dockerコンテナ間のlink，database.ymlの書き方</a></li>
+</ul>
+
+<h2 id="fig-シングルホスト:dd1899745c6eab0d377eaa9661f859e7">fig（シングルホスト）</h2>
+
+<p>link機能は便利だが，利用するコンテナが多くなったときに毎回それらのコマンドを叩くのは億劫になる．それを解決するのが，Docker社に買収されたOrchard社の<a href="http://www.fig.sh/">fig</a>である．</p>
+
+<p>figは，シングルホスト向けのコンテナ管理ツールである．<code>fig.yml</code>という1つのyamlファイルに利用するコンテナや，その起動コマンド，linkしたいコンテナ，解放しておきたいportなどを定義し，<code>fig up</code>というコマンドを叩くだけで全てのコンテナを一気に立ち上がり，接続などをよしなにやってくれる．</p>
+
+<p>例えば，今回の例だと，以下のような<code>fig.yml</code>を準備する．</p>
+
+<pre><code class="language-yaml">cli:
+  image: relateiq/redis-cli
+  links:
+    - redis
+redis:
+  image: crosbymichael/redis
+</code></pre>
+
+<p>あとは，以下のコマンドを叩くだけ（<code>run</code>はone-offコマンドを実行する）．</p>
+
+<pre><code class="language-bash">$ fig run --rm cli
+redis 172.17.0.42:6379&gt; ping
+PONG
+</code></pre>
+
+<p>figを使ってプロダクション運用をしている例は既にある．ローカルでプロダクションと全く同じ状況を一瞬で作れるのが気に入られている．</p>
+
+<ul>
+<li><a href="http://davidmburke.com/2014/09/26/docker-in-dev-and-in-production-a-complete-and-diy-guide/">Docker in dev and in production – a complete and DIY guide | Technology Against You</a></li>
+<li><a href="https://www.youtube.com/watch?v=bYfwFkeeUL4">Docker Global Hack Day: Fig Demo&rsquo;d by Daniel Nephin of Yelp</a></li>
+</ul>
+
+<p>ちなみに，今年のDocker GlobalHackDayの優勝はfigのマルチホスト対応だった（まだPRはマージされてないっぽいが…）．</p>
+
+<ul>
+<li><a href="https://www.youtube.com/watch?v=D3-tvQRRKBc">Enable Fig to deploy to different docker servers in one time</a></li>
+<li><a href="https://github.com/docker/fig/pull/607">Enable services to use different Docker Hosts #607</a></li>
+</ul>
+
+<h3 id="参考:dd1899745c6eab0d377eaa9661f859e7">参考</h3>
+
+<ul>
+<li><a href="http://blog.docker.com/2014/08/orchestrating-docker-containers-in-production-using-fig/">Orchestrating Docker containers in production using Fig | Docker Blog</a></li>
+<li><a href="http://qiita.com/toritori0318/items/190fd2dad2bf3ce38b88">Docker1.3版 boot2docker+fig入門 - Qiita</a></li>
+<li><a href="http://blog.kenjiskywalker.org/blog/2014/10/25/osx-fig-docker-access-container/">OS Xでfigを利用してDockerのコンテナを操作する</a></li>
+</ul>
+
+<h2 id="ambassadorパターン-マルチホスト:dd1899745c6eab0d377eaa9661f859e7">Ambassadorパターン（マルチホスト）</h2>
+
+<p>シングルホストで全てのコンテナを運用するというのは大規模になるときつい．普通はホストを分散させる．Dockerはシングルホストでは強いが，マルチホストになると，とたんに難易度が上がる．実際，今年はDockerに関していろいろツールが出たが，マルチホストでいかにDockerコンテナをオーケストレーションするかを解決するツールが多かったように思える．</p>
+
+<p>その中でも一番シンプルな方法として，Dockerの公式ドキュメントでも紹介されているのが，<a href="http://docs.docker.com/articles/ambassador_pattern_linking/">Ambassadorパターン</a>である．これはトラフィックを別ホストへforwardすることに特化したコンテナ（<code>svendowideit/ambassador</code>）を立てる方法である．今回の例でいうと以下のように接続する．</p>
+
+<pre><code class="language-bash">(redis-cli) --&gt; (ambassador) ---network---&gt; (ambassador) --&gt; (redis)
+</code></pre>
+
+<p>redis-cliコンテナとambassadorコンテナ，redisコンテナとambassadorコンテナはdockerのlink機能で接続し，ambassadorコンテナはトラフィックをネットワーク越しにフォワードする．</p>
+
+<p>まず，redisコンテナを動かすホスト（IPは<code>192.168.1.52</code>とする）では，以下の2つのコンテナを立てる．</p>
+
+<pre><code class="language-bash">$ docker run -d --name redis crosbymichael/redis
+$ docker run -d --link redis:redis --name redis_ambassador -p 6379:6379 svendowideit/ambassador
+</code></pre>
+
+<p>そして別ホストから以下を実行し，そのRedisコンテナに接続する．</p>
+
+<pre><code class="language-bash">$ docker run -d --name redis_ambassador --expose 6379 -e REDIS_PORT_6379_TCP=tcp://192.168.1.52:6379 svendowideit/ambassador
+$ sudo docker run -i -t --rm --link redis_ambassador:redis relateiq/redis-cli
+redis 172.17.0.160:6379&gt; ping
+PONG
+</code></pre>
+
+<p>これはシンプルだが，Redisコンテナを再起動したら，Ambassadorも起動して..など，運用を考えるとしんどそう．また，結局redisコンテナがどのホストで動いているかを意識する必要があり，ホストの数が膨大になったときにしんどくなる未来が見える．</p>
+
+<h2 id="動的ambassadorパターン-マルチホスト:dd1899745c6eab0d377eaa9661f859e7">動的Ambassadorパターン（マルチホスト）</h2>
+
+<p>では，ホストの数が膨大になり，接続したいコンテナがどのホストで動いているかを意識しなくても良くするにはどうしたら良いか．</p>
+
+<p>その1つの解法としては，<code>etcd</code>のような分散Key-Valueストアを利用し，動的なAmbassadorパターンを作り上げる方法がある．つまり以下のようなことをする．</p>
+
+<ul>
+<li>接続される側は接続情報をetcdに書き込み続けるコンテナを立てる</li>
+<li>接続する側はその情報を読み込み続ける動的なambassadorコンテナを立てる</li>
+</ul>
+
+<p>これにより，ホストの変更や増減を意識する必要がなくなる．今回の例を図にすると以下のようになる．</p>
+
+<p><img src="https://coreos.com/assets/images/media/etcd-ambassador-flow.png" alt="https://coreos.com/assets/images/media/etcd-ambassador-flow.png" />
+</p>
+
+<p><a href="https://coreos.com/assets/images/media/etcd-ambassador-flow.png">https://coreos.com/assets/images/media/etcd-ambassador-flow.png</a></p>
+
+<p>これは少し複雑なので別で記事を書いた．</p>
+
+<ul>
+<li><a href="http://deeeet.com/writing/2014/11/26/coreos-etcd-docker-link/">CoreOSクラスタ内のDockerコンテナの動的リンク | SOTA</a></li>
+</ul>
+
+<p>CoreOSを使っているのは標準でetcdが使えること，fleetによるコンテナの管理が楽であるからだが，<code>etcd</code>のような分散Key-Valueストアが使えればどんなプラットフォームでも実現可能な話である．</p>
+
+<p>Dokkuの作者である<a href="https://twitter.com/progrium">Jeff Lindsay</a>氏が，<a href="https://github.com/progrium/ambassadord">progrium/ambassadord</a>とういうツールを作っている．これはetcd+ConsulでDNSベースでこの動的Ambassadorを実現する手法であり，これも良さそう．</p>
+
+<h2 id="weave-マルチホスト:dd1899745c6eab0d377eaa9661f859e7">weave（マルチホスト）</h2>
+
+<p>一方で，Docker専用の仮想ネットワーク（オーバーレイネットワーク）を構築してしまおうという流れもある．あらゆるコンテナを同一ネットワーク上に存在しているかように扱えるようにし，portマッピングやlinkなどを考慮しなくてもよくする．</p>
+
+<p>その中で有名なのが<a href="https://github.com/zettio/weave">zettio/weave</a>である．weaveは，</p>
+
+<ul>
+<li><code>weave</code>コンテナというルータ用のコンテナを立てる</li>
+<li>専用の仮想ブリッチを作成する</li>
+<li>全てのDockerコンテナに専用のvethインターフェースを作成する</li>
+</ul>
+
+<p>ということをして，専用のネットワークを構築する．</p>
+
+<p><img src="https://github.com/zettio/weave/raw/master/docs/deployment.png?raw=true" alt="https://github.com/zettio/weave/raw/master/docs/deployment.png?raw=true" />
+</p>
+
+<p><a href="https://github.com/zettio/weave/raw/master/docs/deployment.png?raw=true">https://github.com/zettio/weave/raw/master/docs/deployment.png</a></p>
+
+<p>実際に使ってみる．まず，weaveネットワークを構築する．あるホスト（IPは<code>192.20.20.11</code>とする）で以下を実行する．</p>
+
+<pre><code class="language-bash">$ sudo weave launch
+</code></pre>
+
+<p>次に別のホストから上のホストを指定してweaveネットワークを立てる．</p>
+
+<pre><code class="language-bash">$ sudo weave launch 192.20.20.11 
+</code></pre>
+
+<p>これでweaveルータが立ち上がり，ネットワークは構築できた．あとは，CIDER形式でサブネットワークを指定してコンテナを立てればよい．</p>
+
+<p>まず，以下のようにredisコンテナを立てる．</p>
+
+<pre><code class="language-bash">$ sudo weave run 10.0.1.1/24 -d crosbymichael/redis
+</code></pre>
+
+<p>次に別のホストからは以下のようにredis-cliコンテナを立てて接続する．</p>
+
+<pre><code class="language-bash">$ C=$(sudo weave run 10.0.1.2/24 -i -t relateiq/redis-cli -h 10.0.1.1)
+$ docker attach $C
+redis 10.0.1.1:6379&gt; ping
+PONG
+</code></pre>
+
+<p>ただ上の例のように直接redisコンテナやredis-cliコンテナを立てるような使い方は違っていて，Ambassadorコンテナを挟むのが良い使いかたかなと思う．</p>
+
+<h3 id="参考-1:dd1899745c6eab0d377eaa9661f859e7">参考</h3>
+
+<ul>
+<li><a href="http://www.slideshare.net/jacopen/weave-40871981">Weaveを試してみた - SlideShare</a></li>
+<li><a href="http://knowledge.sakura.ad.jp/tech/2522/">複数のDockerサーバで独自ネットワークを構築する「Weave」を試す！ - さくらのナレッジ</a></li>
+<li><a href="http://www.infoq.com/jp/news/2014/09/zettio_releases_weave">ZettioがDocker用ネットワークシステムのWeaveをリリース</a></li>
+</ul>
+
+<h2 id="kubernetes-マルチホスト:dd1899745c6eab0d377eaa9661f859e7">Kubernetes (マルチホスト)</h2>
+
+<p>Dockerコンテナの管理として最も注目を浴びているのが<a href="https://github.com/GoogleCloudPlatform/kubernetes">GoogleCloudPlatform/kubernetes</a>である．コンテナの接続という視点でみると，Kubernetesは，Serviceというコンポーネントがコンテナへのアクセスを可能にする．Kubertetesは複数のコンテナをPodという単位でまとめて管理するが，それらへのラウンドロビンや環境変数による他Podからの接続を担うのがServiceである．</p>
+
+<p><img src="https://github.com/GoogleCloudPlatform/kubernetes/raw/master/docs/services_detail.png" alt="" />
+</p>
+
+<p><a href="https://github.com/GoogleCloudPlatform/kubernetes/raw/master/docs/services_detail.png">https://github.com/GoogleCloudPlatform/kubernetes/raw/master/docs/services_detail.png</a></p>
+
+<p>Serviceを実現するため，Kubernetesはweaveと似たようなことをしている．つまり，ホストごとにサブネットワークをアサインし（例えば，ホストAには10.0.1.0/24を，ホストBには10.0.2.0/24）ことで，ポートマッピングの複雑さを低減している．</p>
+
+<p>で，これはGCEでしか使えなかったが，このネットワークモデルを他のプラットフォームでも使えるようにしたのが，<a href="https://github.com/coreos/flannel">coreos/flannel</a>である．これを以下のようなモデルで実現している．</p>
+
+<p><img src="https://github.com/coreos/flannel/raw/master/packet-01.png" alt="https://github.com/coreos/flannel/raw/master/packet-01.png" />
+</p>
+
+<p><a href="https://github.com/coreos/flannel/raw/master/packet-01.png">https://github.com/coreos/flannel/raw/master/packet-01.png</a></p>
+
+<p>flannelでは，まずそれぞれのホストにどのようなレンジでIPをアサインするかを設定する．例えば，10.100.0.0/16を使い，それぞれの/24のサブネットをアサインする．するとホストAは10.100.5.0/24，ホストBは10.100.18.0/24といったネットワークがアサインされる．flannelはこれらの情報をetcdに保存しており，実際のIPとのマッピングを管理する．</p>
+
+<p>.. ただKubernetesはまだまだ絶賛試し中なので，また別の記事を書きたいなと思う．</p>
+
+<h3 id="参考-2:dd1899745c6eab0d377eaa9661f859e7">参考</h3>
+
+<ul>
+<li><a href="https://coreos.com/blog/introducing-rudder/">Introducing flannel: An etcd backed overlay network for containers</a></li>
+</ul>
+
+<h2 id="まとめ:dd1899745c6eab0d377eaa9661f859e7">まとめ</h2>
+
+<p>ざっとここ1年のトレンドを紹介した．まとめると，現状で一番良いモデルは，複数ホストになっても，それらの存在を意識せず，つまり，Datacentar as a computer的にコンテナの接続，デプロイができるのが良い．</p>
+
+<p>なので，KubernetesとCoreOSであるなーと思う．他にもいろいろツールは出てるが，ガチで使うならこの2つに任せた！って感じだ．</p>
+
+      <div class="social">
+  
+  
+  <a href="https://twitter.com/share" class="twitter-share-button" data-via="deeeet" data-count="none">Tweet</a>
+  
+  
+</div>
+
+    </section>
+
+    <footer>
+      <address>
+        
+        <img src="/images/bio.jpeg"/>
+        
+        <p>Written by <strong><a rel="author" href="https://twitter.com/deeeet" title="Taichi Nakashima" target="_blank">Taichi Nakashima</a></strong><br>
+          <span class="muted">A Tokyo based PaaS engineer. Please contact me via twitter.</span>
+        </p>
+      </address>
+
+    </footer>
+
+  </div>
+</article>
+
+<script type="text/javascript" src="//ajax.googleapis.com/ajax/libs/jquery/1.7.2/jquery.min.js"></script>
+<script type="text/javascript" src="/js/main.js"></script>
+
+<script>!function(d,s,id){var js,fjs=d.getElementsByTagName(s)[0],p=/^http:/.test(d.location)?'http':'https';if(!d.getElementById(id)){js=d.createElement(s);js.id=id;js.src=p+'://platform.twitter.com/widgets.js';fjs.parentNode.insertBefore(js,fjs);}}(document, 'script', 'twitter-wjs');</script>
+
+
+<script type="text/javascript">var HN=[];HN.factory=function(e){return function(){HN.push([e].concat(Array.prototype.slice.call(arguments,0)))};},HN.on=HN.factory("on"),HN.once=HN.factory("once"),HN.off=HN.factory("off"),HN.emit=HN.factory("emit"),HN.load=function(){var e="hn-button.js";if(document.getElementById(e))return;var t=document.createElement("script");t.id=e,t.src="//hn-button.herokuapp.com/hn-button.js";var n=document.getElementsByTagName("script")[0];n.parentNode.insertBefore(t,n)},HN.load();</script>
+
+
+  <script>
+  (function(i,s,o,g,r,a,m){i['GoogleAnalyticsObject']=r;i[r]=i[r]||function(){
+  (i[r].q=i[r].q||[]).push(arguments)},i[r].l=1*new Date();a=s.createElement(o),
+  m=s.getElementsByTagName(o)[0];a.async=1;a.src=g;m.parentNode.insertBefore(a,m)
+  })(window,document,'script','//www.google-analytics.com/analytics.js','ga');
+
+  ga('create', 'UA-45390253-1', 'auto');
+  ga('send', 'pageview');
+
+</script>
+
+
+
+<script>
+  $(document).ready(function() {
+  
+  $('p:has(img)').css('text-align', 'center');
+  $('iframe').css('style', 'display: block; margin: 0px auto;');
+  });
+</script>
+

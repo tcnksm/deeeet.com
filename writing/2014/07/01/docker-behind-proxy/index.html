@@ -1,0 +1,176 @@
+<!doctype html>
+<html>
+  <head>
+    <meta http-equiv="content-type" content="text/html; charset=utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    
+    <title>Proxy環境下でDockerを動かす | SOTA</title>
+    
+    <link href="https://fonts.googleapis.com/css?family=Lato%3a900" rel="stylesheet" type="text/css">
+    <link rel="stylesheet" href="/css/main.css">
+    <link rel="shortcut icon" href="/favicon.png" type="image/x-icon" />
+    <link href="http://deeeet.com//index.xml" rel="alternate" type="application/rss+xml" title="" />
+    <meta name="title" content="http://deeeet.com/writing/2014/07/01/docker-behind-proxy/">
+    <link rel="canonical" href="http://deeeet.com/writing/2014/07/01/docker-behind-proxy/">
+    
+    <meta property="og:title" content="Proxy環境下でDockerを動かす"/>
+    <meta property="og:url" content="http://deeeet.com/writing/2014/07/01/docker-behind-proxy/"/>
+  </head>
+  
+  <body>
+    <section class="site-nav">
+      <header>
+        <nav id="navigation">
+          <ul class="menu">
+            <li><a href="https://github.com/tcnksm/talks">Talks</a></li>
+            <li><a href="https://tcnksm.exposure.co/">Photos</a></li>
+          </ul>
+
+          <a class="name" href="/">SOTA</a>
+        </nav>        
+      </header>
+    </section>
+    
+
+
+<article>
+  <div class="container">
+    <header>
+      <div class="meta">
+        <time pubdate datetime="2014-07-01" title="2014-07-01">July 01, 2014</time>
+      </div>
+      <h1 class="title">Proxy環境下でDockerを動かす</h1>
+    </header>
+    
+    <section>
+      
+
+<p>Docker1.0がリリースされたことで，プロダクションレディ感もあり，企業でもDockerを使う機運が高まっている．でも，実際はまだまだ本番環境ではなく，テスト環境などで使われることが多い．</p>
+
+<p>Dockerによるテスト環境構築でまず思い浮かぶのは<a href="https://github.com/progrium/dokku">dokku</a>．dokkuはDockerを使ったbash実装のPaaS．プライベートPaaSを持たない，かつHerokuなどを気軽に使えない企業のテスト環境として今後使われる機会がありそう．</p>
+
+<p>ただ，個人での利用とは違い企業などでDockerやdokkuを使う場合は，Proxyに阻まれることがある（というか今日阻まれた）．ので，Proxy環境下でのDocker，dokkuの使い方を簡単にまとめておく．まず，Docker全般に関して，次にdokku特有の問題についてProxyの問題を解決しなければならない状況とその解決方法を説明する．</p>
+
+<h2 id="proxy環境下でのdocker:ea3937ae50390dd1a705f32ab47db421">Proxy環境下でのDocker</h2>
+
+<p>Dockerを使う中で，外部ネットワークとのやりとりが必要になるのは，以下の3つの場合が考えられる．</p>
+
+<ul>
+<li>DockerHub（Docker Index）とのやりとり</li>
+<li>Dockerfile</li>
+<li>Dockerコンテナ</li>
+</ul>
+
+<p>これらの解決方法をそれぞれ説明する．</p>
+
+<h3 id="dockerhub-docker-index:ea3937ae50390dd1a705f32ab47db421">DockerHub（Docker Index）</h3>
+
+<p>まずは，DockerHub（Docker Index）とのやりとりを行う場合．例えば，<code>docker pull</code>などでイメージを取得する場合など．</p>
+
+<p>この場合は，dockerデーモンを起動する際に<code>http_proxy</code>環境変数を設定すればよい．例えば，Ubuntuの場合は，Upstartの設定ファイル<code>/etc/default/docker</code>に<code>export http_proxy=&lt;HTTP_PROXY&gt;</code>を記述すればよい．</p>
+
+<h3 id="dockerfile:ea3937ae50390dd1a705f32ab47db421">Dockerfile</h3>
+
+<p>次に，Dockerfileで外部ネットワークとやりとりを行う場合．例えば，<code>apt-get</code>などでパッケージをインストールする場合など．</p>
+
+<p>この場合は，<code>ENV</code>コマンドを使ってDockerfile内で環境変数を設定すればよい．</p>
+
+<pre><code class="language-bash">FROM ubuntu:13.10
+ENV http_proxy &lt;HTTP_PROXY&gt;
+ENV https_proxy &lt;HTTPS_PROXY&gt;
+RUN apt-get -y update
+</code></pre>
+
+<h3 id="dockerコンテナ:ea3937ae50390dd1a705f32ab47db421">Dockerコンテナ</h3>
+
+<p>最後は，<code>docker run</code>でコンテナを起動した後に，コンテナ内から外部ネットワークとやりとりをする場合．例えば，サードパーティー製のDockerイメージをそのまま使う場合など．</p>
+
+<p>この場合は，<code>-e</code>オプションを使って<code>http_proxy</code>環境変数を設定してコンテナを起動すればよい．</p>
+
+<pre><code class="language-bash">$ docker run -d \
+    -e &quot;http_proxy=&lt;HTTP_PROXY&gt;&quot; \
+    progrium/buildstep /build/builder
+</code></pre>
+
+<h2 id="proxy環境下でのdokku:ea3937ae50390dd1a705f32ab47db421">Proxy環境下でのdokku</h2>
+
+<p>dokkuのインストール以外で，dokkuが外部ネットワークとやりとりするのは以下の2カ所．</p>
+
+<ul>
+<li>dokku専用のDockerイメージ<a href="https://github.com/progrium/buildstep">progrium/buildstep</a>のpull</li>
+<li>Buildpackを使ったアプリケーションのビルド</li>
+</ul>
+
+<p>1つ目は上記のDockerHubとのやりとりで示した方法で解決できる．2つ目は若干のハックが必要になる．</p>
+
+<p>dokkuはHerokuと同様にアプリケーションのビルドにBuildpackを使用し，依存パッケージ等のインストールを行う．このビルドは，dokku専用のDockerイメージ<a href="https://github.com/progrium/buildstep">progrium/buildstep</a>を使い，そのコンテナ内で実行される．よって，そのときにProxyが設定されている必要がある．これは上記のDockerコンテナで示した方法で解決できる．</p>
+
+<p>dokkuは，bash実装なので，<code>/usr/local/bin/dokku</code>を直接編集してしまえばよい．編集するのは，<code>build/builder</code>コマンドと共にコンテナを起動するところ．そこで<code>-e</code>オプションを使って環境変数を設定すればよい．</p>
+
+<p>具体的には，</p>
+
+<pre><code class="language-bash">id=$(docker run -d -v $CACHE_DIR:/cache $IMAGE /build/builder)
+</code></pre>
+
+<p>を以下のようにする．</p>
+
+<pre><code class="language-bash">id=$(docker run -d -v $CACHE_DIR:/cache -e &quot;http_proxy=&lt;HTTP_PROXY&gt;&quot; -e &quot;https_proxy=&lt;HTTP_PROXY&gt;&quot; $IMAGE /build/builder)
+</code></pre>
+
+<p>でも，ソースいじるのはあれだから良い方法があれば教えてください．</p>
+
+      <div class="social">
+  
+  
+  <a href="https://twitter.com/share" class="twitter-share-button" data-via="deeeet" data-count="none">Tweet</a>
+  
+  
+</div>
+
+    </section>
+
+    <footer>
+      <address>
+        
+        <img src="/images/bio.jpeg"/>
+        
+        <p>Written by <strong><a rel="author" href="https://twitter.com/deeeet" title="Taichi Nakashima" target="_blank">Taichi Nakashima</a></strong><br>
+          <span class="muted">A Tokyo based PaaS engineer. Please contact me via twitter.</span>
+        </p>
+      </address>
+
+    </footer>
+
+  </div>
+</article>
+
+<script type="text/javascript" src="//ajax.googleapis.com/ajax/libs/jquery/1.7.2/jquery.min.js"></script>
+<script type="text/javascript" src="/js/main.js"></script>
+
+<script>!function(d,s,id){var js,fjs=d.getElementsByTagName(s)[0],p=/^http:/.test(d.location)?'http':'https';if(!d.getElementById(id)){js=d.createElement(s);js.id=id;js.src=p+'://platform.twitter.com/widgets.js';fjs.parentNode.insertBefore(js,fjs);}}(document, 'script', 'twitter-wjs');</script>
+
+
+<script type="text/javascript">var HN=[];HN.factory=function(e){return function(){HN.push([e].concat(Array.prototype.slice.call(arguments,0)))};},HN.on=HN.factory("on"),HN.once=HN.factory("once"),HN.off=HN.factory("off"),HN.emit=HN.factory("emit"),HN.load=function(){var e="hn-button.js";if(document.getElementById(e))return;var t=document.createElement("script");t.id=e,t.src="//hn-button.herokuapp.com/hn-button.js";var n=document.getElementsByTagName("script")[0];n.parentNode.insertBefore(t,n)},HN.load();</script>
+
+
+  <script>
+  (function(i,s,o,g,r,a,m){i['GoogleAnalyticsObject']=r;i[r]=i[r]||function(){
+  (i[r].q=i[r].q||[]).push(arguments)},i[r].l=1*new Date();a=s.createElement(o),
+  m=s.getElementsByTagName(o)[0];a.async=1;a.src=g;m.parentNode.insertBefore(a,m)
+  })(window,document,'script','//www.google-analytics.com/analytics.js','ga');
+
+  ga('create', 'UA-45390253-1', 'auto');
+  ga('send', 'pageview');
+
+</script>
+
+
+
+<script>
+  $(document).ready(function() {
+  
+  $('p:has(img)').css('text-align', 'center');
+  $('iframe').css('style', 'display: block; margin: 0px auto;');
+  });
+</script>
+

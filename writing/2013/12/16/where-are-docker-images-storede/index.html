@@ -1,0 +1,460 @@
+<!doctype html>
+<html>
+  <head>
+    <meta http-equiv="content-type" content="text/html; charset=utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    
+    <title>Dockerのイメージはどこにある? | SOTA</title>
+    
+    <link href="https://fonts.googleapis.com/css?family=Lato%3a900" rel="stylesheet" type="text/css">
+    <link rel="stylesheet" href="/css/main.css">
+    <link rel="shortcut icon" href="/favicon.png" type="image/x-icon" />
+    <link href="http://deeeet.com//index.xml" rel="alternate" type="application/rss+xml" title="" />
+    <meta name="title" content="http://deeeet.com/writing/2013/12/16/where-are-docker-images-storede/">
+    <link rel="canonical" href="http://deeeet.com/writing/2013/12/16/where-are-docker-images-storede/">
+    
+    <meta property="og:title" content="Dockerのイメージはどこにある?"/>
+    <meta property="og:url" content="http://deeeet.com/writing/2013/12/16/where-are-docker-images-storede/"/>
+  </head>
+  
+  <body>
+    <section class="site-nav">
+      <header>
+        <nav id="navigation">
+          <ul class="menu">
+            <li><a href="https://github.com/tcnksm/talks">Talks</a></li>
+            <li><a href="https://tcnksm.exposure.co/">Photos</a></li>
+          </ul>
+
+          <a class="name" href="/">SOTA</a>
+        </nav>        
+      </header>
+    </section>
+    
+
+
+<article>
+  <div class="container">
+    <header>
+      <div class="meta">
+        <time pubdate datetime="2013-12-16" title="2013-12-16">December 16, 2013</time>
+      </div>
+      <h1 class="title">Dockerのイメージはどこにある?</h1>
+    </header>
+    
+    <section>
+      <p><a href="http://blog.thoward37.me/articles/where-are-docker-images-stored/">Where are Docker images stored?</a></p>
+
+<p>非常にわかりやすいまとめ．ただ，自分の環境とはディレクトリ構造などが若干異なった (バージョンが異なる?) ので，自分で手を動かしながらまとめなおしてみた．</p>
+
+<p>今回用いるDockerのバージョンは以下．</p>
+
+<pre><code class="language-bash">$ docker -v
+Docker version 0.7.2
+</code></pre>
+
+<p><code>ubuntu</code>レポジトリを取得する</p>
+
+<pre><code class="language-bash">$ docker pull ubuntu
+</code></pre>
+
+<pre><code class="language-bash">$ docker images
+REPOSITORY          TAG                 IMAGE ID            CREATED             VIRTUAL SIZE
+ubuntu              12.04               8dbd9e392a96        8 months ago        128 MB
+ubuntu              latest              8dbd9e392a96        8 months ago        128 MB
+ubuntu              precise             8dbd9e392a96        8 months ago        128 MB
+ubuntu              12.10               b750fe79269d        8 months ago        175.3 MB
+ubuntu              quantal             b750fe79269d        8 months ago        175.3 MB
+</code></pre>
+
+<p>これらのイメージはどこに, どのように保存されているのか．</p>
+
+<p>最初に見るべきは<code>/var/lib/docker/</code>．</p>
+
+<pre><code class="language-bash">$ sudo ls -al /var/lib/docker/
+total 36
+drwx------  6 root root 4096 Dec 17 12:16 .
+drwxr-xr-x 37 root root 4096 Dec 17 12:16 ..
+drwxr-xr-x  6 root root 4096 Dec 17 12:16 aufs
+drwx------  2 root root 4096 Dec 17 12:16 containers
+drwx------  6 root root 4096 Dec 17 12:17 graph
+-rw-r--r--  1 root root 5120 Dec 17 12:16 linkgraph.db
+lrwxrwxrwx  1 root root   18 Dec 17 12:16 lxc-start-unconfined -&gt; /usr/bin/lxc-start
+-rw-------  1 root root  409 Dec 17 12:17 repositories-aufs
+drwx------  2 root root 4096 Dec 17 12:16 volumes
+</code></pre>
+
+<p>まず<code>repositories-aufs</code>を見てみる．</p>
+
+<pre><code class="language-bash">$ sudo cat /var/lib/docker/repositories-aufs | python -mjson.tool
+{
+    &quot;Repositories&quot;: {
+        &quot;ubuntu&quot;: {
+            &quot;12.04&quot;: &quot;8dbd9e392a964056420e5d58ca5cc376ef18e2de93b5cc90e868a1bbc8318c1c&quot;,
+            &quot;12.10&quot;: &quot;b750fe79269d2ec9a3c593ef05b4332b1d1a02a62b4accb2c21d589ff2f5f2dc&quot;,
+            &quot;latest&quot;: &quot;8dbd9e392a964056420e5d58ca5cc376ef18e2de93b5cc90e868a1bbc8318c1c&quot;,
+            &quot;precise&quot;: &quot;8dbd9e392a964056420e5d58ca5cc376ef18e2de93b5cc90e868a1bbc8318c1c&quot;,
+            &quot;quantal&quot;: &quot;b750fe79269d2ec9a3c593ef05b4332b1d1a02a62b4accb2c21d589ff2f5f2dc&quot;
+        }
+    }
+}
+</code></pre>
+
+<p><code>repositories-aufs</code>には，レポジトリの情報がJSON形式で保存されて，タグとイメージのGUIDが紐づけられている．ここでは，<code>ubuntu</code>レポジトリの&rdquo;12.04&rdquo;，&rdquo;precise&rdquo;そして&rdquo;latest&rdquo;とタグをつけられたイメージは全て，&rdquo;8dbd9e392a964056420e5d58ca5cc376ef18e2de93b5cc90e868a1bbc8318c1c&rdquo;というGUIDと紐づけられているのが分かる．</p>
+
+<p>これは，<code>docker images</code>と同じ結果である．</p>
+
+<pre><code class="language-bash">$ docker images
+REPOSITORY          TAG                 IMAGE ID            CREATED             VIRTUAL SIZE
+ubuntu              12.04               8dbd9e392a96        8 months ago        128 MB
+ubuntu              latest              8dbd9e392a96        8 months ago        128 MB
+ubuntu              precise             8dbd9e392a96        8 months ago        128 MB
+ubuntu              12.10               b750fe79269d        8 months ago        175.3 MB
+ubuntu              quantal             b750fe79269d        8 months ago        175.3 MB
+</code></pre>
+
+<p>次に<code>graph</code>の中身を見てみる．</p>
+
+<pre><code class="language-bash">$ sudo ls -al /var/lib/docker/graph
+total 24
+drwx------ 6 root root 4096 Dec 17 12:17 .
+drwx------ 6 root root 4096 Dec 17 12:16 ..
+drwx------ 2 root root 4096 Dec 17 12:17 27cf784147099545
+drwx------ 2 root root 4096 Dec 17 12:17 8dbd9e392a964056420e5d58ca5cc376ef18e2de93b5cc90e868a1bbc8318c1c
+drwx------ 2 root root 4096 Dec 17 12:17 b750fe79269d2ec9a3c593ef05b4332b1d1a02a62b4accb2c21d589ff2f5f2dc
+drwx------ 2 root root 4096 Dec 17 12:17 _tmp
+</code></pre>
+
+<p>イメージのGUIDが現れた．さらに，<code>/var/lib/docker/graph/8dbd9e392a96…</code>の中身を見てみる．</p>
+
+<pre><code class="language-bash">$ sudo ls -al /var/lib/docker/graph/8dbd9e392a964056420e5d58ca5cc376ef18e2de93b5cc90e868a1bbc8318c1c
+total 16
+drwx------ 2 root root 4096 Dec 17 12:17 .
+drwx------ 6 root root 4096 Dec 17 12:17 ..
+-rw------- 1 root root  437 Dec 17 12:17 json
+-rw------- 1 root root    9 Dec 17 12:17 layersize
+</code></pre>
+
+<p><code>json</code>には，イメージのメタデータが保存されている．</p>
+
+<pre><code class="language-bash">$ sudo cat /var/lib/docker/graph/8dbd9e392a964056420e5d58ca518e2de93b5cc90e868a1bbc8318c1c/json | python -mjson.tool
+{
+    &quot;comment&quot;: &quot;Imported from -&quot;,
+    &quot;container_config&quot;: {
+        &quot;AttachStderr&quot;: false,
+        &quot;AttachStdin&quot;: false,
+        &quot;AttachStdout&quot;: false,
+        &quot;Cmd&quot;: null,
+        &quot;Env&quot;: null,
+        &quot;Hostname&quot;: &quot;&quot;,
+        &quot;Image&quot;: &quot;&quot;,
+        &quot;Memory&quot;: 0,
+        &quot;MemorySwap&quot;: 0,
+        &quot;OpenStdin&quot;: false,
+        &quot;PortSpecs&quot;: null,
+        &quot;StdinOnce&quot;: false,
+        &quot;Tty&quot;: false,
+        &quot;User&quot;: &quot;&quot;
+    },
+    &quot;created&quot;: &quot;2013-04-11T14:13:15.57812-07:00&quot;,
+    &quot;docker_version&quot;: &quot;0.1.4&quot;,
+    &quot;id&quot;: &quot;8dbd9e392a964056420e5d58ca5cc376ef18e2de93b5cc90e868a1bbc8318c1c&quot;
+}
+</code></pre>
+
+<p>そして<code>layersize</code>にはレイヤーのサイズが保存されている．</p>
+
+<pre><code class="language-bash">$ sudo cat /var/lib/docker/graph/8dbd9e392a964056420e5d58ca5cc376ef18e2de93b5cc90e868a1bbc8318c1c/layersize | python -mjson.tool
+128029199 #128M
+</code></pre>
+
+<p>次に，<code>/var/lib/docker/aufs/</code>の中身を見てみる．</p>
+
+<pre><code class="language-bash">$ sudo ls -al /var/lib/docker/aufs/    
+total 24
+drwxr-xr-x 6 root root 4096 Dec 17 12:16 .
+drwx------ 6 root root 4096 Dec 17 12:16 ..
+drwxr-xr-x 5 root root 4096 Dec 17 12:17 diff
+drwxr-xr-x 2 root root 4096 Dec 17 12:17 layers
+drwxr-xr-x 5 root root 4096 Dec 17 12:17 mnt
+drwxr-xr-x 4 root root 4096 Dec 17 12:16 tmp
+</code></pre>
+
+<p><code>diff</code>の中身を見てみる．</p>
+
+<pre><code class="language-bash">$ sudo ls -al /var/lib/docker/aufs/diff  
+total 20
+drwxr-xr-x  5 root root 4096 Dec 17 12:17 .
+drwxr-xr-x  6 root root 4096 Dec 17 12:16 ..
+drwxr-xr-x 22 root root 4096 Mar 23  2013 27cf784147099545
+drwxr-xr-x 22 root root 4096 Apr 11  2013 8dbd9e392a964056420e5d58ca5cc376ef18e2de93b5cc90e868a1bbc8318c1c
+drwxr-xr-x  6 root root 4096 Mar 24  2013 b750fe79269d2ec9a3c593ef05b4332b1d1a02a62b4accb2c21d589ff2f5f2dc
+</code></pre>
+
+<p>再び，GUIDが現れた．さらに，<code>/var/lib/docker/aufs/diff/8dbd9e392a96…</code>の中身を見てみる．</p>
+
+<pre><code class="language-bash">$ sudo ls -al /var/lib/docker/aufs/diff/8dbd9e392a964056420e5d58ca5cc376ef18e2de93b5cc90e868a1bbc8318c1c
+total 88
+drwxr-xr-x 22 root root 4096 Apr 11  2013 .
+drwxr-xr-x  5 root root 4096 Dec 17 12:17 ..
+drwxr-xr-x  2 root root 4096 Apr 11  2013 bin
+drwxr-xr-x  2 root root 4096 Apr 19  2012 boot
+drwxr-xr-x  4 root root 4096 Dec 17 12:17 dev
+drwxr-xr-x 41 root root 4096 Dec 17 12:17 etc
+drwxr-xr-x  2 root root 4096 Apr 19  2012 home
+drwxr-xr-x 11 root root 4096 Dec 17 12:16 lib
+drwxr-xr-x  2 root root 4096 Dec 17 12:17 lib64
+drwxr-xr-x  2 root root 4096 Apr 11  2013 media
+drwxr-xr-x  2 root root 4096 Apr 19  2012 mnt
+drwxr-xr-x  2 root root 4096 Apr 11  2013 opt
+drwxr-xr-x  2 root root 4096 Apr 19  2012 proc
+drwx------  2 root root 4096 Dec 17 12:16 root
+drwxr-xr-x  4 root root 4096 Dec 17 12:17 run
+drwxr-xr-x  2 root root 4096 Dec 17 12:17 sbin
+drwxr-xr-x  2 root root 4096 Mar  5  2012 selinux
+drwxr-xr-x  2 root root 4096 Apr 11  2013 srv
+drwxr-xr-x  2 root root 4096 Apr 14  2012 sys
+drwxrwxrwt  2 root root 4096 Apr 11  2013 tmp
+drwxr-xr-x 10 root root 4096 Dec 17 12:16 usr
+drwxr-xr-x 11 root root 4096 Dec 17 12:17 var
+</code></pre>
+
+<p>ここには，イメージのrootのファイルシステムが保持されているのがわかる．</p>
+
+<p>これがローカルにおけるDockerのイメージの保存方法である．まとめると，</p>
+
+<ul>
+<li><code>/var/lib/docker/repositories-aufs</code>にJSON形式でGUIDとタグのマッピング情報を保持</li>
+<li><code>/var/lib/docker/graph/&lt;GUID&gt;/json</code>にイメージのメタ情報を保持</li>
+<li><code>/var/lib/docker/graph/&lt;GUID&gt;/layersize</code>にレイヤーのファイルサイズを保持</li>
+<li><code>/var/lib/docker/aufs/diff/&lt;GUID&gt;</code>に実際のファイルシステムの差分を保持</li>
+</ul>
+
+<p>次に，以下のDockerfileで自分のイメージを作ってみる．</p>
+
+<pre><code>FROM ubuntu
+RUN touch test.txt
+</code></pre>
+
+<p>ubuntuイメージに対して，<code>text.txt</code>という名前で空ファイルを作るという単純なもの．</p>
+
+<pre><code class="language-bash">$ docker build -t test_image .
+</code></pre>
+
+<p>できたイメージを確認する．</p>
+
+<pre><code class="language-bash">$ docker images
+REPOSITORY          TAG                 IMAGE ID            CREATED             VIRTUAL SIZE
+test_image          latest              95d8b8aeedec        4 seconds ago       128 MB
+ubuntu              12.04               8dbd9e392a96        8 months ago        128 MB
+ubuntu              latest              8dbd9e392a96        8 months ago        128 MB
+ubuntu              precise             8dbd9e392a96        8 months ago        128 MB
+ubuntu              12.10               b750fe79269d        8 months ago        175.3 MB
+ubuntu              quantal             b750fe79269d        8 months ago        175.3 MB
+</code></pre>
+
+<p><code>test_image</code>ができている（タグ名を与えない場合は，自動で<code>latest</code>のタグが付与されるのもわかる）．</p>
+
+<p><code>/var/lib/docker/repositories-aufs</code>を見てみる．</p>
+
+<pre><code class="language-bash">$ sudo cat /var/lib/docker/repositories-aufs | python -mjson.tool
+{
+    &quot;Repositories&quot;: {
+        &quot;test_image&quot;: {
+            &quot;latest&quot;: &quot;95d8b8aeedecd36eb7c9e70f01c7b1e81203abd2cd6a17d7db9cdf582a55547b&quot;
+        },
+        &quot;ubuntu&quot;: {
+            &quot;12.04&quot;: &quot;8dbd9e392a964056420e5d58ca5cc376ef18e2de93b5cc90e868a1bbc8318c1c&quot;,
+            &quot;12.10&quot;: &quot;b750fe79269d2ec9a3c593ef05b4332b1d1a02a62b4accb2c21d589ff2f5f2dc&quot;,
+            &quot;latest&quot;: &quot;8dbd9e392a964056420e5d58ca5cc376ef18e2de93b5cc90e868a1bbc8318c1c&quot;,
+            &quot;precise&quot;: &quot;8dbd9e392a964056420e5d58ca5cc376ef18e2de93b5cc90e868a1bbc8318c1c&quot;,
+            &quot;quantal&quot;: &quot;b750fe79269d2ec9a3c593ef05b4332b1d1a02a62b4accb2c21d589ff2f5f2dc&quot;
+        }
+    }
+}
+</code></pre>
+
+<p>新しいレポジトリが登録されている．</p>
+
+<p><code>/var/lib/docker/graph/</code>と<code>/var/lib/docker/aufs/diff/</code>には新しくディレクトリが作られているはず．</p>
+
+<pre><code class="language-bash">$ sudo ls -al /var/lib/docker/graph
+total 28
+drwx------ 7 root root 4096 Dec 17 14:48 .
+drwx------ 6 root root 4096 Dec 17 14:48 ..
+drwx------ 2 root root 4096 Dec 17 12:17 27cf784147099545
+drwx------ 2 root root 4096 Dec 17 12:17 8dbd9e392a964056420e5d58ca5cc376ef18e2de93b5cc90e868a1bbc8318c1c
+drwx------ 2 root root 4096 Dec 17 14:48 95d8b8aeedecd36eb7c9e70f01c7b1e81203abd2cd6a17d7db9cdf582a55547b
+drwx------ 2 root root 4096 Dec 17 12:17 b750fe79269d2ec9a3c593ef05b4332b1d1a02a62b4accb2c21d589ff2f5f2dc
+drwx------ 2 root root 4096 Dec 17 14:48 _tmp
+</code></pre>
+
+<pre><code class="language-bash">$ sudo ls -al /var/lib/docker/aufs/diff
+total 32
+drwxr-xr-x  8 root root 4096 Dec 17 14:48 .
+drwxr-xr-x  6 root root 4096 Dec 17 12:16 ..
+drwxr-xr-x 22 root root 4096 Mar 23  2013 27cf784147099545
+drwxr-xr-x  4 root root 4096 Dec 17 14:48 2c43fda23b3e86ad16dbddde96c5a8ffc9f30db1985ceac9468387324403ab84
+drwxr-xr-x  5 root root 4096 Dec 17 14:48 2c43fda23b3e86ad16dbddde96c5a8ffc9f30db1985ceac9468387324403ab84-init
+drwxr-xr-x 22 root root 4096 Apr 11  2013 8dbd9e392a964056420e5d58ca5cc376ef18e2de93b5cc90e868a1bbc8318c1c
+drwxr-xr-x  4 root root 4096 Dec 17 14:48 95d8b8aeedecd36eb7c9e70f01c7b1e81203abd2cd6a17d7db9cdf582a55547b
+drwxr-xr-x  6 root root 4096 Mar 24  2013 b750fe79269d2ec9a3c593ef05b4332b1d1a02a62b4accb2c21d589ff2f5f2dc
+</code></pre>
+
+<p>どちらにも，<code>95d8b8aeedec…</code>というGUIDでディレクトリが新しく作成されている．</p>
+
+<p><code>/var/lib/docker/graph/5d8b8aeedec…/json</code>を見てみる</p>
+
+<pre><code class="language-bash">$ sudo cat /var/lib/docker/graph/95d8b803abd2cd6a17d7db9cdf582a55547b/json |python -mjson.tool
+{
+    &quot;Size&quot;: 0,
+    &quot;architecture&quot;: &quot;x86_64&quot;,
+    &quot;config&quot;: {
+        &quot;AttachStderr&quot;: false,
+        &quot;AttachStdin&quot;: false,
+        &quot;AttachStdout&quot;: false,
+        &quot;Cmd&quot;: null,
+        &quot;CpuShares&quot;: 0,
+        &quot;Dns&quot;: null,
+        &quot;Domainname&quot;: &quot;&quot;,
+        &quot;Entrypoint&quot;: null,
+        &quot;Env&quot;: [
+            &quot;HOME=/&quot;,
+            &quot;PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin&quot;
+        ],
+        &quot;ExposedPorts&quot;: {},
+        &quot;Hostname&quot;: &quot;2c43fda23b3e&quot;,
+        &quot;Image&quot;: &quot;8dbd9e392a964056420e5d58ca5cc376ef18e2de93b5cc90e868a1bbc8318c1c&quot;,
+        &quot;Memory&quot;: 0,
+        &quot;MemorySwap&quot;: 0,
+        &quot;NetworkDisabled&quot;: false,
+        &quot;OpenStdin&quot;: false,
+        &quot;PortSpecs&quot;: null,
+        &quot;StdinOnce&quot;: false,
+        &quot;Tty&quot;: false,
+        &quot;User&quot;: &quot;&quot;,
+        &quot;Volumes&quot;: {},
+        &quot;VolumesFrom&quot;: &quot;&quot;,
+        &quot;WorkingDir&quot;: &quot;&quot;
+    },
+    &quot;container&quot;: &quot;2c43fda23b3e86ad16dbddde96c5a8ffc9f30db1985ceac9468387324403ab84&quot;,
+    &quot;container_config&quot;: {
+        &quot;AttachStderr&quot;: false,
+        &quot;AttachStdin&quot;: false,
+        &quot;AttachStdout&quot;: false,
+        &quot;Cmd&quot;: [
+            &quot;/bin/sh&quot;,
+            &quot;-c&quot;,
+            &quot;touch test.txt&quot;
+        ],
+        &quot;CpuShares&quot;: 0,
+        &quot;Dns&quot;: null,
+        &quot;Domainname&quot;: &quot;&quot;,
+        &quot;Entrypoint&quot;: null,
+        &quot;Env&quot;: [
+            &quot;HOME=/&quot;,
+            &quot;PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin&quot;
+        ],
+        &quot;ExposedPorts&quot;: {},
+        &quot;Hostname&quot;: &quot;2c43fda23b3e&quot;,
+        &quot;Image&quot;: &quot;8dbd9e392a964056420e5d58ca5cc376ef18e2de93b5cc90e868a1bbc8318c1c&quot;,
+        &quot;Memory&quot;: 0,
+        &quot;MemorySwap&quot;: 0,
+        &quot;NetworkDisabled&quot;: false,
+        &quot;OpenStdin&quot;: false,
+        &quot;PortSpecs&quot;: null,
+        &quot;StdinOnce&quot;: false,
+        &quot;Tty&quot;: false,
+        &quot;User&quot;: &quot;&quot;,
+        &quot;Volumes&quot;: {},
+        &quot;VolumesFrom&quot;: &quot;&quot;,
+        &quot;WorkingDir&quot;: &quot;&quot;
+    },
+    &quot;created&quot;: &quot;2013-12-17T14:48:17.530687093Z&quot;,
+    &quot;docker_version&quot;: &quot;0.7.2&quot;,
+    &quot;id&quot;: &quot;95d8b8aeedecd36eb7c9e70f01c7b1e81203abd2cd6a17d7db9cdf582a55547b&quot;,
+    &quot;parent&quot;: &quot;8dbd9e392a964056420e5d58ca5cc376ef18e2de93b5cc90e868a1bbc8318c1c&quot;
+}
+</code></pre>
+
+<p>新たに、環境変数や実行したコマンドなどが追記されているのがわかる．</p>
+
+<p><code>var/lib/docker/graph/5d8b8aeedec…/layersize</code>を見てみる．</p>
+
+<pre><code class="language-bash">sudo cat /var/lib/docker/graph/95d8b8aeedecd36eb7c9e70f01c7b1e81203abd2cd6a17d7db9cdf582a55547b/layersize
+0
+</code></pre>
+
+<p>空ファイルを追加しただけなのでlayerのファイルサイズに変化はない．</p>
+
+<p><code>/var/lib/docker/aufs/diff/95d8b8aeedec…</code>を見てみる．</p>
+
+<pre><code class="language-bash">sudo ls -al /var/lib/docker/aufs/diff/95d8b8aeedecd36eb7c9e70f01c7b1e81203abd2cd6a17d7db9cdf582a55547b
+total 16
+drwxr-xr-x 4 root root 4096 Dec 17 14:48 .
+drwxr-xr-x 8 root root 4096 Dec 17 14:48 ..
+-rw-r--r-- 1 root root    0 Dec 17 14:48 test.txt
+-r--r--r-- 1 root root    0 Dec 17 14:48 .wh..wh.aufs
+drwx------ 2 root root 4096 Dec 17 14:48 .wh..wh.orph
+drwx------ 2 root root 4096 Dec 17 14:48 .wh..wh.plnk
+</code></pre>
+
+<p><code>test.txt</code>が追加されている．ここで実際にDockerがファイルシステムの差分のみを保持しているのがわかる．</p>
+
+<p>以上がDockerイメージの保存場所とその保存方法．とても単純．</p>
+
+      <div class="social">
+  
+  
+  <a href="https://twitter.com/share" class="twitter-share-button" data-via="deeeet" data-count="none">Tweet</a>
+  
+  
+</div>
+
+    </section>
+
+    <footer>
+      <address>
+        
+        <img src="/images/bio.jpeg"/>
+        
+        <p>Written by <strong><a rel="author" href="https://twitter.com/deeeet" title="Taichi Nakashima" target="_blank">Taichi Nakashima</a></strong><br>
+          <span class="muted">A Tokyo based PaaS engineer. Please contact me via twitter.</span>
+        </p>
+      </address>
+
+    </footer>
+
+  </div>
+</article>
+
+<script type="text/javascript" src="//ajax.googleapis.com/ajax/libs/jquery/1.7.2/jquery.min.js"></script>
+<script type="text/javascript" src="/js/main.js"></script>
+
+<script>!function(d,s,id){var js,fjs=d.getElementsByTagName(s)[0],p=/^http:/.test(d.location)?'http':'https';if(!d.getElementById(id)){js=d.createElement(s);js.id=id;js.src=p+'://platform.twitter.com/widgets.js';fjs.parentNode.insertBefore(js,fjs);}}(document, 'script', 'twitter-wjs');</script>
+
+
+<script type="text/javascript">var HN=[];HN.factory=function(e){return function(){HN.push([e].concat(Array.prototype.slice.call(arguments,0)))};},HN.on=HN.factory("on"),HN.once=HN.factory("once"),HN.off=HN.factory("off"),HN.emit=HN.factory("emit"),HN.load=function(){var e="hn-button.js";if(document.getElementById(e))return;var t=document.createElement("script");t.id=e,t.src="//hn-button.herokuapp.com/hn-button.js";var n=document.getElementsByTagName("script")[0];n.parentNode.insertBefore(t,n)},HN.load();</script>
+
+
+  <script>
+  (function(i,s,o,g,r,a,m){i['GoogleAnalyticsObject']=r;i[r]=i[r]||function(){
+  (i[r].q=i[r].q||[]).push(arguments)},i[r].l=1*new Date();a=s.createElement(o),
+  m=s.getElementsByTagName(o)[0];a.async=1;a.src=g;m.parentNode.insertBefore(a,m)
+  })(window,document,'script','//www.google-analytics.com/analytics.js','ga');
+
+  ga('create', 'UA-45390253-1', 'auto');
+  ga('send', 'pageview');
+
+</script>
+
+
+
+<script>
+  $(document).ready(function() {
+  
+  $('p:has(img)').css('text-align', 'center');
+  $('iframe').css('style', 'display: block; margin: 0px auto;');
+  });
+</script>
+

@@ -1,0 +1,257 @@
+<!doctype html>
+<html>
+  <head>
+    <meta http-equiv="content-type" content="text/html; charset=utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    
+    <title>使いやすいシェルスクリプトを書く | SOTA</title>
+    
+    <link href="https://fonts.googleapis.com/css?family=Lato%3a900" rel="stylesheet" type="text/css">
+    <link rel="stylesheet" href="/css/main.css">
+    <link rel="shortcut icon" href="/favicon.png" type="image/x-icon" />
+    <link href="http://deeeet.com//index.xml" rel="alternate" type="application/rss+xml" title="" />
+    <meta name="title" content="http://deeeet.com/writing/2014/05/18/shell-template/">
+    <link rel="canonical" href="http://deeeet.com/writing/2014/05/18/shell-template/">
+    
+    <meta property="og:title" content="使いやすいシェルスクリプトを書く"/>
+    <meta property="og:url" content="http://deeeet.com/writing/2014/05/18/shell-template/"/>
+  </head>
+  
+  <body>
+    <section class="site-nav">
+      <header>
+        <nav id="navigation">
+          <ul class="menu">
+            <li><a href="https://github.com/tcnksm/talks">Talks</a></li>
+            <li><a href="https://tcnksm.exposure.co/">Photos</a></li>
+          </ul>
+
+          <a class="name" href="/">SOTA</a>
+        </nav>        
+      </header>
+    </section>
+    
+
+
+<article>
+  <div class="container">
+    <header>
+      <div class="meta">
+        <time pubdate datetime="2014-05-18" title="2014-05-18">May 18, 2014</time>
+      </div>
+      <h1 class="title">使いやすいシェルスクリプトを書く</h1>
+    </header>
+    
+    <section>
+      
+
+<p>できればシェルスクリプトなんて書きたくないんだけど，まだまだ書く機会は多い．シェル芸やワンライナーのような凝ったことではなく，他のひとが使いやすいシェルスクリプトを書くために自分が実践していることをまとめておく．</p>
+
+<h2 id="ヘルプメッセージ:d0158a080e0565e85340add49ed6199c">ヘルプメッセージ</h2>
+
+<p>書いてるシェルスクリプトが使い捨てではなく何度も使うものである場合は，本体を書き始める前に，そのスクリプトの使い方を表示する<code>usage</code>関数を書いてしまう．</p>
+
+<p>これを書いておくと，後々チームへ共有がしやすくなる．とりあえず<code>usage</code>見てくださいと言える．また，あらかじめ書くことで，単なるシェルスクリプトであっても自分の中で動作を整理してから書き始めることができる．関数として書くのは，<code>usage</code>を表示してあげるとよい場面がいくつかあり，使い回すことができるため．</p>
+
+<p>以下のように書く．</p>
+
+<pre><code class="language-bash">function usage {
+    cat &lt;&lt;EOF
+$(basename ${0}) is a tool for ...
+
+Usage:
+    $(basename ${0}) [command] [&lt;options&gt;]
+
+Options:
+    --version, -v     print $(basename ${0}) version
+    --help, -h        print this
+EOF
+}
+</code></pre>
+
+<p>バージョンを書いたりもする．</p>
+
+<pre><code class="language-bash">function version {
+    echo &quot;$(basename ${0}) version 0.0.1 &quot;
+}    
+</code></pre>
+
+<h2 id="出力に色をつける:d0158a080e0565e85340add49ed6199c">出力に色をつける</h2>
+
+<p>ErrorやWarningによって出力の色を変えて出力を目立たせられると良い．コンソールの出力への色づけはエスケープシーケンスを利用する．基本の構文は以下．</p>
+
+<pre><code class="language-bash">\033[{属性値}m{文字列}\033[m
+</code></pre>
+
+<p>属性値を変更するだけで，文字色や背景色，文字種を変更することができる．自分は以下のような関数を準備して使う．</p>
+
+<pre><code class="language-bash">red=31
+green=32
+yellow=33
+blue=34
+
+function cecho {
+    color=$1
+    shift
+    echo -e &quot;\033[${color}m$@\033[m&quot;
+}
+</code></pre>
+
+<p>以下のように使う．</p>
+
+<pre><code class="language-bash">cecho $red &quot;hello&quot;
+</code></pre>
+
+<h2 id="対話処理:d0158a080e0565e85340add49ed6199c">対話処理　</h2>
+
+<p>例えば，以下のようにユーザ名やパスワードを対話的に入力させることはよくある．</p>
+
+<pre><code class="language-bash">printf &quot;ID: &quot;
+read ID
+
+stty -echo
+printf &quot;PASSWORD: &quot;
+read PASSWORD
+stty echo
+</code></pre>
+
+<p>これが何度も実行するスクリプトだったりすると，毎回入力させるのは鬱陶しい．環境変数で事前に設定できるようにしてあげると親切．</p>
+
+<pre><code class="language-bash">if [ -z &quot;${ID}&quot; ]; then
+    printf &quot;ID: &quot;
+    read ID
+fi
+
+if [ -z &quot;${PASSWORD}&quot; ]; then
+    stty -echo
+    printf &quot;PASSWORD: &quot;
+    read PASSWORD
+    stty echo
+fi    
+</code></pre>
+
+<p>シェルを起動する度に環境変数を設定するのが鬱陶しいと言われたら<a href="http://deeeet.com/writing/2014/05/06/direnv/">&ldquo;direnv&rdquo;</a>を教えてあげる．</p>
+
+<h2 id="サブコマンド-引数処理:d0158a080e0565e85340add49ed6199c">サブコマンド（引数処理）</h2>
+
+<p>サブコマンドやオプションを持たせて処理を分岐したいことはよくある．引数処理をシェルスクリプトでやる場合は，<code>case</code>文を使う．例えば，第一引数をサブコマンドとする場合は以下のようにする．</p>
+
+<pre><code class="language-bash">case ${1} in
+
+    start)
+        start
+    ;;
+
+    stop)
+        stop
+    ;;
+
+    restart)
+        start &amp;&amp; stop
+    ;;
+
+    help|--help|-h)
+        usage
+    ;;
+
+    version|--version|-v)
+        version
+    ;;
+    
+    *)
+        echo &quot;[ERROR] Invalid subcommand '${1}'&quot;
+        usage
+        exit 1
+    ;;
+esac
+</code></pre>
+
+<p>マッチ後の処理を関数にしておけばきれいに書けるし，関数の使い回しもできる．<code>|</code>を使えば，複数のマッチを書くことができる．何度も使うような処理には短縮コマンドを準備してあげると良い（例えば，<code>list</code>に対して<code>ls</code>など）．また，エラーの際には上で言及した<code>usage</code>を表示してあげるとより親切になる．</p>
+
+<p>オプションを複数とる場合は，<code>while</code>で回す．例えば以下のようにする．</p>
+
+<pre><code class="language-bash">while [ $# -gt 0 ];
+do
+    case ${1} in
+
+        --debug|-d)
+            set -x
+        ;;
+
+        --host|-h)
+            HOST=${2}
+            shift
+        ;;
+
+        --port|-p)
+            PORT=${2}
+            shift
+        ;;
+
+        *)
+            echo &quot;[ERROR] Invalid option '${1}'&quot;
+            usage
+            exit 1
+        ;;
+    esac
+    shift
+done
+</code></pre>
+
+<p>オプション引数は，そのときの第二引数とする．<code>set -x</code>はいちいち書いたり消したりせずに，<code>--debug</code>オプションで切り替え可能にしておくと，開発中にはとても捗る．</p>
+
+      <div class="social">
+  
+  
+  <a href="https://twitter.com/share" class="twitter-share-button" data-via="deeeet" data-count="none">Tweet</a>
+  
+  
+</div>
+
+    </section>
+
+    <footer>
+      <address>
+        
+        <img src="/images/bio.jpeg"/>
+        
+        <p>Written by <strong><a rel="author" href="https://twitter.com/deeeet" title="Taichi Nakashima" target="_blank">Taichi Nakashima</a></strong><br>
+          <span class="muted">A Tokyo based PaaS engineer. Please contact me via twitter.</span>
+        </p>
+      </address>
+
+    </footer>
+
+  </div>
+</article>
+
+<script type="text/javascript" src="//ajax.googleapis.com/ajax/libs/jquery/1.7.2/jquery.min.js"></script>
+<script type="text/javascript" src="/js/main.js"></script>
+
+<script>!function(d,s,id){var js,fjs=d.getElementsByTagName(s)[0],p=/^http:/.test(d.location)?'http':'https';if(!d.getElementById(id)){js=d.createElement(s);js.id=id;js.src=p+'://platform.twitter.com/widgets.js';fjs.parentNode.insertBefore(js,fjs);}}(document, 'script', 'twitter-wjs');</script>
+
+
+<script type="text/javascript">var HN=[];HN.factory=function(e){return function(){HN.push([e].concat(Array.prototype.slice.call(arguments,0)))};},HN.on=HN.factory("on"),HN.once=HN.factory("once"),HN.off=HN.factory("off"),HN.emit=HN.factory("emit"),HN.load=function(){var e="hn-button.js";if(document.getElementById(e))return;var t=document.createElement("script");t.id=e,t.src="//hn-button.herokuapp.com/hn-button.js";var n=document.getElementsByTagName("script")[0];n.parentNode.insertBefore(t,n)},HN.load();</script>
+
+
+  <script>
+  (function(i,s,o,g,r,a,m){i['GoogleAnalyticsObject']=r;i[r]=i[r]||function(){
+  (i[r].q=i[r].q||[]).push(arguments)},i[r].l=1*new Date();a=s.createElement(o),
+  m=s.getElementsByTagName(o)[0];a.async=1;a.src=g;m.parentNode.insertBefore(a,m)
+  })(window,document,'script','//www.google-analytics.com/analytics.js','ga');
+
+  ga('create', 'UA-45390253-1', 'auto');
+  ga('send', 'pageview');
+
+</script>
+
+
+
+<script>
+  $(document).ready(function() {
+  
+  $('p:has(img)').css('text-align', 'center');
+  $('iframe').css('style', 'display: block; margin: 0px auto;');
+  });
+</script>
+

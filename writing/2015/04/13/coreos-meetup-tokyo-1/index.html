@@ -1,0 +1,170 @@
+<!doctype html>
+<html>
+  <head>
+    <meta http-equiv="content-type" content="text/html; charset=utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    
+    <title>CoreOS Meetup Tokyo #1 を開催した | SOTA</title>
+    
+    <link href="https://fonts.googleapis.com/css?family=Lato%3a900" rel="stylesheet" type="text/css">
+    <link rel="stylesheet" href="/css/main.css">
+    <link rel="shortcut icon" href="/favicon.png" type="image/x-icon" />
+    <link href="http://deeeet.com//index.xml" rel="alternate" type="application/rss+xml" title="" />
+    <meta name="title" content="http://deeeet.com/writing/2015/04/13/coreos-meetup-tokyo-1/">
+    <link rel="canonical" href="http://deeeet.com/writing/2015/04/13/coreos-meetup-tokyo-1/">
+    
+    <meta property="og:title" content="CoreOS Meetup Tokyo #1 を開催した"/>
+    <meta property="og:url" content="http://deeeet.com/writing/2015/04/13/coreos-meetup-tokyo-1/"/>
+  </head>
+  
+  <body>
+    <section class="site-nav">
+      <header>
+        <nav id="navigation">
+          <ul class="menu">
+            <li><a href="https://github.com/tcnksm/talks">Talks</a></li>
+            <li><a href="https://tcnksm.exposure.co/">Photos</a></li>
+          </ul>
+
+          <a class="name" href="/">SOTA</a>
+        </nav>        
+      </header>
+    </section>
+    
+
+
+<article>
+  <div class="container">
+    <header>
+      <div class="meta">
+        <time pubdate datetime="2015-04-13" title="2015-04-13">April 13, 2015</time>
+      </div>
+      <h1 class="title">CoreOS Meetup Tokyo #1 を開催した</h1>
+    </header>
+    
+    <section>
+      
+
+<p><a href="http://coreos-meetup-tokyo.connpass.com/event/12596/">CoreOS Meetup Tokyo #1 - connpass</a></p>
+
+<p>今回のMeetupは，etcd2.0のリリースやrktの登場，5月の<a href="https://coreos.com/fest/">CoreOS Fest 2015</a>，また各社のCoreOSの導入事例の兆しを受けての開催．といってもCoreOSの利用事例はまだ少ないと感じたため，CoreOSだけではなくその関連技術やプラットフォームをテーマとした．それでも20分の発表8本というとても濃いMeetupとなり非常に勉強になった．またそこまで人は集まらないと思っていたところ100人枠に350人の応募があり，注目の高さにも驚いた（次回は抽選にするなど考慮します）．</p>
+
+<p>発表資料は全て，<a href="http://coreos-meetup-tokyo.connpass.com/event/12596/presentation/">CoreOS Meetup Tokyo #1 - 資料一覧 - connpass</a>にまとめてある．が，簡単にMeetupの内容をまとめておく．各種テーマが散っているので自分なりにまとめておく．</p>
+
+<h2 id="概要:cef69bd2ad9274d0801615ad8dc14be4">概要</h2>
+
+<p>まず，自分からはCoreOSについて知らない人でもMeetupにキャッチアップできるできるようにCoreOSの概要を簡単に紹介した．</p>
+
+<script async class="speakerdeck-embed" data-id="27e1fef591484f0b91d46cc44ebd434e" data-ratio="1.77777777777778" src="http://speakerdeck.com/assets/embed.js"></script>
+
+<p><a href="https://speakerdeck.com/tcnksm/introduction-of-coreos-at-coreos-meetup-tokyo-number-1-number-coreosjp">Introduction of CoreOS</a></p>
+
+<p>CoreOSとは何か，モチベーションは何か，どんな特徴がありどんな技術が使われているのかについて話した．CoreOSについてはRebuildでも簡単にしゃべらせてもらったので参考にしてください．</p>
+
+<ul>
+<li><a href="http://rebuild.fm/83/">Rebuild: 83: Living In A Container (deeeet)</a></li>
+</ul>
+
+<h2 id="要素技術:cef69bd2ad9274d0801615ad8dc14be4">要素技術</h2>
+
+<p>次にCoreOSで使われている技術について．今回はコンテナの話が2本とFleetの概要の発表が1本だった．</p>
+
+<ul>
+<li><a href="https://twitter.com/mopemope">@mopemope</a>, <a href="http://www.slideshare.net/YutakaMatsubara/rocket-46800960?ref=http://coreos-meetup-tokyo.connpass.com/event/12596/presentation/">&ldquo;CoreOS/Rocket&rdquo;</a> - rktとは何か，どのような思想で作られているのか，Dockerとは何が違うのか，現状何ができるのかについて．特にDockerとの比較はとてもわかりやすくて良かった．「Dockerほど高機能ではないが，その分シンプルで組み合わせ可能」という説明が確かにという感じ．</li>
+<li><a href="https://github.com/kawamuray">@kawamuray</a>, <a href="http://www.slideshare.net/kawamuray/coreos-meetup?ref=http://coreos-meetup-tokyo.connpass.com/event/12596/presentation/">&ldquo;Docker + Checkpoint/Restore&rdquo;</a> - CoreOS関係ないw CRIUの応用はLive migrationくらいだと思っていたけど，コンテナの中身（アプリケーション）に依存せずに起動を高速化するという応用は今後大切になりそう（複数の役割のコンテナをMicroservices的に立てるときに1つだけ起動が遅くてそれを考慮しようとすると管理側に複雑さが入り込む．特に大規模な分散システムだと問題が顕著になりそう）．</li>
+<li><a href="https://twitter.com/spesnova">@spesnova</a>, <a href="https://speakerdeck.com/spesnova/understanding-fleet">&ldquo;Understanding fleet&rdquo;</a> - Fleetの仕組みについて．FleetのスケジューリングはMesosほど複雑なことをしてなくて，もっとも少ないUnitを実行しているAgentに均等にタスクを割り振っているだけ．自分的にはこのシンプルさが好きだし，これで十分なことも多いと思う．</li>
+</ul>
+
+<h2 id="iaas:cef69bd2ad9274d0801615ad8dc14be4">IaaS</h2>
+
+<p>CoreOS OEMの話をNIFTY Cloudの<a href="https://twitter.com/higebu">@higebu</a>さんにしていただいた（<a href="http://www.slideshare.net/higebu/20150409-core-osoemonniftycloud">&ldquo;CoreOS OEM in NIFTY Cloud&rdquo;</a>）．CoreOSのOEMとは，IaaSプロバイダーがそのプラットフォームでCoreOSを利用可能にするために，プラットフォームの独自の設定などをCoreOSに取り込んでもらうための仕組みでCloudに特化したCoreOSならではのもの．NIFTY CloudもCoreOSが使えるようになっており，その経緯について話してももらった．</p>
+
+<p>普通の人はIaaSサービスでCoreOSを使うだけなので，これは万人向けの話ではない．が，CoreOSがどのように提供されるのかを知ることは使う側としてとても大事だと思うので，非常に勉強になった．特にたくさんあるCoreOSのレポジトリがどんな役割があるのかを知れて良かった．</p>
+
+<h2 id="プロダクション運用:cef69bd2ad9274d0801615ad8dc14be4">プロダクション運用</h2>
+
+<p>実際にCoreOSで実運用を始めている話が2本あった．</p>
+
+<ul>
+<li><a href="https://twitter.com/spesnova">@spesnova</a>, <a href="https://speakerdeck.com/spesnova/coreos-yun-yong-falsesuo-gan">&ldquo;CoreOS 運用の所感&rdquo;</a> - Wantedlyでの運用について．etcd/fleetをオフにして運用しているとのこと．ダイナミックデプロイを犠牲にしても得られるCoreOS利点として，ホストマシンの構築タスクがほぼない．AMI焼く必要もない，脆弱性対応（Ghostとか）が楽，起動が速い，コンテナとOSの分離（ホストの抽象化）の促進はそうだなと思うし，導入の参考になると思う．Channelの選びかたも参考になった．Docker後の世界でOpsとDevがいかに協調するか，という話はとても面白かったし<a href="https://twitter.com/deeeet/status/586133045473779712">賛同できた</a></li>
+<li><a href="https://twitter.com/ianmlewis">@harukasan</a>, <a href="https://speakerdeck.com/harukasan/coreos-in-pixiv">&ldquo;CoreOSで運用する際に考えないといけないこと&rdquo;</a> - pixivでの運用について．こちらはFleetとetcdも使っているとのこと．とにかく導入時に考えるべきことが網羅されていて良かった．自分的にはCoreOSをどう捉えているのか，もしくはどのような場合に選択肢になるのか，k8sが必要になるのはどのラインか考え方がとても共感できた（cf. <a href="http://blog.harukasan.jp/entry/2015/04/10/112517">&ldquo;CoreOS Meetup Tokyo #1 で発表してきました #coreosjp - BLOG::はるかさん&rdquo;</a>）</li>
+</ul>
+
+<p>まだみんながいろいろ試しているという段階が面白かった．</p>
+
+<p>あとCoreOSのモニタリングはDataDogが人気っぽい．僕も自分のCoreOSクラスタはDDで監視している（cf. <a href="https://speakerdeck.com/tcnksm/coreoskurasutafalsedockerkontenafalsejian-shi-number-monitoringcasual">&ldquo;CoreOSクラスタのDockerコンテナの監視&rdquo;</a>）</p>
+
+<h2 id="プラットフォーム:cef69bd2ad9274d0801615ad8dc14be4">プラットフォーム</h2>
+
+<p>最後にCoreOSの上でプラットフォームを構築するプロジェクトについての話が2本あった．</p>
+
+<ul>
+<li><a href="https://twitter.com/jacopen">@jacopen</a>, <a href="http://www.slideshare.net/jacopen/openshift-3dockerpaas?ref=http://coreos-meetup-tokyo.connpass.com/event/12596/presentation/">&ldquo;OpenShift 3で、DockerのPaaSを作る話&rdquo;</a> - OpenShiftはv3で今までのアーキテクチャーを一新してDockerとk8sの利用に舵を切っている．思想も面白くて，k8sに足りないPaaS的な側面，つまり，Webサービスの開発のライフサイクルの支援やユーザ管理などをOpenShiftが補うように構築されている．今回は奨励プラットフォームがRed Hat Atomicである部分をCoreOSで動かすというデモがあり面白かった（またWeb Hookの機能が面白いとの声もあった）．</li>
+<li><a href="https://twitter.com/harukasan">@ianmlewis</a>, &ldquo;Kubernetes on CoreOS&rdquo; - CoreOSとk8sの関係は，<a href="https://tectonic.com/">TECTONIC</a>の発表によってますます強くなっている．Dockerだけではなく，k8sを動かすホストとしてCoreOSを選択する事例は増えそう．</li>
+</ul>
+
+<p>CoreOS上にプラットフォームを構築している例として他にもDocker PaaSの<a href="http://deis.io/">Deis</a>などがある．</p>
+
+<h2 id="まとめ:cef69bd2ad9274d0801615ad8dc14be4">まとめ</h2>
+
+<p>Meetupやその後で話したところCoreOSの導入事例は増えそうだなと感じた．特にDockerを載せるプラットフォームとしてはk8sほどのものを必要としないところは多いと思うのでCoreOSは良い選択になると思う．逆にk8sやOpenshiftのようなものを採用して実は裏はCoreOSです，という流れもあると思う．</p>
+
+<p>今回発表はなかったが，<a href="http://cloudfoundry.org/index.html">Cloud Foundry</a>がそのコンポーネントでetcdを使っているようにCoreOSのコンポーネントが単体で使われる事例も増えるのではと思う．特に日本では分散Key&amp;Valueとして<a href="https://www.consul.io/">consul</a>の導入が見られるが，Simple alternativeとしてetcdはあるのではと思う．</p>
+
+<p>とにかく濃く，面白い発表をたくさん聞くことができてとても面白いMeetupだった．また機会があればお願いします．<a href="https://twitter.com/kazunori_279">@kazunori_279</a>さん，<a href="http://connpass.com/user/nishimurakaz/open/">nishimurakaz</a>さん，また会場提供の<a href="https://www.fout.co.jp/">FreakOut</a>さんありがとうございました．</p>
+
+      <div class="social">
+  
+  
+  <a href="https://twitter.com/share" class="twitter-share-button" data-via="deeeet" data-count="none">Tweet</a>
+  
+  
+</div>
+
+    </section>
+
+    <footer>
+      <address>
+        
+        <img src="/images/bio.jpeg"/>
+        
+        <p>Written by <strong><a rel="author" href="https://twitter.com/deeeet" title="Taichi Nakashima" target="_blank">Taichi Nakashima</a></strong><br>
+          <span class="muted">A Tokyo based PaaS engineer. Please contact me via twitter.</span>
+        </p>
+      </address>
+
+    </footer>
+
+  </div>
+</article>
+
+<script type="text/javascript" src="//ajax.googleapis.com/ajax/libs/jquery/1.7.2/jquery.min.js"></script>
+<script type="text/javascript" src="/js/main.js"></script>
+
+<script>!function(d,s,id){var js,fjs=d.getElementsByTagName(s)[0],p=/^http:/.test(d.location)?'http':'https';if(!d.getElementById(id)){js=d.createElement(s);js.id=id;js.src=p+'://platform.twitter.com/widgets.js';fjs.parentNode.insertBefore(js,fjs);}}(document, 'script', 'twitter-wjs');</script>
+
+
+<script type="text/javascript">var HN=[];HN.factory=function(e){return function(){HN.push([e].concat(Array.prototype.slice.call(arguments,0)))};},HN.on=HN.factory("on"),HN.once=HN.factory("once"),HN.off=HN.factory("off"),HN.emit=HN.factory("emit"),HN.load=function(){var e="hn-button.js";if(document.getElementById(e))return;var t=document.createElement("script");t.id=e,t.src="//hn-button.herokuapp.com/hn-button.js";var n=document.getElementsByTagName("script")[0];n.parentNode.insertBefore(t,n)},HN.load();</script>
+
+
+  <script>
+  (function(i,s,o,g,r,a,m){i['GoogleAnalyticsObject']=r;i[r]=i[r]||function(){
+  (i[r].q=i[r].q||[]).push(arguments)},i[r].l=1*new Date();a=s.createElement(o),
+  m=s.getElementsByTagName(o)[0];a.async=1;a.src=g;m.parentNode.insertBefore(a,m)
+  })(window,document,'script','//www.google-analytics.com/analytics.js','ga');
+
+  ga('create', 'UA-45390253-1', 'auto');
+  ga('send', 'pageview');
+
+</script>
+
+
+
+<script>
+  $(document).ready(function() {
+  
+  $('p:has(img)').css('text-align', 'center');
+  $('iframe').css('style', 'display: block; margin: 0px auto;');
+  });
+</script>
+

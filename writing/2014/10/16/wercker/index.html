@@ -1,0 +1,405 @@
+<!doctype html>
+<html>
+  <head>
+    <meta http-equiv="content-type" content="text/html; charset=utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    
+    <title>Werckerの仕組み，独自のboxとstepのつくりかた | SOTA</title>
+    
+    <link href="https://fonts.googleapis.com/css?family=Lato%3a900" rel="stylesheet" type="text/css">
+    <link rel="stylesheet" href="/css/main.css">
+    <link rel="shortcut icon" href="/favicon.png" type="image/x-icon" />
+    <link href="http://deeeet.com//index.xml" rel="alternate" type="application/rss+xml" title="" />
+    <meta name="title" content="http://deeeet.com/writing/2014/10/16/wercker/">
+    <link rel="canonical" href="http://deeeet.com/writing/2014/10/16/wercker/">
+    
+    <meta property="og:title" content="Werckerの仕組み，独自のboxとstepのつくりかた"/>
+    <meta property="og:url" content="http://deeeet.com/writing/2014/10/16/wercker/"/>
+  </head>
+  
+  <body>
+    <section class="site-nav">
+      <header>
+        <nav id="navigation">
+          <ul class="menu">
+            <li><a href="https://github.com/tcnksm/talks">Talks</a></li>
+            <li><a href="https://tcnksm.exposure.co/">Photos</a></li>
+          </ul>
+
+          <a class="name" href="/">SOTA</a>
+        </nav>        
+      </header>
+    </section>
+    
+
+
+<div class="container">
+  <div class="article-cover">
+    <div>
+      <img src="/images/wercker.png" class="image">
+    </div>
+  </div>
+</div>
+
+<article>
+  <div class="container">
+    <header>
+      <div class="meta">
+        <time pubdate datetime="2014-10-16" title="2014-10-16">October 16, 2014</time>
+      </div>
+      <h1 class="title">Werckerの仕組み，独自のboxとstepのつくりかた</h1>
+    </header>
+    
+    <section>
+      
+
+<p><a href="http://wercker.com/">Wercker</a>はTravisCIやDrone.ioのようなCI-as-a-Serviceのひとつ．GitHubへのコードのPushをフックしてアプリケーションのテスト，ビルド，デプロイを行うことができる．</p>
+
+<p>Werckerは，TravisCIのように，レポジトリのルートに<code>wercker.yml</code>を準備し，そこに記述された実行環境と実行コマンドをもとにテスト/ビルドを走らせる．</p>
+
+<p>Werckerには，その実行環境をbox，実行コマンド（の集合）をstepとして自作し，あらかじめWercker Directoryに登録しておくことで，様々なテストからそれらを呼び出して使うという仕組みがある．実際，Werkcerで標準とされているboxやstepも同様の仕組みで作成されている（<a href="https://github.com/wercker">wercker · GitHub</a>）．</p>
+
+<p>今回，WerkcerでのGolangのCross-compileとリリースのために，いくつかboxとstepを自作した．</p>
+
+<ul>
+<li><a href="https://github.com/tcnksm/wercker-box-gox">tcnksm/wercker-box-gox</a></li>
+<li><a href="https://github.com/tcnksm/wercker-step-ghr">tcnksm/wercker-step-ghr</a></li>
+<li><a href="https://github.com/tcnksm/wercker-step-zip">tcnksm/wercker-step-zip</a></li>
+<li><a href="https://github.com/tcnksm/wercker-step-gox">tcnksm/wercker-step-gox</a></li>
+<li><a href="https://github.com/tcnksm/wercker-step-goveralls">tcnksm/wercker-step-goveralls</a></li>
+</ul>
+
+<p>これらの作り方を簡単にまとめておく．まず，大まかなWerckerの仕組み説明し，次に具体的なboxとstepの作り方をそれぞれ説明する．</p>
+
+<h2 id="werckerの仕組み:0b05db3ed0de7b7c15d42f50d841d1d9">Werckerの仕組み</h2>
+
+<p>Werckerには<strong>pipeline</strong>という概念がある．pipelineは，<strong>Build</strong>フェーズと<strong>Deploy</strong>フェーズに分けられ，フェーズは複数の<strong>step</strong>で構成される．すべてのフェーズは1つの<strong>box</strong>と呼ばれる環境上で実行される．</p>
+
+<p><img src="http://f.cl.ly/items/2O3V2n3A1n2d3u3S363D/wercker_pipeline.png" alt="" />
+</p>
+
+<p><a href="http://blog.wercker.com/2013/07/12/How-wercker-works.html">How wercker works</a></p>
+
+<p>1つのpipelineは1つの<code>wercker.yml</code>に記述する．例えば，以下のようにBuildフェーズとDeployフェーズ，それらの具体的なstepを記述する．</p>
+
+<pre><code class="language-yaml">box: box
+build:
+  steps:
+    - stepA
+    - stepB
+deploy:
+  steps:
+    - step1
+    - step2
+</code></pre>
+
+<h3 id="buildフェーズ:0b05db3ed0de7b7c15d42f50d841d1d9">Buildフェーズ</h3>
+
+<p>Buildフェーズは，GitHubやBitbucketへのコードのpushを契機に始まり，アプリケーションのビルド，テスト，コンパイルを行う．生成物がある場合は，<strong>Packege</strong>としてDeployフェーズに渡す．</p>
+
+<h3 id="deployフェーズ:0b05db3ed0de7b7c15d42f50d841d1d9">Deployフェーズ</h3>
+
+<p>Deployフェーズは，Packegeを受け取り，それを外部サービスへデプロイする．例えば，Webアプリケーションであれば，Herokuへデプロイし，バイナリであれば，<a href="https://help.github.com/articles/creating-releases/">Github Release</a>や<a href="https://bintray.com/">bintray.com</a>へリリースする．</p>
+
+<h3 id="box:0b05db3ed0de7b7c15d42f50d841d1d9">box</h3>
+
+<p>各フェーズはboxと呼ばれる同一の環境上で実行される．boxはOSと一連のパッケージがインストールされたVMである．例えば，rubyがインストールされたbox，Golangがインストールされたboxなどがある．</p>
+
+<p>boxはWerckerが提供するもの，もしくは自分でプロビジョニングを定義してWercker Directoryに登録したものを利用することができる．</p>
+
+<p>例えば，Werckerが提供するGolangの実行環境が整ったboxを使いたい場合は，以下のように<code>werker.yml</code>を記述する．</p>
+
+<pre><code class="language-yaml">box: wercker/golang
+</code></pre>
+
+<h3 id="step:0b05db3ed0de7b7c15d42f50d841d1d9">Step</h3>
+
+<p>フェーズを構成するのが複数のstepであり，stepは名前がつけられた一連のコマンドの集合である．</p>
+
+<p>stepは，Werckerが提供するもの，自分で定義してWercker Directoryに登録したもの，もしくは<code>script</code>として<code>wercker.yml</code>に直接定義したものを使うことができる．</p>
+
+<p>例えば，Jekyllで静的サイトを生成するBuildフェーズは以下のように<code>wercker.yml</code>を記述する．</p>
+
+<pre><code class="language-yaml">build:
+  - bundle-install
+  - script:
+    name: generate static site
+    code: |-
+      bundle exec jekyll build --trace --destination &quot;$WERCKER_OUTPUT_DIR&quot;
+</code></pre>
+
+<p>この場合<code>bundle-install</code>はWerckerが提供する標準のstepであり，bundlerのインストールや，Gemfileを元に依存gemのインストールを行う（<a href="https://github.com/wercker/step-bundle-install/blob/master/run.sh">wercker/step-bundle-install</a>）．<code>script</code>は<code>generate static site</code>と名付けられたstepであり，<code>code</code>に実行したいコマンドを直接記述している．</p>
+
+<h3 id="services:0b05db3ed0de7b7c15d42f50d841d1d9">Services</h3>
+
+<p>アプリケーションによっては，テストの際にデータベースやメッセージキューを一緒に使いたい場合がある．このようなアプリケーションとは別のソフトウェアプロセスを使うために，Werckerではboxの他に<strong>services</strong>を準備することができる．</p>
+
+<p>servicesも，標準のもの，もしくは独自で準備してWercker Directoryに登録したものを使うことができる．</p>
+
+<p>例えば，データベースにMongoDB，メッセージキューにRabbitMQを使いたい場合は，<code>wercker.yml</code>に以下を記述する．</p>
+
+<pre><code class="language-yaml">box: wercker/ruby
+services:
+  - wercker/mongodb
+  - wercker/rabbitmq
+</code></pre>
+
+<p>servicesには，環境変数を使ってアクセスすることができる．例えば，上の例の場合は，以下のような環境変数を使うことができる．</p>
+
+<ul>
+<li><code>WERCKER_MONGODB_HOST</code></li>
+<li><code>WERCKER_MONGODB_PORT</code></li>
+<li><code>WERCKER_RABBITMQ_HOST</code></li>
+<li><code>WERCKER_RABBITMQ_PORT</code></li>
+</ul>
+
+<h3 id="environmental-variables:0b05db3ed0de7b7c15d42f50d841d1d9">Environmental Variables</h3>
+
+<p>Werckerは実行時に独自の環境変数を設定する（<a href="http://devcenter.wercker.com/articles/steps/variables.html">Environmental Variables</a>）．例えば，<code>WERCKER_GIT_REPOSITORY</code>にGitのレポジトリ名を，<code>WERCKER_STEP_NAME</code>にstepの名前を設定する．これらは各stepから参照することができる．</p>
+
+<p>環境変数は，Werckerのダッシュボードから独自の値を設定することもできる．これは，自分以外からは隠蔽できるので，例えば，外部サービスに接続するための<code>TOKEN</code>などを設定することができる．</p>
+
+<h3 id="packeageの受け渡し:0b05db3ed0de7b7c15d42f50d841d1d9">Packeageの受け渡し</h3>
+
+<p>BuildフェーズからDeployフェーズへのPackageの受け渡しには，<code>WERCKER_OUTPUT_DIR</code>ディレクトリを利用する．</p>
+
+<p>Werckerでは，すべてのstepを<code>WERCKER_SOURCE_DIR</code>ディレクトリへの移動で始める．Buildフェーズでは，レポジトリのソースが，Deployフェーズでは，Buildフェーズで<code>WERCKER_OUTPUT_DIR</code>に出力されたPackageが<code>WERCKER_SOURCE_DIR</code>に配備される．</p>
+
+<h2 id="boxのつくり方:0b05db3ed0de7b7c15d42f50d841d1d9">boxのつくり方</h2>
+
+<p>まず，boxのつくり方を説明する． boxを自作する利点は，ビルド時間の短縮にある．プロビジョニングはBuildフェーズの途中でstepとして定義することもできるが，テストの度にそれを実行するのは時間がかかりすぎる．</p>
+
+<p>boxの作成は，アプリケーションと同様にpipelineを作成して行う．boxを作成する流れは以下のようになる．</p>
+
+<ol>
+<li>box専用のGithub（Bitbucket）レポジトリの作成</li>
+<li><code>wercker-box.yml</code>の作成</li>
+<li>レポジトリをWerckerに登録</li>
+<li>DeployフェーズにWercker directoryへの登録を指定</li>
+</ol>
+
+<p>具体的なプロビジョニングは<code>wercker-box.yml</code>に記述する．boxのプロビジョニングにはBashスクリプト，もしくはChef，Puppetが使える．ここではBashスクリプトで説明する．他は以下を参考．</p>
+
+<ul>
+<li><a href="http://devcenter.wercker.com/articles/boxes/chef.html">Creating your own boxes with Chef</a></li>
+<li><a href="http://devcenter.wercker.com/articles/boxes/puppet.html">Creating your own boxes with Puppet</a></li>
+</ul>
+
+<h3 id="wercker-box-yml:0b05db3ed0de7b7c15d42f50d841d1d9">wercker-box.yml</h3>
+
+<p>以下にシンプルな<code>wercker-box.yml</code>を示す．</p>
+
+<pre><code class="language-yaml">name: hello
+version: 0.0.1
+inherits: wercker/ubuntu12.04-webessentials@0.0.3
+type: language
+platform: ubuntu@12.04
+description: Say hello world
+keywords:
+  - hello
+    script: |
+      sudo apt-get update -y
+      sudo apt-get install -y hello
+</code></pre>
+
+<p>各項目を簡単に説明する．</p>
+
+<ul>
+<li>name
+
+<ul>
+<li>boxの名前．<code>werkcer.yml</code>でboxを指定する際に利用する．例えば，アカウント名が<code>tcnksm</code>である場合は，<code>tcnksm/hello</code>という名前で指定する．</li>
+</ul></li>
+<li>version
+
+<ul>
+<li>boxのバージョン．同じバージョンではWercker Directoryにデプロイできないので，boxを新しくする度にバージョンを上げる必要がある．バージョンを使ってboxを指定することもできる．例えば，<code>tcnksm/hello@0.0.1</code>のように指定できる．</li>
+</ul></li>
+<li>inherits
+
+<ul>
+<li>継承するbox名．プロビジョニングはこのboxに対して行われる．基本的にはWerckerの標準boxを使うことになると思う．例えば, Golangの実行環境が整ったboxに対してプロビジョニングを行いたい場合は，<code>wercker/golang</code>を指定する．</li>
+</ul></li>
+<li>type
+
+<ul>
+<li>boxのタイプ．<code>main</code>か<code>service</code>を指定する．普通のboxであれば<code>main</code>，servicesとして使いたい場合は<code>service</code>とする．</li>
+</ul></li>
+<li>platform
+
+<ul>
+<li>プラットフォーム．現在（2014年10月）は，Ubuntu12.04のみしかサポートされていない．</li>
+</ul></li>
+<li>description，keyword
+
+<ul>
+<li>boxの簡単な説明とキーワード．これらはメタデータとしてWecker directoryに登録される．</li>
+</ul></li>
+<li>script
+
+<ul>
+<li>実際のプロビジョニングを記述する．</li>
+</ul></li>
+</ul>
+
+<p>他にもserviceを作成したい場合は，そのサービスにアクセスするための環境変数を<code>env</code>という項目で登録する必要がある．</p>
+
+<h3 id="wercker-directoryへの登録:0b05db3ed0de7b7c15d42f50d841d1d9">Wercker Directoryへの登録</h3>
+
+<p>あとは上で作成した<code>wercker-box.yml</code>をGithub（Bitbucket）のレポジトリに上げ，Werckerと連携する．</p>
+
+<p>Werckerと連携したら，Deployフェーズの登録をする．登録は，settingsタブのDeploy targetsから行う．Targetには<code>Wercker Diretory</code>を指定する．ターゲットの名前は自分が分かりやすい名前をつければよい．</p>
+
+<p><img src="http://f.cl.ly/items/222d453f1R2w1F3a3o1V/Screen%20Shot%202013-07-08%20at%203.55.20%20PM.png" alt="" />
+</p>
+
+<p>これで，アプリケーションと同様にレポジトリへのPushを契機に，boxのプロビジョニングとWerckerディレクトリへの登録が継続的に行われるようになる．デプロイが完了したら，そのboxはすぐに別のpipelineから利用できる．</p>
+
+<h2 id="stepのつくり方:0b05db3ed0de7b7c15d42f50d841d1d9">stepのつくり方</h2>
+
+<p>次に，stepの作り方を説明する．stepを作成する利点としては，<code>wercker.yml</code>をシンプルに保つことができること，他で使い回しが出来ることなどが挙げられる．stepもわざわざ作成しなくても，scriptとして，直接コマンドを定義することができる．ただ，複雑なことをやろうとするとscriptは肥大化し，<code>wercker.yml</code>の可読性はどんどん下がる．</p>
+
+<p>stepの作成も，pipelineを作成して行う．stepを作成する流れは以下のようになる．</p>
+
+<ol>
+<li>step専用のGithub（Bitbucket）レポジトリの作成</li>
+<li><code>wercker-step.yml</code>の作成</li>
+<li><code>run.sh</code>の作成</li>
+<li>レポジトリをWerckerに登録</li>
+<li>DeployフェーズにWercker directoryへの登録を指定</li>
+</ol>
+
+<p><code>wercker-step.yml</code>にstepの定義，<code>run.sh</code>に実際に実行したいコマンドを記述する．</p>
+
+<h3 id="wercker-step-yml:0b05db3ed0de7b7c15d42f50d841d1d9">wercker-step.yml</h3>
+
+<p>以下にシンプルな<code>wercker-step.yml</code>を示す．</p>
+
+<pre><code class="language-yaml">name: hello
+version: 0.1.0
+description: Say hello
+kyewords:
+  - hello
+properties:
+  first-name:
+    type: string
+    required: true
+  last-name:
+    type: string
+</code></pre>
+
+<p>各項目を簡単に説明する．</p>
+
+<ul>
+<li>name
+
+<ul>
+<li>stepの名前．<code>werkcer.yml</code>でstepを指定する際に利用する．例えば，アカウント名が<code>tcnksm</code>である場合は，<code>tcnksm/hello</code>という名前で指定する．</li>
+</ul></li>
+<li>version
+
+<ul>
+<li>stepのバージョン．同じバージョンではWercker Directoryにデプロイできないので，stepを新しくする度にバージョンを上げる必要がある．バージョンを使ってstepを指定することもできる．例えば，<code>tcnksm/hello@0.1.0</code>のように指定できる．</li>
+</ul></li>
+<li>description，keyword
+
+<ul>
+<li>stepの簡単な説明とキーワード．これらはメタデータとしてWecker directoryに登録される．</li>
+</ul></li>
+<li>properties
+
+<ul>
+<li><code>run.sh</code> に渡す引数を定義する．引数は<code>wercker.yml</code>から指定できる．<code>required: true</code>により引数を必須にすることができ，指定されていない場合にstepを失敗させることができる．</li>
+</ul></li>
+</ul>
+
+<p><code>properties</code>に指定した引数は，環境変数として<code>run.sh</code>に渡される．例えば，上の例の場合は，以下のような環境変数に値が格納されることになる:</p>
+
+<ul>
+<li><code>WERCKER_HELLO_FIRST_NAME</code></li>
+<li><code>WERCKER_HELLO_LAST_NAME</code></li>
+</ul>
+
+<p>このstepは<code>werkcer.yml</code>では，以下のように記述して利用する．</p>
+
+<pre><code class="language-yaml">steps:
+  - tcnksm/hello:
+    first-name: taichi
+    last-name: nakashima
+</code></pre>
+
+<h3 id="シェルスクリプト書きたくない:0b05db3ed0de7b7c15d42f50d841d1d9">シェルスクリプト書きたくない</h3>
+
+<p>stepは単に<code>run.sh</code>を起点にするだけなので，その中から<code>.js</code>や<code>.rb</code>を呼び出せばよい．ただ，boxにその言語環境が必ずしも準備されているわけではないので，stepの汎用性が下がるということに注意する必要がある．</p>
+
+<h3 id="インストールが必要なコマンドを使いたい:0b05db3ed0de7b7c15d42f50d841d1d9">インストールが必要なコマンドを使いたい</h3>
+
+<p><code>run.sh</code>からboxに依存することなく特別なコマンドを叩きたい場合がある．その場合は，インストールコマンドを直接書いてしまえばよい．</p>
+
+<p>バイナリをあらかじめレポジトリに含めることもできる．例えば，自分が作成した<a href="https://github.com/tcnksm/wercker-step-ghr">tcnksm/wercker-step-ghr</a>は<code>ghr</code>バイナリを<code>bin</code>ディレクトリに含めており，<code>run.sh</code>からそれを直接呼び出して使っている．</p>
+
+<h3 id="wercker-directoryへの登録-1:0b05db3ed0de7b7c15d42f50d841d1d9">Wercker Directoryへの登録</h3>
+
+<p>boxと同じようにWercker上でDeployフェーズを登録すればよい．デプロイが完了したら，すぐにboxはすぐに別のpipelineから利用できる．</p>
+
+<h2 id="まとめ:0b05db3ed0de7b7c15d42f50d841d1d9">まとめ</h2>
+
+<p>肥大化した<code>wercker.yml</code>は扱いづらいので，これからも何かあればboxとstepは自作すると思う．</p>
+
+<p>Wercker Directoryの仕組みは，DockerHubの仕組みに似ていて扱いやすい．というか，Werckerには<code>wercker-lab/docker</code>というboxが準備されていてDockerを使うことができる．次は，その辺で遊んでみようと思う．</p>
+
+      <div class="social">
+  
+  
+  <a href="https://twitter.com/share" class="twitter-share-button" data-via="deeeet" data-count="none">Tweet</a>
+  
+  
+</div>
+
+    </section>
+
+    <footer>
+      <address>
+        
+        <img src="/images/bio.jpeg"/>
+        
+        <p>Written by <strong><a rel="author" href="https://twitter.com/deeeet" title="Taichi Nakashima" target="_blank">Taichi Nakashima</a></strong><br>
+          <span class="muted">A Tokyo based PaaS engineer. Please contact me via twitter.</span>
+        </p>
+      </address>
+
+    </footer>
+
+  </div>
+</article>
+
+<script type="text/javascript" src="//ajax.googleapis.com/ajax/libs/jquery/1.7.2/jquery.min.js"></script>
+<script type="text/javascript" src="/js/main.js"></script>
+
+<script>!function(d,s,id){var js,fjs=d.getElementsByTagName(s)[0],p=/^http:/.test(d.location)?'http':'https';if(!d.getElementById(id)){js=d.createElement(s);js.id=id;js.src=p+'://platform.twitter.com/widgets.js';fjs.parentNode.insertBefore(js,fjs);}}(document, 'script', 'twitter-wjs');</script>
+
+
+<script type="text/javascript">var HN=[];HN.factory=function(e){return function(){HN.push([e].concat(Array.prototype.slice.call(arguments,0)))};},HN.on=HN.factory("on"),HN.once=HN.factory("once"),HN.off=HN.factory("off"),HN.emit=HN.factory("emit"),HN.load=function(){var e="hn-button.js";if(document.getElementById(e))return;var t=document.createElement("script");t.id=e,t.src="//hn-button.herokuapp.com/hn-button.js";var n=document.getElementsByTagName("script")[0];n.parentNode.insertBefore(t,n)},HN.load();</script>
+
+
+  <script>
+  (function(i,s,o,g,r,a,m){i['GoogleAnalyticsObject']=r;i[r]=i[r]||function(){
+  (i[r].q=i[r].q||[]).push(arguments)},i[r].l=1*new Date();a=s.createElement(o),
+  m=s.getElementsByTagName(o)[0];a.async=1;a.src=g;m.parentNode.insertBefore(a,m)
+  })(window,document,'script','//www.google-analytics.com/analytics.js','ga');
+
+  ga('create', 'UA-45390253-1', 'auto');
+  ga('send', 'pageview');
+
+</script>
+
+
+
+<script>
+  $(document).ready(function() {
+  
+  $('p:has(img)').css('text-align', 'center');
+  $('iframe').css('style', 'display: block; margin: 0px auto;');
+  });
+</script>
+

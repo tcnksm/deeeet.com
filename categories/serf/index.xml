@@ -1,0 +1,984 @@
+<?xml version="1.0" encoding="utf-8" standalone="yes" ?>
+<rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom">
+  <channel>
+    <title>Serf on SOTA</title>
+    <link>http://deeeet.com/categories/serf/</link>
+    <description>Recent content in Serf on SOTA</description>
+    <generator>Hugo -- gohugo.io</generator>
+    <language>ja-jp</language>
+    <copyright>Copyright (C) 2013-2015 Taichi Nakashima All Right Reserved.</copyright>
+    <lastBuildDate>Tue, 01 Apr 2014 00:00:00 +0000</lastBuildDate>
+    <atom:link href="http://deeeet.com/categories/serf/index.xml" rel="self" type="application/rss+xml" />
+    
+    <item>
+      <title>SerfでHAProxyの更新 on Vagrant</title>
+      <link>http://deeeet.com/writing/2014/04/01/serf-haproxy/</link>
+      <pubDate>Tue, 01 Apr 2014 00:00:00 +0000</pubDate>
+      
+      <guid>http://deeeet.com/writing/2014/04/01/serf-haproxy/</guid>
+      <description>
+
+&lt;p&gt;Serfの典型的な使い方として紹介されることの多い，HAProxyの登録/更新をやってみた．これは既に何人かの方が試みているし，SerfのGithubのdemoページでも紹介されている．&lt;/p&gt;
+
+&lt;ul&gt;
+&lt;li&gt;&lt;a href=&#34;https://github.com/hashicorp/serf/tree/master/demo/web-load-balancer&#34;&gt;hashicorp/serf/demo/web-load-balancer&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a href=&#34;http://blog.glidenote.com/blog/2013/10/30/serf-haproxy/&#34;&gt;&amp;ldquo;Serf+HAProxyで作るAutomatic Load Balancer&amp;rdquo;&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a href=&#34;http://blog.ryotarai.info/blog/2014/04/01/service-discovery-by-syanpse-with-serf/&#34;&gt;&amp;ldquo;Synapse と Serf でサービスディスカバリ&amp;rdquo;&lt;/a&gt;&lt;/li&gt;
+&lt;/ul&gt;
+
+&lt;p&gt;これらが何をやっているかを簡単に書くと，1つのProxyサーバ（ロードバランサ）と複数のWebサーバという構成において，Webサーバの増減に応じてロードバランサの設定を自動で書き換えるというもの．&lt;/p&gt;
+
+&lt;p&gt;これをVagrantで複数サーバを立ち上げて，自分で手を動しつつ触ってみた．&lt;/p&gt;
+
+&lt;p&gt;&lt;a href=&#34;https://github.com/tcnksm/sample-serf-haproxy&#34;&gt;tcnksm/sample-serf-haproxy&lt;/a&gt;&lt;/p&gt;
+
+&lt;p&gt;Vagrantさえあれば誰でもすぐ試せるようになっている．&lt;/p&gt;
+
+&lt;h2 id=&#34;vagrantの準備:a4d3e4c93be0e2e889b4205a37c0cfc5&#34;&gt;Vagrantの準備&lt;/h2&gt;
+
+&lt;p&gt;以下のようなVagrantfileを準備する．&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-ruby&#34;&gt;# Serfのインストール
+# すべてのホストで実行する
+$script = &amp;lt;&amp;lt;SCRIPT
+sudo apt-get install -y unzip
+cd /tmp/
+wget https://dl.bintray.com/mitchellh/serf/0.5.0_linux_amd64.zip -O serf.zip
+
+unzip serf.zip
+chmod +x serf
+mv serf /usr/bin/serf
+
+SCRIPT
+
+Vagrant.configure(&amp;quot;2&amp;quot;) do |config|
+  config.vm.box = &amp;quot;precise64&amp;quot;
+  config.vm.box_url = &amp;quot;http://files.vagrantup.com/precise64.box&amp;quot;
+  config.vm.provision :shell, inline: $script
+
+  # proxyサーバのプロビジョニング
+  # (1) HAProxyのインストール
+  # (2) HAProxyの有効化
+  # (3) HAProxyの初期設定の書き出し
+  # (4) HAProxyの起動
+  config.vm.define :proxy do |proxy|
+      proxy.vm.network &amp;quot;private_network&amp;quot;, ip: &amp;quot;172.20.20.10&amp;quot;
+      proxy.vm.provision :shell, inline: &amp;lt;&amp;lt;SCRIPT
+apt-get -y install haproxy
+sed -i -e &#39;s/ENABLED=0/ENABLED=1/&#39; /etc/default/haproxy
+
+cat &amp;lt;&amp;lt;EOF &amp;gt;/tmp/haproxy.cfg
+global
+    daemon
+    maxconn 256
+
+defaults
+    mode http
+    timeout connect 5000ms
+    timeout client 50000ms
+    timeout server 50000ms
+
+listen stats
+    bind *:9999
+    mode http
+    stats enable
+    stats uri /
+    stats refresh 1s
+
+listen http-in
+    bind *:80
+    balance roundrobin
+    option http-server-close
+EOF
+
+mv /tmp/haproxy.cfg /etc/haproxy/haproxy.cfg
+
+/etc/init.d/haproxy start
+
+SCRIPT
+  end
+
+  # webサーバのプロビジョニング
+  # (1) nginxのインストール
+  # (2) 初期画面の準備
+  # (3) nginxの起動
+  config.vm.define :web1 do |web|
+      web.vm.network &amp;quot;private_network&amp;quot;, ip: &amp;quot;172.20.20.111&amp;quot;
+      web.vm.provision :shell, inline: &amp;lt;&amp;lt;SCRIPT
+apt-get -y update
+apt-get -y install nginx
+echo &#39;&amp;lt;h1&amp;gt;web1&amp;lt;/h1&amp;gt;&#39; &amp;gt; /usr/share/nginx/www/index.html
+/etc/init.d/nginx start
+SCRIPT
+  end
+
+  config.vm.define :web2 do |web|
+      web.vm.network &amp;quot;private_network&amp;quot;, ip: &amp;quot;172.20.20.112&amp;quot;
+      web.vm.provision :shell, inline: &amp;lt;&amp;lt;SCRIPT
+apt-get -y update
+apt-get -y install nginx
+echo &#39;&amp;lt;h1&amp;gt;web2&amp;lt;/h1&amp;gt;&#39; &amp;gt; /usr/share/nginx/www/index.html
+/etc/init.d/nginx start
+SCRIPT
+  end
+end
+
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;ホストは全部で3つ立てる．ロードバランサ用のホスト&lt;code&gt;proxy&lt;/code&gt;を172.20.20.10で，Webサーバ用のホスト&lt;code&gt;web1&lt;/code&gt;と&lt;code&gt;web2&lt;/code&gt;を172.20.20.111と172.20.20.112で立てる．Webサーバはどれだけ増やしてもよい．&lt;/p&gt;
+
+&lt;p&gt;Serfは全てのホストにインストールする．&lt;code&gt;proxy&lt;/code&gt;ではHAProxyのインストールと初期設定を，&lt;code&gt;web&lt;/code&gt;ではnginxをインストールと初期画面の準備，設定を行う．&lt;/p&gt;
+
+&lt;p&gt;起動する．&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-bash&#34;&gt;$ vagrant up
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;h2 id=&#34;serfの設定ファイルの準備:a4d3e4c93be0e2e889b4205a37c0cfc5&#34;&gt;Serfの設定ファイルの準備&lt;/h2&gt;
+
+&lt;p&gt;Serfを起動するたびにコマンドを打つのはめんどくさいので共通部分は設定ファイルにしておく．設定ファイルの書き方は&lt;a href=&#34;http://www.serfdom.io/docs/agent/options.html&#34;&gt;公式&lt;/a&gt;を参考に．&lt;/p&gt;
+
+&lt;p&gt;まず，Proxyサーバの設定ファイル．&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-ruby&#34;&gt;# proxy.json
+{
+    &amp;quot;tags&amp;quot;: {
+            &amp;quot;role&amp;quot;: &amp;quot;lb&amp;quot;
+    },
+
+    &amp;quot;node_name&amp;quot;: &amp;quot;proxy&amp;quot;,
+
+    &amp;quot;bind&amp;quot;: &amp;quot;172.20.20.10&amp;quot;,
+
+    &amp;quot;event_handlers&amp;quot;: [
+            &amp;quot;ruby handler.rb&amp;quot;
+    ]
+}
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;次に，Webサーバの設定ファイル．&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-ruby&#34;&gt;# web.json
+{
+    &amp;quot;tags&amp;quot;: {
+            &amp;quot;role&amp;quot;: &amp;quot;web&amp;quot;
+    },
+                
+    &amp;quot;start_join&amp;quot;: [
+            &amp;quot;172.20.20.10&amp;quot;
+    ]
+}
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;join先をProxyサーバにしておくと楽．&lt;/p&gt;
+
+&lt;h2 id=&#34;イベントハンドラの準備:a4d3e4c93be0e2e889b4205a37c0cfc5&#34;&gt;イベントハンドラの準備&lt;/h2&gt;
+
+&lt;p&gt;イベントハンドラがやることは単純に&lt;code&gt;/etc/haproxy/haproxy.cfg&lt;/code&gt;の書き換え&lt;/p&gt;
+
+&lt;ol&gt;
+&lt;li&gt;&lt;code&gt;member-join&lt;/code&gt;を受け取ったら，サーバの情報の追記&lt;/li&gt;
+&lt;li&gt;&lt;code&gt;member-leave&lt;/code&gt;を受け取ったら，該当するサーバ情報の削除&lt;/li&gt;
+&lt;/ol&gt;
+
+&lt;p&gt;以下のようになる．&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-ruby&#34;&gt;# handler.rb
+
+require &#39;fileutils&#39;
+
+# 設定ファイル
+CONFIGFILE = &amp;quot;/etc/haproxy/haproxy.cfg&amp;quot;
+TMP_CONFIGFILE = &amp;quot;/tmp/haproxy.cfg&amp;quot;
+
+exit 0 if ENV[&amp;quot;SERF_TAG_ROLE&amp;quot;] != &amp;quot;lb&amp;quot;
+
+# サーバ情報の取得
+def member_info
+  info = {}
+  STDIN.each_line do |line|
+    info[:node], info[:ip], info[:role], _ = line.split(&#39; &#39;)
+  end
+  info
+end
+
+info = member_info
+exit 0 if info[:role] != &amp;quot;web&amp;quot;
+
+case ENV[&amp;quot;SERF_EVENT&amp;quot;]
+
+# サーバ情報の追記
+when &#39;member-join&#39;
+  File.open(CONFIGFILE,&amp;quot;a&amp;quot;) do |f|
+      f.puts &amp;quot;    server #{info[:node]} #{info[:ip]}:80 check&amp;quot;
+  end
+  
+# 該当サーバ情報の削除
+when &#39;member-leave&#39;
+  target = &amp;quot;    server #{info[:node]} #{info[:ip]}:80 check&amp;quot;
+  FileUtils.rm(TMP_CONFIGFILE) if File.exist?(TMP_CONFIGFILE)
+  File.open(TMP_CONFIGFILE,&amp;quot;w&amp;quot;) do |f|
+    File.open(CONFIGFILE,&amp;quot;r&amp;quot;).each do |line|
+      next if line.chomp == target
+      f.write(line)
+    end
+  end
+  FileUtils.mv(TMP_CONFIGFILE, CONFIGFILE)
+end
+
+system(&amp;quot;/etc/init.d/haproxy reload&amp;quot;)
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;このイベントハンドラはProxyサーバのみで設定する．&lt;/p&gt;
+
+&lt;h2 id=&#34;動かしてみる:a4d3e4c93be0e2e889b4205a37c0cfc5&#34;&gt;動かしてみる&lt;/h2&gt;
+
+&lt;p&gt;実際に動かしてみる．&lt;/p&gt;
+
+&lt;p&gt;まず，Proxyサーバで最初のAgentを立ち上げる．&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-bash&#34;&gt;$ vagrant ssh proxy
+$ cd /vagrant
+$ sudo serf agent -config-file=proxy.json
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;&lt;code&gt;-config-file&lt;/code&gt;に上で準備した設定ファイルを指定する．&lt;/p&gt;
+
+&lt;p&gt;アクセスしてみる．&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-bash&#34;&gt;$ curl http://172.20.20.10/
+&amp;lt;html&amp;gt;&amp;lt;body&amp;gt;&amp;lt;h1&amp;gt;503 Service Unavailable&amp;lt;/h1&amp;gt;
+No server is available to handle this request.
+&amp;lt;/body&amp;gt;&amp;lt;/html&amp;gt;
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;まだ一つもバランシングされていない．&lt;/p&gt;
+
+&lt;p&gt;次に，&lt;code&gt;web1&lt;/code&gt;でAgentを立ち上げて，クラスタにjoinする．&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-bash&#34;&gt;$ vagrant ssh web1
+$ cd /vagrant
+$ serf agent -config-file=web.json -node web1 -bind 172.20.20.111
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;設定ファイルに加えて，ノード名とホストのIPを指定する．&lt;/p&gt;
+
+&lt;p&gt;これで&lt;code&gt;web1&lt;/code&gt;がバランシングされるようになる．&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-bash&#34;&gt;$ curl http://172.20.20.10/
+&amp;lt;h1&amp;gt;web1&amp;lt;/h1&amp;gt;
+$ curl http://172.20.20.10/
+&amp;lt;h1&amp;gt;web1&amp;lt;/h1&amp;gt;
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;さらに，&lt;code&gt;web2&lt;/code&gt;でAgentを立ち上げて，クラスタにjoinする．&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-bash&#34;&gt;$ vagrant ssh web2
+$ cd /vagrant
+$ serf agent -config-file=web.json -node web2 -bind 172.20.20.112
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;これで&lt;code&gt;web2&lt;/code&gt;にもバランシングされるようになる．&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-bash&#34;&gt;$ curl http://172.20.20.10/
+&amp;lt;h1&amp;gt;web1&amp;lt;/h1&amp;gt;
+$ curl http://172.20.20.10/
+&amp;lt;h1&amp;gt;web2&amp;lt;/h1&amp;gt;
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;このとき，&lt;code&gt;/etc/haproxy/haproxy.cfg&lt;/code&gt;は以下のようになる．&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;...
+listen http-in
+    bind *:80
+    balance roundrobin
+    option http-server-close
+    server web1 172.20.20.111:80 check
+    server web2 172.20.20.112:80 check
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;クラスタから離脱してみる．&lt;code&gt;web1&lt;/code&gt;を停止する．&lt;/p&gt;
+
+&lt;p&gt;すると，&lt;code&gt;web1&lt;/code&gt;にはバランシングされないようになる．&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-bash&#34;&gt;$ curl http://172.20.20.10/
+&amp;lt;h1&amp;gt;web2&amp;lt;/h1&amp;gt;
+$ curl http://172.20.20.10/
+&amp;lt;h1&amp;gt;web2&amp;lt;/h1&amp;gt;
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;最終的な&lt;code&gt;/etc/haproxy/haproxy.cfg&lt;/code&gt;は以下のようになる．&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;...
+listen http-in
+    bind *:80
+    balance roundrobin
+    option http-server-close
+    server web2 172.20.20.112:80 check
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;文章ではなかなか伝わらないけど，実際に動かしてみると感動するので是非．&lt;/p&gt;
+</description>
+    </item>
+    
+    <item>
+      <title>Serf 虎の巻</title>
+      <link>http://deeeet.com/writing/2014/03/23/serf-basic/</link>
+      <pubDate>Sun, 23 Mar 2014 00:00:00 +0000</pubDate>
+      
+      <guid>http://deeeet.com/writing/2014/03/23/serf-basic/</guid>
+      <description>
+
+&lt;p&gt;サービスディスカバリーとオーケストレーション用のツールである&lt;a href=&#34;http://www.serfdom.io/&#34;&gt;Serf&lt;/a&gt;についてまとめた．基本的には公式のHPのGetting Startの抄訳．Vagrantで試験環境を立てて実際に触りつつSerfを使い始められるようにした．&lt;/p&gt;
+
+&lt;h2 id=&#34;m&#34;&gt;目次&lt;/h2&gt;
+
+&lt;ul&gt;
+&lt;li&gt;&lt;a href=&#34;#ov&#34;&gt;Serfとは&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a href=&#34;#g&#34;&gt;Gossip protocolとは&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a href=&#34;#pre&#34;&gt;試験環境の準備&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a href=&#34;#jcluster&#34;&gt;クラスタの形成&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a href=&#34;#lcluster&#34;&gt;クラスタからの離脱&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a href=&#34;#eh&#34;&gt;イベントハンドラ&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a href=&#34;#ce&#34;&gt;カスタムイベント&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a href=&#34;#q&#34;&gt;カスタムクエリ&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a href=&#34;#com&#34;&gt;コマンド一覧&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a href=&#34;#ref&#34;&gt;参考&lt;/a&gt;&lt;/li&gt;
+&lt;/ul&gt;
+
+&lt;h2 id=&#34;#ov&#34;&gt;Serfとは&lt;/h2&gt;
+
+&lt;p&gt;Serfはサービスディスカバリーやオーケストレーション，障害検出のためのツール．Vagrantの開発者であるMitchell Hashimoto氏により開発が進められている．Serfは&lt;a href=&#34;http://www.publickey1.jp/blog/14/immutable_infrastructure.html&#34;&gt;Immutable Infrastructure&lt;/a&gt;の文脈で登場してきたツールであり，Immutableなシステムアーキテクチャー，デプロイを実現する上で必須のツールである．&lt;/p&gt;
+
+&lt;p&gt;Immutable Infrastructureを簡単に説明すると，上書き的にサーバーを更新するのではなく，デプロイの度に１からにサーバ，イメージを構築してしまおうという考え方．現段階では，ChefやPuppet，AnsibleのようなConfiguration toolでソフトウェア，サービスの設定を行いイメージを作成し，テストが完了した段階でロードバランサを切り替えるというワークフローが提唱されている（&lt;a href=&#34;http://www.publickey1.jp/blog/14/blue-green_deployment.html&#34;&gt;Blue Green Deployment&lt;/a&gt;）．もしくは，Dockerなどのコンテナベースであれば，そのポータビリティにより，ローカルでコンテナをつくって，それをそのままプロダクションデプロイする方法も考えられる．&lt;/p&gt;
+
+&lt;p&gt;このとき問題になるのは，ロードバランサへの追加や，Memcacheのクラスタ，MySQLのslave/masterなどの動的に変わるような設定．もちろんChefやPuppetがこれらの設定まで受け持つことは可能であるが，Immutableなデプロイを実現する上では複雑性が増す．&lt;/p&gt;
+
+&lt;p&gt;これを解決するのがSerf．ChefやPuppetで不変なサーバ，イメージが完成したあとに，それらのサーバ，イメージ間の紐付けやクラスタリングを行う．&lt;/p&gt;
+
+&lt;h3 id=&#34;serfができること:949cea981e22858e171e92950843d958&#34;&gt;Serfができること&lt;/h3&gt;
+
+&lt;p&gt;Serfは，大きく以下の3つのことを行うことができる．&lt;/p&gt;
+
+&lt;ul&gt;
+&lt;li&gt;&lt;strong&gt;クラスタリング&lt;/strong&gt;: Serfはクラスタを形成し，クラスタへメンバーの参加，離脱といったイベントを検出して，メンバーそれぞれにあらかじめ設定したスクリプトを実行させることができる．例えば，SerfはロードバランサのためのWebサーバのリストをもち，ノードの増減の度にロードバランサにそれを通知することができる．&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;障害の検出と回復&lt;/strong&gt;: Serfはクラスタのメンバーが障害で落ちた場合にそれを検出し，残りのメンバーにそれを通知することができる．また，障害によりダウンしたメンバーを再びクラスタに参加させるように働く．&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;イベントの伝搬&lt;/strong&gt;: Serfはメンバーの参加，離脱といったイベント以外にオリジナルのカスタムイベントをメンバーに伝搬させることができる．これらは，デプロイやConfigurationのトリガーなどに使うことができる．&lt;/li&gt;
+&lt;/ul&gt;
+
+&lt;h3 id=&#34;serfの利用例:949cea981e22858e171e92950843d958&#34;&gt;Serfの利用例&lt;/h3&gt;
+
+&lt;p&gt;具体的なSerfの利用例には以下のようなものがある．&lt;/p&gt;
+
+&lt;ul&gt;
+&lt;li&gt;Webサーバのロードバランサへの登録，解除&lt;/li&gt;
+&lt;li&gt;RedisやMemcachedのクラスタリング&lt;/li&gt;
+&lt;li&gt;DNSの更新&lt;/li&gt;
+&lt;li&gt;デプロイのトリガー（&lt;a href=&#34;#ce&#34;&gt;カスタムイベント&lt;/a&gt;）&lt;/li&gt;
+&lt;li&gt;シンプルなサービス監視（&lt;a href=&#34;#q&#34;&gt;カスタムクエリ&lt;/a&gt;）&lt;/li&gt;
+&lt;/ul&gt;
+
+&lt;p&gt;詳細は，公式の&lt;a href=&#34;http://www.serfdom.io/intro/use-cases.html&#34;&gt;Use Cases&lt;/a&gt;を参照．&lt;/p&gt;
+
+&lt;p&gt;&lt;a href=&#34;#m&#34;&gt;目次へ&lt;/a&gt;&lt;/p&gt;
+
+&lt;h2 id=&#34;g&#34;&gt;Gossip Protocolとは&lt;/h2&gt;
+
+&lt;p&gt;Serfはクラスタのメンバーへのイベントの伝搬に&lt;a href=&#34;http://en.wikipedia.org/wiki/Gossip_protocol&#34;&gt;Gossip Protocol&lt;/a&gt;を用いている．Gossip Protocolは&lt;a href=&#34;http://www.cs.cornell.edu/~asdas/research/dsn02-swim.pdf&#34;&gt;&amp;ldquo;SWIM: Scalable Weakly-consistent Infection-style Process Group Membership Protocol&amp;rdquo;&lt;/a&gt;を基にしており，SWIMのイベントの伝搬速度とカバレッジに改良を加えている．&lt;/p&gt;
+
+&lt;h3 id=&#34;swim-protocolの概要:949cea981e22858e171e92950843d958&#34;&gt;SWIM Protocolの概要&lt;/h3&gt;
+
+&lt;p&gt;Serfは新しいクラスタの形成，既存のクラスタへ参入，のどちらかで起動する．新しいクラスタが形成されると，そこには新しいノードが参入してくることが期待される．既存のクラスタに参入するには，既存クラスタのメンバーのIPアドレスが必要になる．新しいメンバーはTCPで既存クラスタのメンバーと状態が同期され，Gossiping（噂，情報のやりとり）が始まる．&lt;/p&gt;
+
+&lt;p&gt;GossipingはUDPで通信される．これにより，ネットワークの容量はノードの数に比例して一定になる．Gossipingよりも頻度は低いが，定期的にTCPによるランダムなノード間で完全な状態同期が行われる．&lt;/p&gt;
+
+&lt;p&gt;障害検出は，定期的にランダムなノードをチェックすることにより行われる．もし一定期間あるノードから反応がない場合は，直接そのノードに対してチェックが行われる．ネットワーク上問題でノードからの反応が得られていない可能性を考慮して，この直接のチェックは複数のノードから行われる．ランダムなチェックおよび，直接のチェックでも反応がない場合，そのノードは，_suspicious_と認定される．_suspicious_であってもそのノードはクラスタの一員として扱われる．それでも反応が慣れれば，そのノードは落ちたと認定され，それは他のノードにGossipされる．&lt;/p&gt;
+
+&lt;h3 id=&#34;gossipのswimからの改良点:949cea981e22858e171e92950843d958&#34;&gt;GossipのSWIMからの改良点&lt;/h3&gt;
+
+&lt;p&gt;Gossip ProtocolのSWIMからの変更点は大きく以下の3点&lt;/p&gt;
+
+&lt;ul&gt;
+&lt;li&gt;SerfはTCPで全状態の同期を行うが，SWIMは変更をGossipすることしかしない．最終的には，どちらも一貫性を持つが，Serfは状態の収束が速い．&lt;/li&gt;
+&lt;li&gt;SerfはGossipingのみを行うレイヤーと障害検出を行うプロトコルを分離しているが，SWIMは，障害検出にGossipingが上乗りしている．Serfは上乗りもしている．これによりSerfはより速いGossipingを可能にする．&lt;/li&gt;
+&lt;li&gt;Serfは落ちたノードを一定期間保持するため，全状態の同期の際にそれも伝搬される．SWIMはTCPによる状態の同期を行わない．これにより障害からの復帰が速くなる．&lt;/li&gt;
+&lt;/ul&gt;
+
+&lt;p&gt;&lt;a href=&#34;#m&#34;&gt;目次へ&lt;/a&gt;&lt;/p&gt;
+
+&lt;h2 id=&#34;pre&#34;&gt;試験環境の準備&lt;/h2&gt;
+
+&lt;p&gt;&lt;a href=&#34;https://github.com/hashicorp/serf/tree/master/demo/vagrant-cluster&#34;&gt;serf/demo/vagrant-cluster&lt;/a&gt;のVagrantfileを改良して，Serfがプレインストールされたノードが3つ立ち上がった試験環境を作る．ノードのIPはそれぞれ&amp;rdquo;172.20.20.10&amp;rdquo;，&amp;rdquo;172.20.20.11&amp;rdquo;，&amp;rdquo;172.20.20.12&amp;rdquo;とし，同一ネットワーク上に存在する．Vagrantfileは以下．&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-ruby&#34;&gt;$script = &amp;lt;&amp;lt;SCRIPT
+
+echo Installing depedencies...
+sudo apt-get install -y unzip
+
+echo Fetching Serf...
+cd /tmp/
+wget https://dl.bintray.com/mitchellh/serf/0.5.0_linux_amd64.zip -O serf.zip
+
+echo Installing Serf...
+unzip serf.zip
+sudo chmod +x serf
+sudo mv serf /usr/bin/serf
+
+SCRIPT
+
+Vagrant.configure(VAGRANTFILE_API_VERSION) do |config|
+  config.vm.box = &amp;quot;precise64&amp;quot;
+    config.vm.box_url = &amp;quot;http://files.vagrantup.com/precise64.box&amp;quot;
+
+  config.vm.provision &amp;quot;shell&amp;quot;, inline: $script
+
+  config.vm.define &amp;quot;n1&amp;quot; do |n1|
+      n1.vm.network &amp;quot;private_network&amp;quot;, ip: &amp;quot;172.20.20.10&amp;quot;
+  end
+
+  config.vm.define &amp;quot;n2&amp;quot; do |n2|
+      n2.vm.network &amp;quot;private_network&amp;quot;, ip: &amp;quot;172.20.20.11&amp;quot;
+  end
+
+  config.vm.define &amp;quot;n3&amp;quot; do |n3|
+      n3.vm.network &amp;quot;private_network&amp;quot;, ip: &amp;quot;172.20.20.12&amp;quot;
+  end
+end  
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;立ち上げる．&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-bash&#34;&gt;$ vagrant up
+$ vagrant status
+Current machine states:
+
+n1                        running (virtualbox)
+n2                        running (virtualbox)
+n3                        running (virtualbox)
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;&lt;a href=&#34;#m&#34;&gt;目次へ&lt;/a&gt;&lt;/p&gt;
+
+&lt;h2 id=&#34;jcluster&#34;&gt;クラスタの形成&lt;/h2&gt;
+
+&lt;p&gt;シンプルなクラスタを形成してみる．&lt;/p&gt;
+
+&lt;h3 id=&#34;エージェントの起動:949cea981e22858e171e92950843d958&#34;&gt;エージェントの起動&lt;/h3&gt;
+
+&lt;p&gt;まず，&lt;code&gt;n1&lt;/code&gt;で最初のエージェント（&lt;code&gt;agent1&lt;/code&gt;）を起動する．同一ネットワーク上で発見されるように，bindアドレスにはprivate networkのIPを指定する．&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-bash&#34;&gt;$ vagrant ssh n1
+vagrant@n1:$ serf agent -node=agent1 -bind=172.20.20.10
+==&amp;gt; Starting Serf agent...
+==&amp;gt; Starting Serf agent RPC...
+==&amp;gt; Serf agent running!
+         Node name: &#39;agent1&#39;
+         Bind addr: &#39;172.20.20.10:7946&#39;
+         RPC addr: &#39;127.0.0.1:7373&#39;
+         Encrypted: false
+         Snapshot: false
+         Profile: lan
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;次に，別のウィンドウを立ち上げて&lt;code&gt;n2&lt;/code&gt;で新たなエージェント（&lt;code&gt;agent2&lt;/code&gt;）を起動する．&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-bash&#34;&gt;$ vagrant ssh n2
+vagrant@n2:$ serf agent -node=agent2 -bind=172.20.20.11
+==&amp;gt; Starting Serf agent...
+==&amp;gt; Starting Serf agent RPC...
+==&amp;gt; Serf agent running!
+         Node name: &#39;agent2&#39;
+         Bind addr: &#39;172.20.20.11:7946&#39;
+         RPC addr: &#39;127.0.0.1:7373&#39;
+         Encrypted: false
+         Snapshot: false
+         Profile: lan
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;この時点で，2つのホストで2つのserfエージェントが起動してる．しかし，2つのエージェントは互いについては何も知らない．それぞれが自分自身のクラスタを形成している．&lt;code&gt;serf member&lt;/code&gt;を実行するとそれを確認できる．&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-bash&#34;&gt;vagrant@n1:$ serf members
+agent1  172.20.20.10:7946  alive
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-bash&#34;&gt;vagrant@n2:$ serf members
+agent2  172.20.20.11:7946  alive
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;h3 id=&#34;クラスタへのjoin:949cea981e22858e171e92950843d958&#34;&gt;クラスタへのJoin&lt;/h3&gt;
+
+&lt;p&gt;クラスタにjoinしてみる．&lt;code&gt;agent2&lt;/code&gt;を&lt;code&gt;agent1&lt;/code&gt;にjoinさせる．&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-bash&#34;&gt;vagrant@n2$ serf join 172.20.20.10
+Successfully joined cluster by contacting 1 nodes.
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;それぞれのエージェントのログをみると，メンバーのjoin情報（&lt;code&gt;EventMemberJoin&lt;/code&gt;）を互いに受け取っていることが確認できる．&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-bash&#34;&gt;# agent1
+2014/03/23 13:45:18 [INFO] serf: EventMemberJoin: agent2 172.20.20.11
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-bash&#34;&gt;# agent2
+2014/03/23 13:45:18 [INFO] agent: joining: [172.20.20.10] replay: false
+2014/03/23 13:45:18 [INFO] serf: EventMemberJoin: agent1 172.20.20.10
+2014/03/23 13:45:18 [INFO] agent: joined: 1 Err: &amp;lt;nil&amp;gt;
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;それぞれのエージェントで&lt;code&gt;serf member&lt;/code&gt;を実行すると，それぞれのエージェントが互いのことを認識していることが確認できる．&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-bash&#34;&gt;vagrant@n1:$ serf members
+agent1  172.20.20.10:7946  alive
+agent2  172.20.20.11:7946  alive
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-bash&#34;&gt;vagrant@n2:$ serf members
+agent2  172.20.20.11:7946  alive
+agent1  172.20.20.10:7946  alive
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;さらに別のウィンドウを立ち上げて&lt;code&gt;n3&lt;/code&gt;で新たなエージェント（&lt;code&gt;agent3&lt;/code&gt;）を起動し，同時に&lt;code&gt;agent1&lt;/code&gt;と&lt;code&gt;agent2&lt;/code&gt;で形成するクラスタにjoinする．起動と同時にクラスタにjoinするには，&lt;code&gt;-join&lt;/code&gt;オプションを使う．ここでは，&lt;code&gt;agent2&lt;/code&gt;のbindアドレスを指定してjoinしてみる．&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-bash&#34;&gt;$ vagrant ssh n3
+vagrant@precise64:~$ serf agent -node=agent3 -bind=172.20.20.12 -join=172.20.20.11
+==&amp;gt; Starting Serf agent...
+==&amp;gt; Starting Serf agent RPC...
+==&amp;gt; Serf agent running!
+         Node name: &#39;agent3&#39;
+         Bind addr: &#39;172.20.20.12:7946&#39;
+         RPC addr: &#39;127.0.0.1:7373&#39;
+         Encrypted: false
+         Snapshot: false
+         Profile: lan
+==&amp;gt; Joining cluster...(replay: false)
+Join completed. Synced with 1 initial agents
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;それぞれのエージェントのログをみると，エージェントのjoinの情報がやり取りされているのがわかる．&lt;code&gt;agent1&lt;/code&gt;と&lt;code&gt;agent2&lt;/code&gt;は&lt;code&gt;agent3&lt;/code&gt;のjoin情報を，新しくクラスタにjoinしたばかりの&lt;code&gt;agent3&lt;/code&gt;は&lt;code&gt;agent1&lt;/code&gt;と&lt;code&gt;agent2&lt;/code&gt;のjoin情報を受け取っている．&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-bash&#34;&gt;# agent1
+2014/03/23 14:15:09 [INFO] serf: EventMemberJoin: agent3 172.20.20.12
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-bash&#34;&gt;# agent2
+2014/03/23 14:15:08 [INFO] serf: EventMemberJoin: agent3 172.20.20.12
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-bash&#34;&gt;# agent3
+2014/03/23 14:15:08 [INFO] agent: joining: [172.20.20.11] replay: false
+2014/03/23 14:15:08 [INFO] serf: EventMemberJoin: agent1 172.20.20.10
+2014/03/23 14:15:08 [INFO] serf: EventMemberJoin: agent2 172.20.20.11
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;それぞれのエージェントでserf memberを実行すると，&lt;code&gt;agent3&lt;/code&gt;が新たなメンバーとして追加されていることが確認できる．&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-bash&#34;&gt;vagrant@n1:$ serf members
+agent1  172.20.20.10:7946  alive
+agent2  172.20.20.11:7946  alive
+agent3  172.20.20.12:7946  alive
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-bash&#34;&gt;vagrant@n2:$ serf members
+agent2  172.20.20.11:7946  alive
+agent1  172.20.20.10:7946  alive
+agent3  172.20.20.12:7946  alive
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-bash&#34;&gt;vagrant@n3:$ serf members
+agent3  172.20.20.12:7946  alive
+agent1  172.20.20.10:7946  alive
+agent2  172.20.20.11:7946  alive
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;&lt;a href=&#34;#m&#34;&gt;目次へ&lt;/a&gt;&lt;/p&gt;
+
+&lt;h2 id=&#34;lcluster&#34;&gt;クラスタからの離脱&lt;/h2&gt;
+
+&lt;p&gt;クラスタから抜けてみる．エージェントを停止するだけ．停止方法は，エージェントの起動画面で&lt;code&gt;Ctrl-C&lt;/code&gt;（interrupt signalを送る）するか，エージェントのプロセスをkill（terminated）するだけ．&lt;/p&gt;
+
+&lt;p&gt;二つの停止方法で，serfの挙動は異なる．&lt;/p&gt;
+
+&lt;ul&gt;
+&lt;li&gt;正常終了．&lt;code&gt;Ctrl-C&lt;/code&gt;（interrupt）による停止．Serfは他のクラスタのメンバーにその停止エージェントの_left_を通知し，以後そのノードに対して通信はしない．&lt;/li&gt;
+&lt;li&gt;異常終了．プロセスをkill（terminated）して停止．クラスタの他のメンバーはそのノードが_failed_したと検知する．そしてSerfは再びそのノードに接続しよう通信を継続する．&lt;/li&gt;
+&lt;/ul&gt;
+
+&lt;h3 id=&#34;正常終了:949cea981e22858e171e92950843d958&#34;&gt;正常終了&lt;/h3&gt;
+
+&lt;p&gt;まず，&lt;code&gt;agent3&lt;/code&gt;を&lt;code&gt;Ctrl-C&lt;/code&gt;で停止してみる．&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-bash&#34;&gt;==&amp;gt; Caught signal: interrupt
+==&amp;gt; Gracefully shutting down agent...
+    2014/03/23 14:42:07 [INFO] agent: requesting graceful leave from Serf
+    2014/03/23 14:42:08 [INFO] serf: EventMemberLeave: agent3 172.20.20.12
+    2014/03/23 14:42:08 [INFO] agent: requesting serf shutdown
+    2014/03/23 14:42:08 [INFO] agent: shutdown complete
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;他のメンバーに対して，クラスタのleaveを通知してからエージェントを停止している．また，残ったエージェントのログをみると，メンバーのleave情報（&lt;code&gt;EventMemberLeave&lt;/code&gt;）を受け取っていることが確認できる．&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-bash&#34;&gt;# agent1
+2014/03/23 14:42:08 [INFO] serf: EventMemberLeave: agent3 172.20.20.12
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-bash&#34;&gt;# agent2
+2014/03/23 14:42:08 [INFO] serf: EventMemberLeave: agent3 172.20.20.12
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;それぞれのエージェントでserf memberを実行すると，&lt;code&gt;agent3&lt;/code&gt;が_left_したことが確認できる．&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-bash&#34;&gt;vagrant@n1:$ serf members
+agent1  172.20.20.10:7946  alive
+agent2  172.20.20.11:7946  alive
+agent3  172.20.20.12:7946  left
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-bash&#34;&gt;vagrant@n2:$ serf members
+agent2  172.20.20.11:7946  alive
+agent1  172.20.20.10:7946  alive
+agent3  172.20.20.12:7946  left
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;h3 id=&#34;異常終了:949cea981e22858e171e92950843d958&#34;&gt;異常終了&lt;/h3&gt;
+
+&lt;p&gt;次に，&lt;code&gt;agent2&lt;/code&gt;をプロセスのkillで停止してみる．&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-bash&#34;&gt;==&amp;gt; Caught signal: terminated
+    2014/03/23 14:58:11 [INFO] agent: requesting serf shutdown
+    2014/03/23 14:58:11 [WARN] Shutdown without a Leave
+    2014/03/23 14:58:11 [INFO] agent: shutdown complete
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;&lt;code&gt;agent3&lt;/code&gt;の場合とは異なり，leave通知なしで停止している．残った&lt;code&gt;agent1&lt;/code&gt;のログをみると，メンバーの_failed_を検知し，再接続しようとしているのが確認できる．&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-bash&#34;&gt;# agent1
+2014/03/23 14:58:19 [INFO] serf: EventMemberFailed: agent2 172.20.20.11
+2014/03/23 14:58:20 [INFO] agent: Received event: member-failed
+2014/03/23 14:58:36 [INFO] serf: attempting reconnect to agent2 172.20.20.11
+2014/03/23 14:59:06 [INFO] serf: attempting reconnect to agent2 172.20.20.11
+2014/03/23 14:59:36 [INFO] serf: attempting reconnect to agent2 172.20.20.11
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;&lt;code&gt;serf members&lt;/code&gt;を実行すると，&lt;code&gt;agent2&lt;/code&gt;が_failed_となっていることが確認できる．&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-bash&#34;&gt;vagrant@n1:$ serf members
+agent1  172.20.20.10:7946  alive
+agent2  172.20.20.11:7946  failed
+agent3  172.20.20.12:7946  left
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;Serfは_failed_ノードを再接続しようとし続けるので，再び&lt;code&gt;n2&lt;/code&gt;で&lt;code&gt;agent2&lt;/code&gt;を起動すると，joinすることなく自動でクラスタにjoinされる．&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-bash&#34;&gt;vagrant@n2:$ serf agent -node=agent2 -bind=172.20.20.11
+...
+2014/03/23 15:05:36 [INFO] serf: EventMemberJoin: agent1 172.20.20.10
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;&lt;a href=&#34;#m&#34;&gt;目次へ&lt;/a&gt;&lt;/p&gt;
+
+&lt;h2 id=&#34;eh&#34;&gt;イベントハンドラ&lt;/h2&gt;
+
+&lt;p&gt;Serfのエージェントの起動方法，クラスタへの参入/離脱方法はわかった．Serfが強力なのは，メンバーのjoinやその他のイベントに反応できるところ．特定のイベントに対して，オリジナルのスクリプトを実行することができる．&lt;/p&gt;
+
+&lt;p&gt;以下のような，単純なrubyスクリプトによるイベントハンドラ（&lt;code&gt;handler.rb&lt;/code&gt;）を作る．&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-ruby&#34;&gt;#handler.rb
+
+puts
+puts &amp;quot;New event: #{ENV[&amp;quot;SERF_EVENT&amp;quot;]}. &amp;quot;
+
+while str = STDIN.gets
+    puts str
+end
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;このイベントハンドラは，単純に&lt;code&gt;SERF_EVENT&lt;/code&gt;という環境変数に格納されたイベント名を出力する．Serfのイベントのデータは常に標準入力からくる，ので&lt;code&gt;STDIN&lt;/code&gt;によりこれを取得する．&lt;/p&gt;
+
+&lt;h3 id=&#34;イベントハンドラの登録:949cea981e22858e171e92950843d958&#34;&gt;イベントハンドラの登録&lt;/h3&gt;
+
+&lt;p&gt;では，実際にこのイベントハンドラを動かしてみる．エージェントを起動する際に，&lt;code&gt;-event-handler&lt;/code&gt;で上記のスクリプトを指定するだけ．イベントハンドラの出力はDEBUGモードの時に出力されるので，ログレベルをDEBUGにしておく．&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-bash&#34;&gt;$ serf agent -node=agent1 -log-level=debug -event-handler=&#39;ruby handler.rb&#39;
+==&amp;gt; Starting Serf agent...
+==&amp;gt; Starting Serf agent RPC...
+==&amp;gt; Serf agent running!
+         Node name: &#39;agent1&#39;
+         Bind addr: &#39;0.0.0.0:7946&#39;
+         RPC addr: &#39;127.0.0.1:7373&#39;
+         Encrypted: false
+         Snapshot: false
+         Profile: lan
+
+==&amp;gt; Log data will now stream in as it occurs:
+
+    2014/03/25 16:43:00 [INFO] agent: Serf agent starting
+    2014/03/25 16:43:00 [INFO] serf: EventMemberJoin: agent1 10.0.2.15
+    2014/03/25 16:43:01 [INFO] agent: Received event: member-join
+    2014/03/25 16:43:01 [DEBUG] agent: Event &#39;member-join&#39; script output:
+    New event: member-join.
+    agent1  10.0.2.15
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;ログの最終行をみると，イベントに対して，スクリプトを実行しているのがわかる．今回の&lt;code&gt;
+SERF_EVENT&lt;/code&gt;は&lt;code&gt;member-join&lt;/code&gt;で，それを出力している．&lt;/p&gt;
+
+&lt;h3 id=&#34;イベントハンドラの種類:949cea981e22858e171e92950843d958&#34;&gt;イベントハンドラの種類&lt;/h3&gt;
+
+&lt;p&gt;Serfが発行するイベントは以下．&lt;/p&gt;
+
+&lt;ul&gt;
+&lt;li&gt;&lt;code&gt;member-join&lt;/code&gt; メンバーのjoin&lt;/li&gt;
+&lt;li&gt;&lt;code&gt;member-leave&lt;/code&gt; メンバーの離脱（&lt;code&gt;Ctrl+c&lt;/code&gt;による離脱，正常終了の場合）&lt;/li&gt;
+&lt;li&gt;&lt;code&gt;member-failed&lt;/code&gt; メンバーのダウン，Failed（異常終了の場合）&lt;/li&gt;
+&lt;li&gt;&lt;code&gt;member-update&lt;/code&gt; メンバーのアップデート&lt;/li&gt;
+&lt;li&gt;&lt;code&gt;member-reap&lt;/code&gt; メンバーの解除（_failed_メンバーへの再接続のタイムアウト）&lt;/li&gt;
+&lt;li&gt;&lt;code&gt;user&lt;/code&gt; &lt;a href=&#34;#ce&#34;&gt;カスタムイベント&lt;/a&gt;の発行&lt;/li&gt;
+&lt;li&gt;&lt;code&gt;query&lt;/code&gt; &lt;a href=&#34;#q&#34;&gt;カスタムクエリ&lt;/a&gt;の発行&lt;/li&gt;
+&lt;/ul&gt;
+
+&lt;h3 id=&#34;環境変数:949cea981e22858e171e92950843d958&#34;&gt;環境変数&lt;/h3&gt;
+
+&lt;p&gt;イベントハンドラが実行されると，Serfは以下のような環境変数を設定する．&lt;/p&gt;
+
+&lt;ul&gt;
+&lt;li&gt;&lt;code&gt;SERF_EVENT&lt;/code&gt; 発生したイベント名&lt;/li&gt;
+&lt;li&gt;&lt;code&gt;SERF_SELF_NAME&lt;/code&gt; イベントを発行したノード名&lt;/li&gt;
+&lt;li&gt;&lt;code&gt;SERF_SELF_ROLE&lt;/code&gt; イベントを発行したノードのrole名&lt;/li&gt;
+&lt;li&gt;&lt;code&gt;SERF_TAG_${TAG}&lt;/code&gt; エージェントが持つタグ名&lt;/li&gt;
+&lt;li&gt;&lt;code&gt;SERF_USER_EVENT&lt;/code&gt; &lt;a href=&#34;#ce&#34;&gt;カスタムイベント&lt;/a&gt;名&lt;/li&gt;
+&lt;li&gt;&lt;code&gt;SERF_USER_LTIME&lt;/code&gt; &lt;a href=&#34;#ce&#34;&gt;カスタムイベント&lt;/a&gt;の&lt;code&gt;LamportTime&lt;/code&gt;&lt;/li&gt;
+&lt;li&gt;&lt;code&gt;SERF_QUERY_NAME&lt;/code&gt; &lt;a href=&#34;#q&#34;&gt;カスタムクエリ&lt;/a&gt;名&lt;/li&gt;
+&lt;li&gt;&lt;code&gt;SERF_QUERY_LTIME&lt;/code&gt; &lt;a href=&#34;#q&#34;&gt;カスタムクエリ&lt;/a&gt;の&lt;code&gt;LamportTime&lt;/code&gt;&lt;/li&gt;
+&lt;/ul&gt;
+
+&lt;p&gt;&lt;code&gt;LamportTime&lt;/code&gt;は&lt;a href=&#34;http://en.wikipedia.org/wiki/Lamport_timestamps&#34;&gt;Lamport timestamps&lt;/a&gt;を参照．&lt;/p&gt;
+
+&lt;h3 id=&#34;特定のイベントに対するイベントハンドラの登録:949cea981e22858e171e92950843d958&#34;&gt;特定のイベントに対するイベントハンドラの登録&lt;/h3&gt;
+
+&lt;p&gt;特定のイベントに対して，イベントハンドラを登録することもできる．&lt;/p&gt;
+
+&lt;p&gt;&lt;code&gt;member-leave&lt;/code&gt;のときのみ，&lt;code&gt;handler.rb&lt;/code&gt;を実行したい場合は，&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-bash&#34;&gt;$ serf agent -node=agent1 -log-level=debug -event-handler member-leave=&#39;ruby handler.rb&#39;
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;&lt;code&gt;memver-join&lt;/code&gt;と&lt;code&gt;member-leave&lt;/code&gt;のときのみ，&lt;code&gt;handler.rb&lt;/code&gt;を実行した場合は，&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-bash&#34;&gt;$ serf agent -node=agent1 -log-level=debug -event-handler member-join,member-leave=&#39;ruby handler.rb&#39;
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;&lt;a href=&#34;#m&#34;&gt;目次へ&lt;/a&gt;&lt;/p&gt;
+
+&lt;h2 id=&#34;ce&#34;&gt;カスタムイベント&lt;/h2&gt;
+
+&lt;p&gt;joinやleave等の標準のイベントに加えて，ユーザ独自のイベントをクラスタ内に伝搬させることもできる．このイベントには，基になるノードもないし，反応も期待しない．また，全てのノードに伝搬したか保証できない．カスタムイベントは，デプロイのトリガー，クラスタの再起動などに使われる．&lt;/p&gt;
+
+&lt;h3 id=&#34;カスタムイベントの発行:949cea981e22858e171e92950843d958&#34;&gt;カスタムイベントの発行&lt;/h3&gt;
+
+&lt;p&gt;あらかじめエージェントを起動しておく．例として，二つのホスト（&lt;code&gt;n1&lt;/code&gt;と&lt;code&gt;n2&lt;/code&gt;）で&lt;code&gt;agent1&lt;/code&gt;と&lt;code&gt;agent2&lt;/code&gt;を起動し，クラスタを形成する．&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-bash&#34;&gt;$ vagrant ssh n1
+vagrant@n1:$ serf agent -node=agent1 -bind=172.20.20.10
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-bash&#34;&gt;$ vagrant ssh n2
+vagrant@n2:$ serf agent -node=agent2 -bind=172.20.20.11 -join=172.20.20.10
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-bash&#34;&gt;$ serf members
+agent1  172.20.20.10:7946  alive
+agent2  172.20.20.11:7946  alive
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;カスタムイベントを発行するには，&lt;code&gt;serf event&lt;/code&gt;コマンドを実行する．&lt;code&gt;hello&lt;/code&gt;というイベントを発行する．&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-bash&#34;&gt;$ vagrant ssh n2
+vagrant@n2:$ vagrant event hello
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;それぞれのエージェントのログをみると，&lt;code&gt;hello&lt;/code&gt;イベントを受け取っていることがわかる&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-bash&#34;&gt;#agent1
+2014/03/26 14:10:38 [INFO] agent: Received event: user-event: hello
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-bash&#34;&gt;#agent2
+2014/03/26 14:10:38 [INFO] agent: Received event: user-event: hello
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;h3 id=&#34;カスタムイベントに対するイベントハンドラ:949cea981e22858e171e92950843d958&#34;&gt;カスタムイベントに対するイベントハンドラ&lt;/h3&gt;
+
+&lt;p&gt;標準のイベントと同様に，イベントハンドラはこのカスタムイベントに反応することができる．&lt;/p&gt;
+
+&lt;p&gt;すべてのカスタムイベントに対して，&lt;code&gt;handler.rb&lt;/code&gt;を実行したい場合，&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-bash&#34;&gt;$ serf agent -log-level=debug -event-handler user=&amp;quot;ruby handler.rb&amp;quot;
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;特定のカスタムイベントに対するイベントハンドラは，&lt;code&gt;user:イベント名&lt;/code&gt;で登録する．例えば，上の&lt;code&gt;hello&lt;/code&gt;カスタムイベントに対して，&lt;code&gt;handler.rb&lt;/code&gt;を実行したい場合，&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-bash&#34;&gt;$ serf agent -log-level=debug -event-handler user:hello=&amp;quot;ruby handler.rb&amp;quot;
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;h3 id=&#34;イベントペイロード:949cea981e22858e171e92950843d958&#34;&gt;イベントペイロード&lt;/h3&gt;
+
+&lt;p&gt;イベント名を伝搬するだけではなく，イベント名に紐づく任意のデータ（ペイロード）を同時に伝搬させることができる．&lt;/p&gt;
+
+&lt;p&gt;例えば，&lt;code&gt;name&lt;/code&gt;というイベント名で，&lt;code&gt;deeeet&lt;/code&gt;を伝搬させるには以下のようにする．&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-bash&#34;&gt;$ serf event name deeeet
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;データは，標準入力として入力されるので，イベントハンドラ内で利用できる．&lt;/p&gt;
+
+&lt;p&gt;SerfのゴシッププロトコルはUDPを使っているので，理論的には，最大積載量は1KB未満であり，Serfはさらにそれを制限している．&lt;/p&gt;
+
+&lt;p&gt;&lt;a href=&#34;#m&#34;&gt;目次へ&lt;/a&gt;&lt;/p&gt;
+
+&lt;h2 id=&#34;q&#34;&gt;カスタムクエリ&lt;/h2&gt;
+
+&lt;p&gt;&lt;a href=&#34;#ce&#34;&gt;カスタムイベント&lt;/a&gt;は，イベントを伝搬させるだけだが，カスタムクエリは各ノードにレスポンスを要求する．カスタムクエリは，イベントよりも柔軟で，伝搬させるべきノードをフィルタリングして，さらに好きなレスポンスを返させることができる．カスタムクエリは，ノードの情報種集などに利用される．&lt;/p&gt;
+
+&lt;h3 id=&#34;カスタムクエリの発行:949cea981e22858e171e92950843d958&#34;&gt;カスタムクエリの発行&lt;/h3&gt;
+
+&lt;p&gt;あらかじめエージェントを起動しておく．例として，二つのホスト（&lt;code&gt;n1&lt;/code&gt;と&lt;code&gt;n2&lt;/code&gt;）で&lt;code&gt;agent1&lt;/code&gt;と&lt;code&gt;agent2&lt;/code&gt;を起動し，クラスタを形成する．&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-bash&#34;&gt;$ vagrant ssh n1
+vagrant@n1:$ serf agent -node=agent1 -bind=172.20.20.10
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-bash&#34;&gt;$ vagrant ssh n2
+vagrant@n2:$ serf agent -node=agent2 -bind=172.20.20.11 -join=172.20.20.10
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-bash&#34;&gt;$ serf members
+agent1  172.20.20.10:7946  alive
+agent2  172.20.20.11:7946  alive
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;カスタムクエリを発行するには，&lt;code&gt;serf query&lt;/code&gt;コマンドを実行する．&lt;code&gt;uptime&lt;/code&gt;というクエリを発行する．&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-bash&#34;&gt;$ serf query uptime
+Query &#39;uptime&#39; dispatched
+Ack from &#39;agent2&#39;
+Ack from &#39;agent1&#39;
+Total Acks: 2
+Total Responses: 0
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;カスタムイベントとはことなり，各ノードからレスポンスが返ってきている．それぞれのエージェントのログをみると，&lt;code&gt;uptime&lt;/code&gt;クエリを受け取っていることがわかる．&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-bash&#34;&gt;# agent1
+2014/03/26 15:18:32 [INFO] agent: Received event: query: uptime
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-bash&#34;&gt;# agent2
+2014/03/26 15:18:32 [INFO] agent: Received event: query: uptime
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;h3 id=&#34;カスタムクエリに対するイベントハンドラ:949cea981e22858e171e92950843d958&#34;&gt;カスタムクエリに対するイベントハンドラ&lt;/h3&gt;
+
+&lt;p&gt;カスタムクエリが強力なのは，イベントハンドラの出力結果をレスポンスとして返させることができること．&lt;/p&gt;
+
+&lt;p&gt;特定のクエリに対するイベントハンドラは，&lt;code&gt;query:クエリ名&lt;/code&gt;で登録する．例えば，上の&lt;code&gt;uptime&lt;/code&gt;カスタムクエリに対して，&lt;code&gt;uptime&lt;/code&gt;を実行したい場合は，以下のようにする．&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-bash&#34;&gt;$ serf agent -node=agent1 -bind=172.20.20.10 -event-handler query:uptime=uptime
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;この状態で，&lt;code&gt;uptime&lt;/code&gt;クエリを実行すると，&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-bash&#34;&gt;$ serf query uptime
+Query &#39;uptime&#39; dispatched
+Ack from &#39;agent1&#39;
+Response from &#39;agent1&#39;:  15:29:29 up 2 days,  6:27,  2 users,  load average: 0.13, 0.25, 0.30
+Total Acks: 1
+Total Responses: 1
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;&lt;code&gt;agent1&lt;/code&gt;から&lt;code&gt;uptime&lt;/code&gt;の実行結果が返ってきているのがわかる．&lt;/p&gt;
+
+&lt;h3 id=&#34;クエリペイロード:949cea981e22858e171e92950843d958&#34;&gt;クエリペイロード&lt;/h3&gt;
+
+&lt;p&gt;クエリ名を伝搬するだけではなく，クエリ名に紐づく任意のデータ（ペイロード）を同時に伝搬させることができる．&lt;/p&gt;
+
+&lt;p&gt;例えば，nameというクエリ名で，deeeetを伝搬させるには以下のようにする．&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-bash&#34;&gt;$ serf query name deeeet
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;データは，標準入力として入力されるので，イベントハンドラ内で利用できる．&lt;/p&gt;
+
+&lt;p&gt;SerfのゴシッププロトコルはUDPを使っているので，理論的には，最大積載量は1KB未満であり，Serfはさらにそれを制限している．&lt;/p&gt;
+
+&lt;h3 id=&#34;伝搬させるノードの制限:949cea981e22858e171e92950843d958&#34;&gt;伝搬させるノードの制限&lt;/h3&gt;
+
+&lt;p&gt;クエリを伝搬させるべきノードを制限することができる．例えば&lt;code&gt;agent1&lt;/code&gt;のみに伝搬させたい場合は，&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-bash&#34;&gt;$ serf query -node agent1 uptime
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;h3 id=&#34;カスタムクエリの応用例:949cea981e22858e171e92950843d958&#34;&gt;カスタムクエリの応用例&lt;/h3&gt;
+
+&lt;p&gt;イベントハンドラにシェルを指定し，クエリペイロードを用いると，任意のコマンドを発行し，その結果を受け取ることができる．&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-bash&#34;&gt;$ serf agent -node=agent1 -bind=172.20.20.10 -event-handler query:sh=&#39;/bin/bash&#39;
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-bash&#34;&gt;$ serf query sh &#39;service nginx reload&#39;
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;&lt;a href=&#34;http://www.slideshare.net/sonots/serf-iiconf-20140325&#34;&gt;&amp;ldquo;Serf という Orchestration ツール #immutableinfra&amp;rdquo;&lt;/a&gt;を参考．&lt;/p&gt;
+
+&lt;p&gt;&lt;a href=&#34;#m&#34;&gt;目次へ&lt;/a&gt;&lt;/p&gt;
+
+&lt;h2 id=&#34;com&#34;&gt;コマンド一覧&lt;/h2&gt;
+
+&lt;p&gt;v0.5.0現在で利用可能なコマンド一覧．&lt;/p&gt;
+
+&lt;p&gt;メンバーシップ関連&lt;/p&gt;
+
+&lt;ul&gt;
+&lt;li&gt;&lt;code&gt;serf agent&lt;/code&gt; エージェントを起動する&lt;/li&gt;
+&lt;li&gt;&lt;code&gt;serf join&lt;/code&gt; クラスタに参入する&lt;/li&gt;
+&lt;li&gt;&lt;code&gt;serf leave&lt;/code&gt; クラスタから離脱する&lt;/li&gt;
+&lt;li&gt;&lt;code&gt;serf force-leave&lt;/code&gt; メンバーを離脱させる&lt;/li&gt;
+&lt;li&gt;&lt;code&gt;serf memers&lt;/code&gt; クラスタのメンバーを確認する&lt;/li&gt;
+&lt;/ul&gt;
+
+&lt;p&gt;カスタムメッセージ関連&lt;/p&gt;
+
+&lt;ul&gt;
+&lt;li&gt;&lt;code&gt;serf event&lt;/code&gt; カスタムイベントを配信する&lt;/li&gt;
+&lt;li&gt;&lt;code&gt;serf query&lt;/code&gt; カスタムクエリを配信する&lt;/li&gt;
+&lt;/ul&gt;
+
+&lt;p&gt;デバッグ関連&lt;/p&gt;
+
+&lt;ul&gt;
+&lt;li&gt;&lt;code&gt;serf monitor&lt;/code&gt; 起動しているエージェントの接続して，そのログを確認する&lt;/li&gt;
+&lt;li&gt;&lt;code&gt;serf reachability&lt;/code&gt; ネットワークの接続確認をする&lt;/li&gt;
+&lt;/ul&gt;
+
+&lt;p&gt;その他&lt;/p&gt;
+
+&lt;ul&gt;
+&lt;li&gt;&lt;code&gt;serf keygen&lt;/code&gt; &lt;a href=&#34;http://www.serfdom.io/docs/agent/encryption.html&#34;&gt;暗号通信&lt;/a&gt;を行うための暗号キーを生成する&lt;/li&gt;
+&lt;li&gt;&lt;code&gt;serf tag&lt;/code&gt; クラスタのメンバーのタグを変更する&lt;/li&gt;
+&lt;/ul&gt;
+
+&lt;p&gt;&lt;a href=&#34;#m&#34;&gt;目次へ&lt;/a&gt;&lt;/p&gt;
+
+&lt;h2 id=&#34;ref&#34;&gt;参考&lt;/h2&gt;
+
+&lt;ul&gt;
+&lt;li&gt;&lt;a href=&#34;http://mizzy.org/blog/2013/10/29/1/&#34;&gt;インフラ系技術の流れ&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a href=&#34;http://blog.glidenote.com/blog/2013/10/30/serf-haproxy/&#34;&gt;Serf+HAProxyで作るAutomatic Load Balancer&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a href=&#34;http://jedipunkz.github.io/blog/2013/11/10/serf/&#34;&gt;Serf を使ってみた&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a href=&#34;http://pocketstudio.jp/log3/2013/11/12/raspberrypi-notify-with-serf/&#34;&gt;RaspberryPi起動・停止時にSerfで画面に通知する方法&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a href=&#34;http://www.slideshare.net/sonots/serf-iiconf-20140325&#34;&gt;&amp;ldquo;Serf という Orchestration ツール #immutableinfra&amp;rdquo;&lt;/a&gt;&lt;/li&gt;
+&lt;/ul&gt;
+</description>
+    </item>
+    
+  </channel>
+</rss>

@@ -1,0 +1,206 @@
+<!doctype html>
+<html>
+  <head>
+    <meta http-equiv="content-type" content="text/html; charset=utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    
+    <title>Dockerで継続的インテグレーション | SOTA</title>
+    
+    <link href="https://fonts.googleapis.com/css?family=Lato%3a900" rel="stylesheet" type="text/css">
+    <link rel="stylesheet" href="/css/main.css">
+    <link rel="shortcut icon" href="/favicon.png" type="image/x-icon" />
+    <link href="http://deeeet.com//index.xml" rel="alternate" type="application/rss+xml" title="" />
+    <meta name="title" content="http://deeeet.com/writing/2013/12/13/ci-with-docker/">
+    <link rel="canonical" href="http://deeeet.com/writing/2013/12/13/ci-with-docker/">
+    
+    <meta property="og:title" content="Dockerで継続的インテグレーション"/>
+    <meta property="og:url" content="http://deeeet.com/writing/2013/12/13/ci-with-docker/"/>
+  </head>
+  
+  <body>
+    <section class="site-nav">
+      <header>
+        <nav id="navigation">
+          <ul class="menu">
+            <li><a href="https://github.com/tcnksm/talks">Talks</a></li>
+            <li><a href="https://tcnksm.exposure.co/">Photos</a></li>
+          </ul>
+
+          <a class="name" href="/">SOTA</a>
+        </nav>        
+      </header>
+    </section>
+    
+
+
+<article>
+  <div class="container">
+    <header>
+      <div class="meta">
+        <time pubdate datetime="2013-12-13" title="2013-12-13">December 13, 2013</time>
+      </div>
+      <h1 class="title">Dockerで継続的インテグレーション</h1>
+    </header>
+    
+    <section>
+      
+
+<p><a href="http://deeeet.com/writing/2013/12/12/docker-rbenv/">Dockerで複数バージョンのrubyがインストールされたイメージを作る</a>を使って，ローカルでTravis CI的なビルドテストを実現する方法を書く．</p>
+
+<h2 id="準備-os-x:14f53403b0002f0c6ff7df7a9c6d3990">準備 (OS X)</h2>
+
+<p>Vagrantを使う．バージョン1.4からはDockerのprovisioningに対応してるのでそれを使う．
+<a href="http://www.vagrantup.com/downloads.html">Download Vagrant - Vagrant</a>より.dmgをダウンロードしてきてインストール.</p>
+
+<p>インストールしたら，rubyプロジェクトに移動して以下を実行する．</p>
+
+<pre><code class="language-bash">vagrant init precise64 http://files.vagrantup.com/precise64.box
+</code></pre>
+
+<p>Vagrantfileを以下のように編集する．ここでは，<a href="https://github.com/tcnksm/docker-rbenv">docker-rbenv</a>で作成した，複数バージョンのruby (1.8,7と1.9.3，2.0.0)とそれぞれにbundlerがインストールされたDockerイメージ<a href="https://index.docker.io/u/tcnksm/rbenv-rubygems/">tcnksm/rbenv-rubygems</a>を用いる．</p>
+
+<pre><code class="language-ruby">Vagrant.configure(&quot;2&quot;) do |config|
+    config.vm.box = &quot;precise64&quot;
+    config.vm.provision :docker do |d|
+        d.pull_images &quot;tcnksm/rbenv&quot;
+    end
+end
+</code></pre>
+
+<p>あらかじめ仮想サーバを起動しておく．</p>
+
+<pre><code>vagrant up
+</code></pre>
+
+<p>Dockerの実行は仮想サーバーへのssh経由で行う．</p>
+
+<pre><code>vagrant ssh-config --host docker-host &gt;&gt; ~/.ssh/config
+</code></pre>
+
+<p>(注: Vagrant1.4のバグでsshの設定以外の出力をすることがあるので，適宜<code>~/.ssh/config</code>を編集してそれを消す)</p>
+
+<h2 id="実行したいテストの記述:14f53403b0002f0c6ff7df7a9c6d3990">実行したいテストの記述</h2>
+
+<p>プロジェクトのルートに実行したいテストをシェルスクリプトで記述する．</p>
+
+<pre><code class="language-bash"># docker.sh
+
+for v in 1.8.7-p371 1.9.3-p392 2.0.0-p353
+do
+    rbenv global $v
+    bundle
+    rspec
+done            
+</code></pre>
+
+<p>記述しているのはバージョンをそれぞれ1.8.7，1.9.3，2.0.0と切り替えて，それぞれに対してrubygemsをインストールして，rspecテストを実行している．(毎回bunldeを実行するのがたるい場合は，あらかじめbundleを実行してそれをコミットしてイメージを作ってしまえばよい，例えば，<a href="http://blog.powpark.com/2013/11/11/using-docker-and-vagrant-on-mac-osx-for-a-ruby-on-rails-app/">Using Docker and Vagrant on Mac OS X with a Ruby on Rails application</a>も同様のことをしている)</p>
+
+<h2 id="テストの実行:14f53403b0002f0c6ff7df7a9c6d3990">テストの実行</h2>
+
+<p>OS X</p>
+
+<pre><code>ssh docker-host docker run -v '/vagrant:/work' -w /work tcnksm/rbenv-rubygems sh -ex docker.sh
+</code></pre>
+
+<p>ssh経由で，dockerを実行する．</p>
+
+<p>Linux</p>
+
+<pre><code>docker run -v &quot;$PWD:/work&quot; -w /work tcnksm/rbenv-rubygems sh -ex docker.sh
+</code></pre>
+
+<p><code>-v</code>でプロジェクトのディレクトリをdockerのイメージ内にマウントする．<code>-w</code>でカレントディレクトリをマウントしたディレクトリに変更．後は，上で記述したテストを実行するだけ．コンテナは破棄されるのでこれらは何度も実行できる．しかもイメージのpullなどは済んでいるため，起動などの時間がない．テストの時間のみ．</p>
+
+<h2 id="git-hook:14f53403b0002f0c6ff7df7a9c6d3990">git-hook</h2>
+
+<p><code>git push</code>もしくは<code>git commit</code>するたびにテストを走らせるには，<code>.git/hooks</code>内のファイルを編集すればよい．例えば，<code>git push</code>する度にテストを行いたい場合は，<code>.git/hooks/pre-push</code>を作成する．例えば, OSXの場合は以下のように記述する．</p>
+
+<pre><code># pre-push
+ssh docker-host docker run -v '/vagrant:/work' -w /work tcnksm/rbenv-rubygems sh -ex docker.sh
+</code></pre>
+
+<h2 id="guard:14f53403b0002f0c6ff7df7a9c6d3990">Guard</h2>
+
+<p>Guardと連携して，.rbファイルが更新される度にテストを実行する場合は，<code>Guardfile</code>を以下のように編集する．</p>
+
+<pre><code>guard :rspec do
+  watch(%r{^spec/.+_spec\.rb$}) { `ssh docker-host docker run -v '/vagrant:/work' -w /work tcnksm/rbenv sh -ex docker.sh` }
+end
+</code></pre>
+
+<h2 id="まとめ:14f53403b0002f0c6ff7df7a9c6d3990">まとめ</h2>
+
+<p>上記を簡単なプロジェクトを作成してやってみたが，爆速．guardを使っても勝手に走ってるので気にならない．これらを作るのはとても簡単だった．これは，rubyはノウハウが溜まっていて，これするときにはこれというのがほとんど定型的になっているからだと思う．コードに落としやすい．</p>
+
+<h2 id="今後の課題:14f53403b0002f0c6ff7df7a9c6d3990">今後の課題</h2>
+
+<ul>
+<li><code>.travis.yml</code>のような設定ファイルを準備するだけにしたい（シェルスクリプトを書くのはたるい）</li>
+<li>テストの実行結果を巧くキャッチしたい</li>
+</ul>
+
+<h2 id="参考:14f53403b0002f0c6ff7df7a9c6d3990">参考</h2>
+
+<ul>
+<li><a href="http://www.sitepoint.com/docker-for-rubyists/">Docker for Rubyists - SitePoint</a></li>
+<li><a href="http://blog.relateiq.com/a-docker-dev-environment-in-24-hours-part-2-of-2/">A Docker Dev Environment in 24 Hours!</a></li>
+<li><a href="https://github.com/miyagawa/docker-plenv-vanilla">miyagawa/docker-plenv-vanilla</a></li>
+<li><a href="http://rebuild.fm/14/">Rebuild: 14: DevOps with Docker, chef and serverspec (naoya, mizzy)</a></li>
+<li><a href="https://gist.github.com/tcnksm/7700047">Docker 虎の巻</a></li>
+</ul>
+
+      <div class="social">
+  
+  
+  <a href="https://twitter.com/share" class="twitter-share-button" data-via="deeeet" data-count="none">Tweet</a>
+  
+  
+</div>
+
+    </section>
+
+    <footer>
+      <address>
+        
+        <img src="/images/bio.jpeg"/>
+        
+        <p>Written by <strong><a rel="author" href="https://twitter.com/deeeet" title="Taichi Nakashima" target="_blank">Taichi Nakashima</a></strong><br>
+          <span class="muted">A Tokyo based PaaS engineer. Please contact me via twitter.</span>
+        </p>
+      </address>
+
+    </footer>
+
+  </div>
+</article>
+
+<script type="text/javascript" src="//ajax.googleapis.com/ajax/libs/jquery/1.7.2/jquery.min.js"></script>
+<script type="text/javascript" src="/js/main.js"></script>
+
+<script>!function(d,s,id){var js,fjs=d.getElementsByTagName(s)[0],p=/^http:/.test(d.location)?'http':'https';if(!d.getElementById(id)){js=d.createElement(s);js.id=id;js.src=p+'://platform.twitter.com/widgets.js';fjs.parentNode.insertBefore(js,fjs);}}(document, 'script', 'twitter-wjs');</script>
+
+
+<script type="text/javascript">var HN=[];HN.factory=function(e){return function(){HN.push([e].concat(Array.prototype.slice.call(arguments,0)))};},HN.on=HN.factory("on"),HN.once=HN.factory("once"),HN.off=HN.factory("off"),HN.emit=HN.factory("emit"),HN.load=function(){var e="hn-button.js";if(document.getElementById(e))return;var t=document.createElement("script");t.id=e,t.src="//hn-button.herokuapp.com/hn-button.js";var n=document.getElementsByTagName("script")[0];n.parentNode.insertBefore(t,n)},HN.load();</script>
+
+
+  <script>
+  (function(i,s,o,g,r,a,m){i['GoogleAnalyticsObject']=r;i[r]=i[r]||function(){
+  (i[r].q=i[r].q||[]).push(arguments)},i[r].l=1*new Date();a=s.createElement(o),
+  m=s.getElementsByTagName(o)[0];a.async=1;a.src=g;m.parentNode.insertBefore(a,m)
+  })(window,document,'script','//www.google-analytics.com/analytics.js','ga');
+
+  ga('create', 'UA-45390253-1', 'auto');
+  ga('send', 'pageview');
+
+</script>
+
+
+
+<script>
+  $(document).ready(function() {
+  
+  $('p:has(img)').css('text-align', 'center');
+  $('iframe').css('style', 'display: block; margin: 0px auto;');
+  });
+</script>
+

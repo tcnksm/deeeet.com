@@ -1,0 +1,343 @@
+<!doctype html>
+<html>
+  <head>
+    <meta http-equiv="content-type" content="text/html; charset=utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    
+    <title>CoreOSに入門した | SOTA</title>
+    
+    <link href="https://fonts.googleapis.com/css?family=Lato%3a900" rel="stylesheet" type="text/css">
+    <link rel="stylesheet" href="/css/main.css">
+    <link rel="shortcut icon" href="/favicon.png" type="image/x-icon" />
+    <link href="http://deeeet.com//index.xml" rel="alternate" type="application/rss+xml" title="" />
+    <meta name="title" content="http://deeeet.com/writing/2014/11/17/coreos/">
+    <link rel="canonical" href="http://deeeet.com/writing/2014/11/17/coreos/">
+    
+    <meta property="og:title" content="CoreOSに入門した"/>
+    <meta property="og:url" content="http://deeeet.com/writing/2014/11/17/coreos/"/>
+  </head>
+  
+  <body>
+    <section class="site-nav">
+      <header>
+        <nav id="navigation">
+          <ul class="menu">
+            <li><a href="https://github.com/tcnksm/talks">Talks</a></li>
+            <li><a href="https://tcnksm.exposure.co/">Photos</a></li>
+          </ul>
+
+          <a class="name" href="/">SOTA</a>
+        </nav>        
+      </header>
+    </section>
+    
+
+
+<div class="container">
+  <div class="article-cover">
+    <div>
+      <img src="/images/coreos.png" class="image">
+    </div>
+  </div>
+</div>
+
+<article>
+  <div class="container">
+    <header>
+      <div class="meta">
+        <time pubdate datetime="2014-11-17" title="2014-11-17">November 17, 2014</time>
+      </div>
+      <h1 class="title">CoreOSに入門した</h1>
+    </header>
+    
+    <section>
+      
+
+<p><a href="https://coreos.com/">CoreOS is Linux for Massive Server Deployments · CoreOS</a></p>
+
+<p><a href="http://www.meetup.com/Docker-Tokyo/events/218561812/">CoreOS + Docker Meetup Tokyo #1</a>に参加してCoreOSにめっちゃ感動したので，CoreOSに入門していろいろ触ってみた．</p>
+
+<p>まず，CoreOSの概要とそれを支える技術について説明する．次に実際にDigitalOcenan上にVagrantを使って実際にCoreOSクラスタを立てて，CoreOSで遊ぶ方法について書く．</p>
+
+<h2 id="coreosとは何か:ed60bb4aab1bbf7e1b4034d93c897a4f">CoreOSとは何か</h2>
+
+<p><a href="https://coreos.com/">CoreOS</a>は，GoogleやFacebook，Twitterといった企業が実現している柔軟かつスケーラブル，耐障害性の高いインフラの構築を目的としたLinuxディストリビューションである．軽量かつ使い捨てを前提にしており，クラウドなアーキテクチャのベストプラクティスを取り入れている．CoreOSの特徴は大きく4つ挙げられる．</p>
+
+<ul>
+<li>ミニマルなデザイン</li>
+<li>容易かつ安全なOSアップデート</li>
+<li>Dockerコンテナによるアプリケーションの起動</li>
+<li>クラスタリング</li>
+</ul>
+
+<p>CoreOSはとてもミニマルである．従来のLinuxディストリビューションが機能を追加することでその価値を高めていったのに対して，CoreOSは必要最低限まで機能を削ぎ落としていることに価値がある（<a href="http://agilecatcloud.com/2014/11/17/coreos-%E3%81%AE%E8%AA%BF%E6%9F%BB%EF%BC%9A%E8%B6%B3%E3%81%97%E7%AE%97%E3%81%8B%E3%82%89%E5%BC%95%E3%81%8D%E7%AE%97%E3%81%B8%E3%81%A8%E3%80%81linux-%E3%83%87%E3%82%A3%E3%82%B9%E3%83%88%E3%83%AA/">&ldquo;CoreOS の調査：足し算から引き算へと，Linux ディストリビューションを再編する&rdquo;</a>）．</p>
+
+<p>CoreOSは安全かつ容易なOSアップデート機構を持っている．これには<a href="https://code.google.com/p/omaha/">Omaha</a>というChromeOSやChromeの更新に利用されているUpdate Engineを使っており，RootFSを丸ごと入れ替えることでアップデートを行う．これによりShellShockのような脆弱性が発見されても，いちいちパッチを当てるといったことやらずに済む．</p>
+
+<p>CoreOSは専用のパッケージマネージャーをもたない．またRubyやPythonといった言語のRuntimeも持たない．全てのアプリケーションをDockerコンテナとして動作させる．これによりプロセスの隔離と，安全なマシンリソースの共有，アプリケーションのポータビリティという恩恵を受けることができる．</p>
+
+<p>CoreOSはクラスタリングの機構を標準で持っている．クラスタリングについては，先週来日していたCoreOSのKelsey氏は&rdquo;Datacenter as a Computer&rdquo;という言葉を使っていた．データセンターの大量のサーバー群からクラスタを構築してまるでそれが1つのコンピュータとして扱えるようにすることをゴールとしているといった説明をしていた．</p>
+
+<p>CoreOSはクラウドネイティブなOSである．Amazon EC2，DigitalOcean，Rackspace，OpenStack，QEMU/KVMといったあらゆるプラットフォームが対応を始めている．1つのクラスタを異なる2つのクラウドサーバにまたがって構築することもできるし，クラウドと自社のベアメタルサーバーを使って構築することもできる．</p>
+
+<p>CoreOSの特徴については，<a href="https://twitter.com/mopemope">@mopemope</a>さんの <a href="http://qiita.com/mopemope/items/fa9424b094aae3eac580">&ldquo;CoreOS入門 - Qiita&rdquo;</a>や，<a href="https://twitter.com/yungsang">@yungsang</a>さんの<a href="https://gist.github.com/YungSang/73148282c1a081adb2ba">&ldquo;CoreOS とその関連技術に関するここ半年間の私の活動まとめ&rdquo;</a>が詳しい．</p>
+
+<h2 id="coreosを支える技術:ed60bb4aab1bbf7e1b4034d93c897a4f">CoreOSを支える技術</h2>
+
+<p>CoreOSを支える技術キーワードを挙げるとすれば以下の3つになる．</p>
+
+<ul>
+<li><a href="https://www.docker.com/">Docker</a></li>
+<li><a href="https://github.com/coreos/etcd">etcd</a></li>
+<li><a href="https://github.com/coreos/fleet">fleet</a></li>
+</ul>
+
+<p>これらについてざっと説明する．</p>
+
+<h3 id="docker:ed60bb4aab1bbf7e1b4034d93c897a4f">Docker</h3>
+
+<p>CoreOSは専用のパッケージマネージャーをもたない．またRubyやPythonといった言語のRuntimeも持たない．全てのアプリケーションをDockerコンテナとして動作させる．</p>
+
+<p><img src="https://coreos.com/assets/images/media/Host-Diagram.png" alt="https://coreos.com/assets/images/media/Host-Diagram.png" />
+</p>
+
+<p><a href="https://coreos.com/assets/images/media/Host-Diagram.png">https://coreos.com/assets/images/media/Host-Diagram.png</a></p>
+
+<p>Dockerを使うことで上図のようにコンテナによるプロセスの隔離と，安全なマシンリソースの共有，アプリケーションのポータビリティという恩恵を受けることができる．</p>
+
+<h3 id="etcd:ed60bb4aab1bbf7e1b4034d93c897a4f">etcd</h3>
+
+<p>CoreOSは複数のマシンからクラスタを形成する．クラスタを形成するために，CoreOSは<code>etcd</code>という分散Key-Valuesストアを使い，各種設定をノード間で共有する（<code>etcd</code>ってのは&rdquo;<code>/etc</code> distributed&rdquo;という意味）．</p>
+
+<p><img src="/images/etcd.png" class="image"></p>
+
+<p><a href="https://coreos.com/assets/images/media/Three-Tier-Webapp.png">https://coreos.com/assets/images/media/Three-Tier-Webapp.png</a></p>
+
+<p><code>etcd</code>はクラスタのサービスディスカバリーとしても利用される．クラスタのメンバーの状態などを共有し，共有情報に基づき動的にアプリケーションの設定を行う．これらを行うetcdのコアはRaftのコンセンサスアルゴリズムである．Raftについては，<a href="http://thesecretlivesofdata.com/raft/">&ldquo;Raft - The Secret Lives of Data&rdquo;</a>を見るとビジュアルにその動作を見ることができる．</p>
+
+<p>etcdは<a href="https://github.com/coreos/locksmith">locksmith</a>というクラスタの再起動時のリブートマネジャーにも使われている．</p>
+
+<h3 id="fleet:ed60bb4aab1bbf7e1b4034d93c897a4f">fleet</h3>
+
+<p>コンテナによるサービスをクラスタ内のどのマシンで起動するかをいちいち人手で決めるわけにはいけない．クラスタ内のリソースの状態や動いているサービスに基づき，適切なマシンでコンテナを動かすスケジューリングの仕組みが必要になる．</p>
+
+<p>このスケジューリングとコンテナの管理にCoreOSは<code>fleet</code>を用いる．<code>fleet</code>はクラスタ全体のinit systemとして，クラスタのプロセス管理を行う．<code>fleet</code>はこれを各マシンの<code>systemd</code>を束ねることでこれを実現している．<code>fleet</code>で管理するサービスは<code>systemd</code>のUnitファイルを改良したものを用いる．</p>
+
+<p><img src="https://coreos.com/assets/images/media/Fleet-Scheduling.png" alt="https://coreos.com/assets/images/media/Fleet-Scheduling.png" />
+</p>
+
+<p><a href="https://coreos.com/assets/images/media/Fleet-Scheduling.png">https://coreos.com/assets/images/media/Fleet-Scheduling.png</a></p>
+
+<p>例えば，上図のようにAPIサーバーを動かすコンテナを6つ，LB用のコンテナを2つ起動したいとする．<code>fleet</code>はマシンのリソース状態と<code>systemd</code>のUnitファイルに既述した条件に基づき，これらを最も適したマシンで起動する．<code>fleet</code>はこれらのコンテナがどこで動いているかも常に管理しており，コンテナの停止，削除，ログの確認なども行うことができる．</p>
+
+<p>もしマシンに障害が発生しても<code>fleet</code>は自動でフェイルオーバーを行う．適切なマシンを選択し直し，登録された分のコンテナが起動していることを保証する．</p>
+
+<h2 id="coreosの起動:ed60bb4aab1bbf7e1b4034d93c897a4f">CoreOSの起動</h2>
+
+<p>CoreOSは<code>cloud-config</code>という設定ファイルを使って起動する．このファイルにより，CoreOSはクラスタ内の他のメンバーと接続し，基本的なサービスを起動し，重要なパラメータを設定する．</p>
+
+<p><code>cloud-config</code>は<a href="https://launchpad.net/cloud-init">cloud-init</a>にインスパイアされている．cloud-initはCoreOSが使わないツールも含むので，<code>cloud-config</code>は必要最低限なものだけを実装したサブセットになる．さらに，例えばetcdの設定，systemdのunitなどといったCoreOS特有の設定項目も持つ．</p>
+
+<p>最小限には，<code>cloud-config</code>は，ホストに既存のクラスタへの参入方法と<code>etcd</code>と<code>fleet</code>の2つのサービスの起動方法を伝えればよい（これらは全て関連している）．これにより，新しいホストを，既存のサーバーに接続させ，設定する必要のあるツールを提供する．基本的に，これらがCoreOSノードを既存クラスタへ参入させるための要件となる．</p>
+
+<h2 id="coreosクラスタを立てる:ed60bb4aab1bbf7e1b4034d93c897a4f">CoreOSクラスタを立てる</h2>
+
+<p><a href="https://github.com/tcnksm/vagrant-digitalocean-coreos">tcnksm/vagrant-digitalocean-coreos</a></p>
+
+<p>Vagrantを使ってDigitalOcean上にCoreOSのクラスタを立ち上げてみる（ソースは全て上記のレポジトリにある）．</p>
+
+<h3 id="sshの準備:ed60bb4aab1bbf7e1b4034d93c897a4f">SSHの準備</h3>
+
+<p>まず，全てのCoreOSは少なくとも1つのSSH公開鍵が登録されている必要がある．DigitalOceanの場合は，公開鍵をDropletsに登録しておき，以下で秘密鍵をエージェントに登録しておく必要がある．</p>
+
+<pre><code class="language-bash">$ ssh-add
+</code></pre>
+
+<p>fleetを使った他nodeへの接続でもCoreOSはsshを使う．CoreOSへログインした後も同様の秘密鍵の情報が利用される必要があるので，sshの際は必ず<code>-A</code>オプションを指定する．</p>
+
+<h3 id="サービスディスカバリーの設定:ed60bb4aab1bbf7e1b4034d93c897a4f">サービスディスカバリーの設定</h3>
+
+<p>etcdを使ってクラスタを形成するために，discovery用のサーバを別途準備する必要がある．CoreOSは<a href="#">https://discovery.etcd.io</a>というdiscoveryサービスを運用しており，それをそのまま使うことができる．今回はこれを利用する．</p>
+
+<p>この<code>/new</code>ページにアクセスすれば，新しいクラスタ用のTokenが生成されるので，それをdiscovery用のURLとして利用する．</p>
+
+<pre><code class="language-bash">$ curl -w &quot;n&quot; https://discovery.etcd.io/new
+https://discovery.etcd.io/724ac1949c661bb3970ff8984b895bca
+</code></pre>
+
+<p>（1つのクラスタに付き1つの新しいTokenを生成する必要がある．また，同じIPで再びクラスタを再構成する場合も新しいTokenを取得する必要がある）</p>
+
+<h3 id="最小限のcloud-config:ed60bb4aab1bbf7e1b4034d93c897a4f">最小限のcloud-config</h3>
+
+<p><code>cloud-config</code>は<code>#cloud-config</code>で始まるYAMLフォーマットで既述する．以下は最小限の設定内容になる．これを<code>user-data.yml</code>という名前で作成する．</p>
+
+<pre><code class="language-yaml"># cloud-config
+
+coreos:
+  etcd:
+    discovery: https://discovery.etcd.io/c39365ee7d788fb27596150a451c2434
+    addr: $private_ipv4:4001
+    peer-addr: $private_ipv4:7001
+
+  fleet:
+    public-ip: $private_ipv4
+
+units:
+  - name: etcd.service
+    command: start
+  - name: fleet.service
+    command: start
+</code></pre>
+
+<p><code>coreos.etcd.*</code>パラメータには，etcdの設定ファイルとしてsystemdのunitファイルへ解釈される．もしプラットフォームがcoreos-cloudinitのテンプレート機能が使えるなら<code>$public_ipv4</code>や<code>$private_ipv4</code>といった変数が使える．</p>
+
+<p><code>coreos.fleet.*</code>パラメータも<code>coreos.etcd.*</code>のように，fleetの設定ファイルとして利用される．</p>
+
+<p><code>coreos.units.*</code>パラメータは，起動後のsystemd unitを定義する．これらは，基本的なサービスの起動を行う．<code>name</code>はサービスの名前で必須，<code>command</code>はunitが実行するコマンド（start, stop, reload, restart, try-restart, reload-or-restart,…）で，デフォルトは何もしない．<code>content</code>を使うと直接unit fileの既述もできる．</p>
+
+<p>起動後の<code>etcd</code>と<code>fleet</code>の設定項目は以下で確認できる．</p>
+
+<ul>
+<li><code>/run/systemd/system/etcd.service/20-cloundinit.conf</code></li>
+<li><code>/run/systemd/system/fleet.service/20-cloundinit.conf </code></li>
+</ul>
+
+<h3 id="vagrantfile:ed60bb4aab1bbf7e1b4034d93c897a4f">Vagrantfile</h3>
+
+<p><a href="https://github.com/smdahlen/vagrant-digitalocean">vagrant-digitalocean</a> pluginを使えばVagranを使ってDigitalOcean上にイメージを立てることができる．CoreOSには，現時点（2014年11月）では最新の<code>494.0.0</code>を利用する．以下のような<code>Vagrantfile</code>を準備する．</p>
+
+<pre><code class="language-ruby">$num_instances = 1
+$image         = '494.0.0 (alpha)'
+
+if ENV[&quot;NUM_INSTANCES&quot;].to_i &gt; 0 &amp;&amp; ENV[&quot;NUM_INSTANCES&quot;]
+  $num_instances = ENV[&quot;NUM_INSTANCES&quot;].to_i
+end
+
+Vagrant.configure('2') do |config|
+  config.ssh.username = 'core'
+    (1..$num_instances).each do |i|
+    config.vm.define &quot;core-%02d&quot;%i do |config|
+      config.vm.provider :digital_ocean do |provider, override|
+      override.ssh.private_key_path = '/.ssh/idrsa'
+      override.vm.box               = 'digital_ocean'
+      override.vm.box_url           = &quot;https://github.com/smdahlen/vagrant-digitalocean/raw/master/box/digital_ocean.box&quot;
+      provider.token                = ENV['TOKEN']
+      provider.image                = $image
+      provider.region               = 'nyc3'
+      provider.size                 = '512MB'
+      provider.ssh_key_name         = ENV['SSH_KEY_NAME']
+      provider.setup                = false
+      provider.private_networking   = true
+      provider.user_data            = File.read('user-data.yml')
+    end
+   end
+  end
+end
+</code></pre>
+
+<p>また現時点（2014年11月）では，<a href="https://github.com/smdahlen/vagrant-digitalocean">vagrant-digitalocean</a> のバージョンは0.7であり，<code>user_data</code>（<code>cloud-config</code>ファイル）のポストに対応していない．GitHub上にある最新はそれに対応しているので，自分でビルドしてインストールする必要がある．</p>
+
+<pre><code class="language-bash">$ git clone https://github.com/smdahlen/vagrant-digitalocean
+$ gem build vagrant-digitalocean.gemspec
+$ vagrant plugin install vagrant-digitalocean-0.7.0.gem
+</code></pre>
+
+<h3 id="coreosを起動する:ed60bb4aab1bbf7e1b4034d93c897a4f">CoreOSを起動する</h3>
+
+<p>では，実際に上記の<code>user-data.yml</code>と<code>Vagrantfile</code>を使ってDigitalOcean上にクラスタを立ててみる．今回は3つのインスタンスを立てる．以下のようにするだけ．</p>
+
+<pre><code class="language-bash">export TOKEN=&quot;YOUR_DIGITALOCEAN_TOKEN&quot;
+export SSH_KEY_NAME=&quot;YOUR_SSH_KEY&quot;
+export NUM_INSTANCES=3
+</code></pre>
+
+<pre><code class="language-bash">$  vagrant up --provider=digital_ocean
+</code></pre>
+
+<h3 id="クラスタの確認をする:ed60bb4aab1bbf7e1b4034d93c897a4f">クラスタの確認をする</h3>
+
+<p>クラスタがちゃんと形成されているかを確認する．<code>core1</code>にログインする．</p>
+
+<pre><code class="language-bash">$ ssh -A core@core1_public_IP
+</code></pre>
+
+<p>以下のコマンドでクラスタのマシンを確認する．それぞれのマシンの<code>peer-addr</code>が確認できる．</p>
+
+<pre><code class="language-bash">$ fleetctl list-machines
+MACHINE         IP              METADATA
+12c469d0...     10.102.100.105  -
+93093555...     10.102.101.102  -
+b463af61...     10.102.101.101  -
+</code></pre>
+
+<p><code>etcd</code>や<code>fleet</code>，DockerといったCoreOSで重要なサービスも使えるようになっているはず．</p>
+
+<h2 id="参考:ed60bb4aab1bbf7e1b4034d93c897a4f">参考</h2>
+
+<ul>
+<li><a href="http://www.slideshare.net/YutakaMatsubara/coreos-35320632">CoreOS入門 - SlideShare</a></li>
+<li><a href="http://qiita.com/mopemope/items/fa9424b094aae3eac580">CoreOS入門 - Qiita</a></li>
+<li><a href="http://www.slideshare.net/yujiod/coreosdocker">CoreOSによるDockerコンテナのクラスタリング</a></li>
+<li><a href="https://gist.github.com/YungSang/73148282c1a081adb2ba">CoreOS とその関連技術に関するここ半年間の私の活動まとめ</a></li>
+<li><a href="https://www.digitalocean.com/community/tutorial_series/getting-started-with-coreos-2">Getting Started with CoreOS | DigitalOcean</a></li>
+<li><a href="https://www.digitalocean.com/community/tutorials/how-to-troubleshoot-common-issues-with-your-coreos-servers">How To Troubleshoot Common Issues with your CoreOS Servers | DigitalOcean</a></li>
+<li><a href="http://lwn.net/Articles/617452/">Etcd and fleet [LWN.net]</a></li>
+<li><a href="http://qiita.com/voluntas/items/1d5c1a6b6e7bce4abac4">etcd - CoreOS が提供してくれるもの - Qiita</a></li>
+<li><a href="http://knowledge.sakura.ad.jp/tech/2519/">CoreOS + etcd + fleetによるクラスタリング事始め - さくらのナレッジ</a></li>
+</ul>
+
+      <div class="social">
+  
+  
+  <a href="https://twitter.com/share" class="twitter-share-button" data-via="deeeet" data-count="none">Tweet</a>
+  
+  
+</div>
+
+    </section>
+
+    <footer>
+      <address>
+        
+        <img src="/images/bio.jpeg"/>
+        
+        <p>Written by <strong><a rel="author" href="https://twitter.com/deeeet" title="Taichi Nakashima" target="_blank">Taichi Nakashima</a></strong><br>
+          <span class="muted">A Tokyo based PaaS engineer. Please contact me via twitter.</span>
+        </p>
+      </address>
+
+    </footer>
+
+  </div>
+</article>
+
+<script type="text/javascript" src="//ajax.googleapis.com/ajax/libs/jquery/1.7.2/jquery.min.js"></script>
+<script type="text/javascript" src="/js/main.js"></script>
+
+<script>!function(d,s,id){var js,fjs=d.getElementsByTagName(s)[0],p=/^http:/.test(d.location)?'http':'https';if(!d.getElementById(id)){js=d.createElement(s);js.id=id;js.src=p+'://platform.twitter.com/widgets.js';fjs.parentNode.insertBefore(js,fjs);}}(document, 'script', 'twitter-wjs');</script>
+
+
+<script type="text/javascript">var HN=[];HN.factory=function(e){return function(){HN.push([e].concat(Array.prototype.slice.call(arguments,0)))};},HN.on=HN.factory("on"),HN.once=HN.factory("once"),HN.off=HN.factory("off"),HN.emit=HN.factory("emit"),HN.load=function(){var e="hn-button.js";if(document.getElementById(e))return;var t=document.createElement("script");t.id=e,t.src="//hn-button.herokuapp.com/hn-button.js";var n=document.getElementsByTagName("script")[0];n.parentNode.insertBefore(t,n)},HN.load();</script>
+
+
+  <script>
+  (function(i,s,o,g,r,a,m){i['GoogleAnalyticsObject']=r;i[r]=i[r]||function(){
+  (i[r].q=i[r].q||[]).push(arguments)},i[r].l=1*new Date();a=s.createElement(o),
+  m=s.getElementsByTagName(o)[0];a.async=1;a.src=g;m.parentNode.insertBefore(a,m)
+  })(window,document,'script','//www.google-analytics.com/analytics.js','ga');
+
+  ga('create', 'UA-45390253-1', 'auto');
+  ga('send', 'pageview');
+
+</script>
+
+
+
+<script>
+  $(document).ready(function() {
+  
+  $('p:has(img)').css('text-align', 'center');
+  $('iframe').css('style', 'display: block; margin: 0px auto;');
+  });
+</script>
+

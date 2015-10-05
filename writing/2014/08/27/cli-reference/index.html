@@ -1,0 +1,195 @@
+<!doctype html>
+<html>
+  <head>
+    <meta http-equiv="content-type" content="text/html; charset=utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    
+    <title>コマンドラインツールを作るときに参考にしている資料 | SOTA</title>
+    
+    <link href="https://fonts.googleapis.com/css?family=Lato%3a900" rel="stylesheet" type="text/css">
+    <link rel="stylesheet" href="/css/main.css">
+    <link rel="shortcut icon" href="/favicon.png" type="image/x-icon" />
+    <link href="http://deeeet.com//index.xml" rel="alternate" type="application/rss+xml" title="" />
+    <meta name="title" content="http://deeeet.com/writing/2014/08/27/cli-reference/">
+    <link rel="canonical" href="http://deeeet.com/writing/2014/08/27/cli-reference/">
+    
+    <meta property="og:title" content="コマンドラインツールを作るときに参考にしている資料"/>
+    <meta property="og:url" content="http://deeeet.com/writing/2014/08/27/cli-reference/"/>
+  </head>
+  
+  <body>
+    <section class="site-nav">
+      <header>
+        <nav id="navigation">
+          <ul class="menu">
+            <li><a href="https://github.com/tcnksm/talks">Talks</a></li>
+            <li><a href="https://tcnksm.exposure.co/">Photos</a></li>
+          </ul>
+
+          <a class="name" href="/">SOTA</a>
+        </nav>        
+      </header>
+    </section>
+    
+
+
+<article>
+  <div class="container">
+    <header>
+      <div class="meta">
+        <time pubdate datetime="2014-08-27" title="2014-08-27">August 27, 2014</time>
+      </div>
+      <h1 class="title">コマンドラインツールを作るときに参考にしている資料</h1>
+    </header>
+    
+    <section>
+      
+
+<p><a href="http://yapcasia.org/2014/talk/show/b49cc53a-027b-11e4-9357-07b16aeab6a4">コマンドラインツールについて語るときに僕の語ること - YAPC::Asia Tokyo 2014</a></p>
+
+<p>コマンドラインツールが好きで昔からつくってきた．
+今年のYAPCで，そのコマンドラインツールをつくるときにどういうことを意識して作っているのか？どのような流れで開発しているのか？といったことを語る機会をもらえた．
+具体的な内容については，是非トークを聴きに来てもらうとして，
+スライドをつくるにあったって過去に読んだ資料や，よく参考にしている記事を集め直したので，その一部を参考資料としてまとめておく．</p>
+
+<h2 id="unixという考え方:048e63f7923e6c117f017ce79825eb5a">UNIXという考え方</h2>
+
+<p><a href="http://www.amazon.co.jp/UNIX%E3%81%A8%E3%81%84%E3%81%86%E8%80%83%E3%81%88%E6%96%B9%E2%80%95%E3%81%9D%E3%81%AE%E8%A8%AD%E8%A8%88%E6%80%9D%E6%83%B3%E3%81%A8%E5%93%B2%E5%AD%A6-Mike-Gancarz/dp/4274064069">UNIXという考え方</a></p>
+
+<p>Mike GancarzによるUNIXの思想や哲学をまとめた本．古いが全然色あせてない．
+コマンドラインツールの作り方を書いた本ではないが，これらの思想の上で動くツールはこの思想に準拠して作られるべきだと思う．何度も読んで考え方を染み付かせた．</p>
+
+<ul>
+<li>小さいものは美しい</li>
+<li>一つのプログラムには一つのことをうまくやらせる</li>
+<li>できるだけ早く試作する</li>
+<li>効率より移植性を優先する</li>
+<li>データをフラットなテキストデータとして保存する</li>
+<li>ソフトウェアを梃子（てこ）として使う</li>
+<li>シェルスクリプトによって梃子の効果と移植性を高める</li>
+<li>過度の対話インターフェースを避ける</li>
+<li>全てのプログラムをフィルタとして設計する</li>
+</ul>
+
+<h3 id="小定理:048e63f7923e6c117f017ce79825eb5a">小定理</h3>
+
+<ul>
+<li>好みに応じて自分で環境を調整できるようにする</li>
+<li>オペレーティングシステムのカーネルを小さく軽くする</li>
+<li>小文字を使い，短く</li>
+<li>木を守る（ドキュメント）</li>
+<li>沈黙は金（エラーメッセージの出力について)</li>
+<li>同時に考える（並列処理）</li>
+<li>部分の総和は全体よりも大きい（小さな部品を集めて大きなアプリケーションを作る）</li>
+<li>90パーセントの解を目指す</li>
+<li>劣る方が優れている</li>
+<li>階層的に考える</li>
+</ul>
+
+<h2 id="gnu標準インターフェース:048e63f7923e6c117f017ce79825eb5a">GNU標準インターフェース</h2>
+
+<p><a href="https://www.gnu.org/prep/standards/html_node/Command_002dLine-Interfaces.html">Standards for Command Line Interfaces</a></p>
+
+<p>コマンドラインツールには長い歴史がある．つまり慣習がある．慣習を外れない簡単な方法は，標準に従うこと．
+普段からコマンドラインツールは使っているので，インターフェースはわかりきっていると思うかも知れないが，いざ自分がつくるとなると見落としていることは多い．</p>
+
+<p>また，オプションは短オプション（e.g., <code>-f</code>）と長オプション（e.g., <code>--force</code>）の両方を準備するべきだが，長オプションの名前に迷うときがある．そういうときのために，GNUでよく使われている長オプションが以下にまとめられている．</p>
+
+<p><a href="https://www.gnu.org/prep/standards/html_node/Option-Table.html#Option-Table">Table of Long Options</a></p>
+
+<h2 id="build-awesome-command-line-tool:048e63f7923e6c117f017ce79825eb5a">Build Awesome Command-line tool</h2>
+
+<p><a href="https://pragprog.com/book/dccar2/build-awesome-command-line-applications-in-ruby-2">Build Awesome Command-Line Applications in Ruby 2: Control Your Computer, Simplify Your Life</a></p>
+
+<p>David Copeland氏によるAwesomeなコマンドラインツールの作り方の本．サンプルコードや紹介されているライブラリは全てRubyだが，
+他のどの言語でも適応できることばかり．「コマンドラインツールのつくりかた」としては一番参考になった．
+コマンドラインツールを作る上での抑えるべき基礎が網羅されている．</p>
+
+<p>この本におけるAwesomeなコマンドラインツールとは？</p>
+
+<ul>
+<li>Easy to use（簡単に使える）</li>
+<li>Helpful（役に立つ）</li>
+<li>Play with others（他ツールと協調できる）</li>
+<li>Has sensible defaults but is configurable（適切なデフォルト値を持ち，設定できる）</li>
+<li>Install painlessly（苦痛なくインストールできる）</li>
+<li>Gets new features and bug fixes easily（新機能の追加やバグの改修が簡単にできる）</li>
+<li>Delights users（ユーザを喜ばせる）</li>
+</ul>
+
+<h2 id="building-a-ruby-library:048e63f7923e6c117f017ce79825eb5a">Building a Ruby Library</h2>
+
+<script async class="speakerdeck-embed" data-id="4fca431e928d7202ab009b70" data-ratio="1.33333333333333" src="http://speakerdeck.com/assets/embed.js"></script>
+
+<p>VagrantやConsulの作者である<a href="https://github.com/mitchellh">Mitchell Hashimoto</a>氏が<a href="http://www.confreaks.com/events/aloharuby2012">Aloha Ruby Conf 2012</a>で語った良いRubyライブラリを作るための方法論．内容はRubyのライブラリについてだが，これもどんな言語であっても大切なことが語られている．</p>
+
+<p>この発表における良いRuby Libraryとは？</p>
+
+<ul>
+<li>Intuitive API (直感的なAPI)</li>
+<li>Configurable（設定が可能）</li>
+<li>Logged（ログが出せる）</li>
+<li>Exceptions（適切な例外処理）</li>
+<li>Documentation（ドキュメントが揃っている）</li>
+<li>Support（サポートがある）</li>
+</ul>
+
+<p>ファンタスティックなツールの作り方とかではなくて，タイトルにもあるように，誰も語らないような泥臭い部分をしっかりとやる大切さを語っている．
+Hashicorpが出してくるプロダクトはどれも素晴らしいけど，こういう泥臭い，みんながやりたがらない，でも当たり前なことをしっかりこなすことが土台になっていると思う．
+特にドキュメントに対する考え方とか一貫しているなあと思う．</p>
+
+      <div class="social">
+  
+  
+  <a href="https://twitter.com/share" class="twitter-share-button" data-via="deeeet" data-count="none">Tweet</a>
+  
+  
+</div>
+
+    </section>
+
+    <footer>
+      <address>
+        
+        <img src="/images/bio.jpeg"/>
+        
+        <p>Written by <strong><a rel="author" href="https://twitter.com/deeeet" title="Taichi Nakashima" target="_blank">Taichi Nakashima</a></strong><br>
+          <span class="muted">A Tokyo based PaaS engineer. Please contact me via twitter.</span>
+        </p>
+      </address>
+
+    </footer>
+
+  </div>
+</article>
+
+<script type="text/javascript" src="//ajax.googleapis.com/ajax/libs/jquery/1.7.2/jquery.min.js"></script>
+<script type="text/javascript" src="/js/main.js"></script>
+
+<script>!function(d,s,id){var js,fjs=d.getElementsByTagName(s)[0],p=/^http:/.test(d.location)?'http':'https';if(!d.getElementById(id)){js=d.createElement(s);js.id=id;js.src=p+'://platform.twitter.com/widgets.js';fjs.parentNode.insertBefore(js,fjs);}}(document, 'script', 'twitter-wjs');</script>
+
+
+<script type="text/javascript">var HN=[];HN.factory=function(e){return function(){HN.push([e].concat(Array.prototype.slice.call(arguments,0)))};},HN.on=HN.factory("on"),HN.once=HN.factory("once"),HN.off=HN.factory("off"),HN.emit=HN.factory("emit"),HN.load=function(){var e="hn-button.js";if(document.getElementById(e))return;var t=document.createElement("script");t.id=e,t.src="//hn-button.herokuapp.com/hn-button.js";var n=document.getElementsByTagName("script")[0];n.parentNode.insertBefore(t,n)},HN.load();</script>
+
+
+  <script>
+  (function(i,s,o,g,r,a,m){i['GoogleAnalyticsObject']=r;i[r]=i[r]||function(){
+  (i[r].q=i[r].q||[]).push(arguments)},i[r].l=1*new Date();a=s.createElement(o),
+  m=s.getElementsByTagName(o)[0];a.async=1;a.src=g;m.parentNode.insertBefore(a,m)
+  })(window,document,'script','//www.google-analytics.com/analytics.js','ga');
+
+  ga('create', 'UA-45390253-1', 'auto');
+  ga('send', 'pageview');
+
+</script>
+
+
+
+<script>
+  $(document).ready(function() {
+  
+  $('p:has(img)').css('text-align', 'center');
+  $('iframe').css('style', 'display: block; margin: 0px auto;');
+  });
+</script>
+

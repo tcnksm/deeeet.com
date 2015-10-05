@@ -1,0 +1,859 @@
+<?xml version="1.0" encoding="utf-8" standalone="yes" ?>
+<rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom">
+  <channel>
+    <title>Coreos on SOTA</title>
+    <link>http://deeeet.com/categories/coreos/</link>
+    <description>Recent content in Coreos on SOTA</description>
+    <generator>Hugo -- gohugo.io</generator>
+    <language>ja-jp</language>
+    <copyright>Copyright (C) 2013-2015 Taichi Nakashima All Right Reserved.</copyright>
+    <lastBuildDate>Wed, 26 Nov 2014 00:00:00 +0000</lastBuildDate>
+    <atom:link href="http://deeeet.com/categories/coreos/index.xml" rel="self" type="application/rss+xml" />
+    
+    <item>
+      <title>CoreOSクラスタ内のDockerコンテナの動的リンク</title>
+      <link>http://deeeet.com/writing/2014/11/26/coreos-etcd-docker-link/</link>
+      <pubDate>Wed, 26 Nov 2014 00:00:00 +0000</pubDate>
+      
+      <guid>http://deeeet.com/writing/2014/11/26/coreos-etcd-docker-link/</guid>
+      <description>
+
+&lt;p&gt;&lt;a href=&#34;https://coreos.com/blog/docker-dynamic-ambassador-powered-by-etcd/&#34;&gt;Dynamic Docker links with an ambassador powered by etcd&lt;/a&gt;&lt;/p&gt;
+
+&lt;p&gt;上記の記事を参考にCoreOSのクラスタ内で複数ホスト間にまたがりDockerコンテナを連携させる方法について検証した．&lt;/p&gt;
+
+&lt;h2 id=&#34;背景と問題:596208b804d94d869541a12339f27b5b&#34;&gt;背景と問題&lt;/h2&gt;
+
+&lt;p&gt;複数ホストにまたがりDockerのコンテナを接続する方法としては&lt;a href=&#34;http://docs.docker.com/articles/ambassador_pattern_linking/&#34;&gt;Ambassador パターン&lt;/a&gt;が有名である．これはトラフィックを別ホストへforwardすることに特化したコンテナを立てる方法で，ホストに無駄な設定なし，かつDockerコンテナのみで行えるシンプルな方法である．例えば，あるホストから&lt;code&gt;redis-cli&lt;/code&gt;を使って，別ホストで動く&lt;code&gt;redis&lt;/code&gt;に接続する場合は以下のように接続する．&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-bash&#34;&gt;(redis-cli) --&amp;gt; (ambassador) ---network---&amp;gt; (ambassador) --&amp;gt; (redis)
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;&lt;code&gt;redis-cli&lt;/code&gt;コンテナと&lt;code&gt;ambassador&lt;/code&gt;コンテナ，&lt;code&gt;redis&lt;/code&gt;コンテナと&lt;code&gt;ambassador&lt;/code&gt;コンテナはdockerのlink機能で接続し，&lt;code&gt;ambassador&lt;/code&gt;コンテナはトラフィックをネットワーク越しにフォワードする．&lt;/p&gt;
+
+&lt;p&gt;この方法は，接続側がその相手先のホストを知っている必要がある．例えば上記の場合，&lt;code&gt;redis-cli&lt;/code&gt;コンテナ側の&lt;code&gt;ambassador&lt;/code&gt;コンテナは以下のように相手先のホストのIP（e.g., &lt;code&gt;192.168.1.52&lt;/code&gt;）を指定して起動しなければならない．&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-bash&#34;&gt;$ docker run -d --name ambassador --expose 6379 -e REDIS_PORT_6379_TCP=tcp://192.168.1.52:6379 svendowideit/ambassador
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;ホストが固定されている場合は問題ないが，CoreOSのように動的にホストが変わる可能性がある場合は問題になる．接続先のホスト情報を直接既述すると，ホストが変わる度に設定を更新する必要があり，かなり億劫な感じになる．&lt;/p&gt;
+
+&lt;h2 id=&#34;coreosにおける1つの解法:596208b804d94d869541a12339f27b5b&#34;&gt;CoreOSにおける1つの解法&lt;/h2&gt;
+
+&lt;p&gt;CoreOSはクラスタの形成に分散Key-Valueストアであるetcdを使っている．このetcdを使うと動的な&lt;code&gt;ambassador&lt;/code&gt;パターンを作り上げることができる．つまり，以下のようなことをする．&lt;/p&gt;
+
+&lt;ul&gt;
+&lt;li&gt;接続される側は接続情報をetcdに書き込み続けるコンテナを立てる&lt;/li&gt;
+&lt;li&gt;接続する側はその情報を読み込み続ける動的な&lt;code&gt;ambassador&lt;/code&gt;コンテナを立てる&lt;/li&gt;
+&lt;/ul&gt;
+
+&lt;p&gt;あとは，この動的な&lt;code&gt;ambassador&lt;/code&gt;コンテナとlink接続すれば，相手先の情報を環境変数として取得するとができる．これで接続する側は接続相手のホスト情報を知らなくてもよくなる．&lt;/p&gt;
+
+&lt;h2 id=&#34;検証ストーリー:596208b804d94d869541a12339f27b5b&#34;&gt;検証ストーリー&lt;/h2&gt;
+
+&lt;p&gt;これを実際にCoreOSクラスタを立てて検証してみる．&lt;/p&gt;
+
+&lt;p&gt;ここでは，Docker公式のドキュメント&lt;a href=&#34;http://docs.docker.com/articles/ambassador_pattern_linking/&#34;&gt;&amp;ldquo;Link via an Ambassador Container&amp;rdquo;&lt;/a&gt;と同様の例を用いる．クラスタ内のあるホストより&lt;code&gt;redis-cli&lt;/code&gt;コンテナを使って，別ホストの&lt;code&gt;redis&lt;/code&gt;コンテナに接続するという状況を考える．&lt;/p&gt;
+
+&lt;h2 id=&#34;coreosクラスタを立てる:596208b804d94d869541a12339f27b5b&#34;&gt;CoreOSクラスタを立てる&lt;/h2&gt;
+
+&lt;p&gt;利用するCoreOSクラスタは&lt;a href=&#34;https://github.com/tcnksm/vagrant-digitalocean-coreos&#34;&gt;tcnksm/vagrant-digitalocean-coreos&lt;/a&gt;を使って，VagrantでDigitalOcean上に立てる．&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-bash&#34;&gt;$ export NUM_INSTANCES=3
+$ vagrant up --provider=digital_ocean
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;これで，DigitalOcean上に3つのCoreOSインスタンスが立ち上がる．&lt;/p&gt;
+
+&lt;h2 id=&#34;利用するコンテナ:596208b804d94d869541a12339f27b5b&#34;&gt;利用するコンテナ&lt;/h2&gt;
+
+&lt;p&gt;全部で5つのコンテナを用いる．&lt;/p&gt;
+
+&lt;p&gt;&lt;img src=&#34;https://coreos.com/assets/images/media/etcd-ambassador-hosts.png&#34; alt=&#34;https://coreos.com/assets/images/media/etcd-ambassador-hosts.png&#34; /&gt;
+&lt;/p&gt;
+
+&lt;p&gt;&lt;a href=&#34;https://coreos.com/assets/images/media/etcd-ambassador-hosts.png&#34;&gt;https://coreos.com/assets/images/media/etcd-ambassador-hosts.png&lt;/a&gt;&lt;/p&gt;
+
+&lt;p&gt;HostA（&lt;code&gt;redis&lt;/code&gt;を動かすホスト）では以下のコンテナを立てる．&lt;/p&gt;
+
+&lt;ul&gt;
+&lt;li&gt;&lt;strong&gt;crosbymichael/redis&lt;/strong&gt; - &lt;a href=&#34;http://docs.docker.com/articles/ambassador_pattern_linking/&#34;&gt;Ambassador パターン&lt;/a&gt;で使われているものと同様のRedisコンテナ&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;polvi/simple-amb&lt;/strong&gt; - &lt;code&gt;socat&lt;/code&gt;コマンドを使って，特定のポートへのトラフィックを与えられたホストにforwardするだけのコンテナ．etcdへのフォーワードに利用する．&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;polvi/docker-register&lt;/strong&gt; - &lt;code&gt;docker port&lt;/code&gt;コマンドを使って与えられたDockerコンテナのIPとPortを取得し，etcdにそれを登録するコンテナ&lt;/li&gt;
+&lt;/ul&gt;
+
+&lt;p&gt;HostB（&lt;code&gt;redis-cli&lt;/code&gt;を動かすホスト）では以下のコンテナを立てる．&lt;/p&gt;
+
+&lt;ul&gt;
+&lt;li&gt;&lt;strong&gt;polvi/simple-amb&lt;/strong&gt; - HostAと同様のコンテナ．etcdへのフォーワードに利用する．&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;polvi/dynamic-etcd-amb&lt;/strong&gt; - etcdからRedisコンテナのホストとIPを取得し，環境変数にそれを設定するコンテナ&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;relateiq/redis-cli&lt;/strong&gt; - &lt;a href=&#34;http://docs.docker.com/articles/ambassador_pattern_linking/&#34;&gt;Ambassador パターン&lt;/a&gt;で使われているものと同様のコンテナ&lt;/li&gt;
+&lt;/ul&gt;
+
+&lt;h2 id=&#34;unitファイル:596208b804d94d869541a12339f27b5b&#34;&gt;Unitファイル&lt;/h2&gt;
+
+&lt;p&gt;CoreOSはコンテナの管理とスケジューリングにFleetを用い，その設定はUnitファイルで行う．上述したDockerコンテナを起動するためのUnitファイルについて簡単に説明する．なお，Fleetの詳しい使いかたなどは，&lt;a href=&#34;http://deeeet.com/writing/2014/11/20/fleet/&#34;&gt;&amp;ldquo;Fleetの使い方，Unitファイルの書き方&amp;rdquo;&lt;/a&gt;に書いた．&lt;/p&gt;
+
+&lt;h3 id=&#34;hosta:596208b804d94d869541a12339f27b5b&#34;&gt;HostA&lt;/h3&gt;
+
+&lt;p&gt;&lt;strong&gt;crosbymichael/redis&lt;/strong&gt;を動かすための&lt;code&gt;redis.service&lt;/code&gt;は以下．&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;[Unit]
+Description=Run redis
+
+[Service]
+TimeoutStartSec=0
+KillMode=none
+EnvironmentFile=/etc/environment
+ExecStartPre=-/usr/bin/docker kill %n
+ExecStartPre=-/usr/bin/docker rm %n
+ExecStartPre=/usr/bin/docker pull crosbymichael/redis
+ExecStart=/usr/bin/docker run --rm --name %n -p $COREOS_PRIVATE_IPV46379 crosbymichael/redis
+ExecStop=/usr/bin/docker stop -t 3 %n
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;単純に&lt;strong&gt;crosbymichael/redis&lt;/strong&gt;コンテナを起動するだけ．&lt;strong&gt;polvi/docker-register&lt;/strong&gt;コンテナを使って，ホストのIPとPortをetcdに登録する必要があるので，&lt;code&gt;-p ${COREOS_PRIVATE_IPV4}::6379&lt;/code&gt;を指定して起動する．CoreOSはそのホスト情報を&lt;code&gt;/etc/environment&lt;/code&gt;に保存しているので，それをそのまま使う．どのホストかを直接指定する必要はない．&lt;/p&gt;
+
+&lt;p&gt;&lt;code&gt;%n&lt;/code&gt;はsystemdのUnitファイルの記法で，そのファイル名が代入される（今回の場合は，&lt;code&gt;redis.service&lt;/code&gt;）．&lt;/p&gt;
+
+&lt;p&gt;&lt;strong&gt;polvi/simple-amb&lt;/strong&gt;を動かすための&lt;code&gt;etcd-amb-redis.service&lt;/code&gt;は以下．&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;[Unit]
+Description=Forward all traffic it gets on port 10000 to 172.17.42.1:4001 (redis)
+
+[Service]
+TimeoutStartSec=0
+KillMode=none
+ExecStartPre=-/usr/bin/docker kill %n
+ExecStartPre=-/usr/bin/docker rm %n
+ExecStartPre=/usr/bin/docker pull polvi/simple-amb
+ExecStart=/usr/bin/docker run --rm --name %n polvi/simple-amb 172.17.42.1:4001
+ExecStop=/usr/bin/docker stop -t 3 %n
+
+[X-Fleet]
+X-ConditionMachineOf=redis.service
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;このコンテナは特定のポート（&lt;code&gt;10000&lt;/code&gt;port）のトラフィックを与えられた引数のホストにforwardする．CoreOSのDockerコンテナからは&lt;code&gt;172.17.42.1:4001&lt;/code&gt;でそのetcdにアクセスできる．引数にそれを与えることで&lt;code&gt;10000&lt;/code&gt;portへのトラフィックはすべてetcdにforwardされるようになる．&lt;/p&gt;
+
+&lt;p&gt;&lt;code&gt;X-ConditionMachineOf&lt;/code&gt;に&lt;code&gt;redis.service&lt;/code&gt;を指定することで，このコンテナは，&lt;strong&gt;crosbymichael/redis&lt;/strong&gt;コンテナと同じホストにスケジューリングされるようになる．&lt;/p&gt;
+
+&lt;p&gt;&lt;strong&gt;polvi/docker-register&lt;/strong&gt;の&lt;code&gt;register-redis-etcd.service&lt;/code&gt;は以下．&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;[Unit]
+Description=Read the IP and port of redis.service from Docker API and publish it to etcd as service name of redis-A
+After=redis.service
+After=etcd-amb-redis.service
+Require=etcd-amb-redis.service
+
+[Service]
+TimeoutStartSec=0
+KillMode=none
+ExecStartPre=-/usr/bin/docker kill %n
+ExecStartPre=-/usr/bin/docker rm %n
+ExecStartPre=/usr/bin/docker pull polvi/docker-register
+ExecStart=/usr/bin/docker run --link etcd-amb-redis.service:etcd -v /var/run/docker.sock:/var/run/docker.sock --rm --name %n polvi/docker-register redis.service 6379 redis-A
+ExecStop=/usr/bin/docker stop -t 3 %n
+
+[X-Fleet]
+X-ConditionMachineOf=redis.service
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;このコンテナは与えられたコンテナのホストにおけるIPとPortのマッピング情報を取得し，それをetcdに登録する．今回は&lt;strong&gt;crosbymichael/redis&lt;/strong&gt;コンテナの&lt;code&gt;6379&lt;/code&gt;portのホストにおけるIPとPortのマッピング情報を&lt;code&gt;redis-A&lt;/code&gt;という名前でetcdに登録する．&lt;strong&gt;polvi/docker-register&lt;/strong&gt;コンテナとlinkで接続することにより，環境変数で&lt;code&gt;etcd&lt;/code&gt;の接続先を取得する．&lt;/p&gt;
+
+&lt;p&gt;&lt;code&gt;X-ConditionMachineOf&lt;/code&gt;に&lt;code&gt;redis.service&lt;/code&gt;を指定することで，このコンテナは&lt;strong&gt;crosbymichael/redis&lt;/strong&gt;コンテナと同じホストにスケジューリングされるようになる．&lt;/p&gt;
+
+&lt;h3 id=&#34;hostb:596208b804d94d869541a12339f27b5b&#34;&gt;HostB&lt;/h3&gt;
+
+&lt;p&gt;&lt;strong&gt;polvi/simple-amb&lt;/strong&gt;を動かすための&lt;code&gt;etcd-amb-redis-cli.service&lt;/code&gt;は以下．&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;[Unit]
+Description=Forward all traffic it gets on port 10000 to 172.17.42.1:4001 (etcd)
+
+[Service]
+TimeoutStartSec=0
+KillMode=none
+ExecStartPre=-/usr/bin/docker kill %n
+ExecStartPre=-/usr/bin/docker rm %n
+ExecStartPre=/usr/bin/docker pull polvi/simple-amb
+ExecStart=/usr/bin/docker run --rm --name %n polvi/simple-amb 172.17.42.1:4001
+ExecStop=/usr/bin/docker stop -t 3 %n
+
+[X-Fleet]
+X-Conflicts=redis.service
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;内容はHostAの&lt;code&gt;etcd-amb-redis.service&lt;/code&gt;と同様だが，スケジューリングの条件が異なる．&lt;code&gt;X-Conflicts&lt;/code&gt;に&lt;code&gt;redis.service&lt;/code&gt;を指定することで&lt;strong&gt;crosbymichael/redis&lt;/strong&gt;コンテナとは異なるホストにスケジューリングされるようになる．&lt;/p&gt;
+
+&lt;p&gt;&lt;strong&gt;polvi/dynamic-etcd-amb&lt;/strong&gt;の&lt;code&gt;redis-dyn-amb.service&lt;/code&gt;は以下．&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;[Unit]
+Description=Tells the proxy to expose port 6379 and point it to the service registered as redis-A in etcd.
+After=etcd-amb-redis-cli.service
+Require=etcd-amb-redis-cli.service
+After=register-redis-etcd
+
+[Service]
+TimeoutStartSec=0
+KillMode=none
+ExecStartPre=-/usr/bin/docker kill %n
+ExecStartPre=-/usr/bin/docker rm %n
+ExecStartPre=/usr/bin/docker pull polvi/dynamic-etcd-amb
+ExecStart=/usr/bin/docker run --link etcd-amb-redis-cli.service:etcd --rm --name %n -p 127.0.0.16379 polvi/dynamic-etcd-amb redis-A 6379
+ExecStop=/usr/bin/docker stop -t 3 %n
+
+[X-Fleet]
+X-ConditionMachineOf=etcd-amb-redis-cli.service
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;このコンテナはetcdに保存されたホストへのプロキシとして動作する．&lt;code&gt;6379&lt;/code&gt;portを解放し，そこへの接続を&lt;code&gt;redis-A&lt;/code&gt;という名前でetcdに登録された&lt;strong&gt;crosbymichael/redis&lt;/strong&gt;コンテナが動くIPとPortに向けるようにする．&lt;strong&gt;polvi/docker-register&lt;/strong&gt;コンテナとlinkで接続することにより，環境変数で&lt;code&gt;etcd&lt;/code&gt;の接続先を取得する．&lt;/p&gt;
+
+&lt;p&gt;&lt;strong&gt;relateiq/redis-cli&lt;/strong&gt;コンテナは，このコンテナと接続することで，ネットワーク越しに&lt;strong&gt;crosbymichael/redis&lt;/strong&gt;コンテナに接続する．&lt;/p&gt;
+
+&lt;h2 id=&#34;接続を試す:596208b804d94d869541a12339f27b5b&#34;&gt;接続を試す&lt;/h2&gt;
+
+&lt;p&gt;上述したUnitファイルで定義したサービスをCoreOSクラスタにデプロイし&lt;code&gt;redis&lt;/code&gt;コンテナに接続してみる．&lt;/p&gt;
+
+&lt;p&gt;まず，サービスのデプロイする．&lt;code&gt;.service&lt;/code&gt;ファイルがあるディレクトリで以下を実行する．&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-bash&#34;&gt;$ fleetctl start *.service
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;サービスの起動を確認する．Unitファイルで定義したように別々のホストでサービスが起動していることが確認できる．&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-bash&#34;&gt;$ fleetctl list-units
+UNIT                            MACHINE                         ACTIVE  SUB
+etcd-amb-redis-cli.service      7f0be3a3.../10.132.180.245      active  running
+redis-dyn-amb.service           7f0be3a3.../10.132.180.245      active  running
+etcd-amb-redis.service          dc324c84.../10.132.181.182      active  running
+redis.service                   dc324c84.../10.132.181.182      active  running
+register-redis-etcd.service     dc324c84.../10.132.181.182      active  running
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;&lt;code&gt;redis&lt;/code&gt;コンテナに接続するには，&lt;code&gt;etcd-amb-redis-cli&lt;/code&gt;コンテナが動いているホストに移動する必要がある．以下で移動できる．&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-bash&#34;&gt;$ fleetctl ssh etcd-amb-redis-cli
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;実際に接続してみる．&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-bash&#34;&gt;$ docker run -it --link redis-dyn-amb.service:redis relateiq/redis-cli
+redis 172.17.0.3:6379&amp;gt; ping
+PONG
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;etcdに保存された情報をみると，&lt;code&gt;redis.service&lt;/code&gt;が動いているホストの情報が保存されているのが確認できる．&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-bash&#34;&gt;$ etcdctl get /services/redis-A/redis.service
+{ &amp;quot;port&amp;quot;: 49155, &amp;quot;host&amp;quot;: &amp;quot;10.132.181.182&amp;quot; }
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;h3 id=&#34;耐障害性:596208b804d94d869541a12339f27b5b&#34;&gt;耐障害性&lt;/h3&gt;
+
+&lt;p&gt;&lt;code&gt;redis&lt;/code&gt;コンテナを再起動してもすぐに設定は更新され再接続できる．これは，&lt;code&gt;redis&lt;/code&gt;コンテナが動くホスト情報のetcdへの動的な書き込み，読み込みにより実現できる．&lt;/p&gt;
+
+&lt;p&gt;また，&lt;code&gt;redis&lt;/code&gt;コンテナが動くホストを，ホストごと殺しても再び接続できる．これは，fleetによるフェイルオーバー（再スケジューリング）とetcdの動的に書き込み・読み込みにより実現できる．&lt;/p&gt;
+
+&lt;h2 id=&#34;まとめ:596208b804d94d869541a12339f27b5b&#34;&gt;まとめ&lt;/h2&gt;
+
+&lt;p&gt;CoreOSのクラスタ内で複数ホスト間にまたがりDockerコンテナを連携させる方法について検証した．etcdに接続先のホストを保存することで，コンテナがどのホストで動いているかを意識しないでそれに接続することができた．&lt;/p&gt;
+</description>
+    </item>
+    
+    <item>
+      <title>Fleetの使い方，Unitファイルの書き方</title>
+      <link>http://deeeet.com/writing/2014/11/20/fleet/</link>
+      <pubDate>Thu, 20 Nov 2014 00:00:00 +0000</pubDate>
+      
+      <guid>http://deeeet.com/writing/2014/11/20/fleet/</guid>
+      <description>
+
+&lt;p&gt;&lt;a href=&#34;http://deeeet.com/writing/2014/11/17/coreos/&#34;&gt;CoreOSに入門した | SOTA&lt;/a&gt;&lt;/p&gt;
+
+&lt;p&gt;CoreOSではすべてのアプリケーションをDockerで動かす．このとき，コンテナによるサービスをCoreOSクラスタのどのマシンで起動するかをいちいち人手で決めるわけにはいけない．クラスタ内のリソースの状態や動いているサービスに基づき，適切なマシンでコンテナを動かすスケジューリングの仕組みが必要になる．&lt;/p&gt;
+
+&lt;p&gt;このスケジューリングとコンテナの管理にCoreOSはfleetを用いる． fleetを使うとCoreOSクラスタが1つのinit systemで動いているかのようにそれを扱うことができるようになる．開発者はどのマシンでどのDockerコンテナが動いているかを気にする必要がなくなる．&lt;/p&gt;
+
+&lt;p&gt;例えば，5つのコンテナを動かす必要があれば，fleetはクラスタのどこかでその5つのコンテナが動いてることを保証する．もしコンテナが動いているマシンに障害があっても，fleetはそのコンテナを別のマシンにスケジューリングしなおす（フェイルオーバー）．&lt;/p&gt;
+
+&lt;p&gt;スケジューリングは柔軟で，マシンのRegionやRoleによって振り分けることもできるし，同じサービスを同じマシンでは動かさないようにするといった設定もできる．例えば，複数のDBコンテナを別々のマシンに分散させるといったこともできる．&lt;/p&gt;
+
+&lt;p&gt;DigitalOceanの&lt;a href=&#34;https://www.digitalocean.com/community/tutorial_series/getting-started-with-coreos-2&#34;&gt;&amp;ldquo;Getting Started with CoreOS&amp;rdquo;&lt;/a&gt;シリーズの&lt;/p&gt;
+
+&lt;ul&gt;
+&lt;li&gt;&lt;a href=&#34;https://www.digitalocean.com/community/tutorials/how-to-use-fleet-and-fleetctl-to-manage-your-coreos-cluster&#34;&gt;How To Use Fleet and Fleetctl to Manage your CoreOS Cluster&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a href=&#34;https://www.digitalocean.com/community/tutorials/how-to-create-flexible-services-for-a-coreos-cluster-with-fleet-unit-files&#34;&gt;How to Create Flexible Services for a CoreOS Cluster with Fleet Unit Files&lt;/a&gt;&lt;/li&gt;
+&lt;/ul&gt;
+
+&lt;p&gt;において，fleetを操作するための&lt;code&gt;fleettcl&lt;/code&gt;コマンドの使い方と，その設定ファイルであるUnitファイルの書き方を良い感じに解説していたので，それらを参考にfleetの使い方をまとめておく．&lt;/p&gt;
+
+&lt;p&gt;まずfleetの技術的概要をまとめる，次に&lt;code&gt;fleetctl&lt;/code&gt;コマンドによるサービスの管理方法を書く．最後にUnitファイルの書き方について説明する．&lt;/p&gt;
+
+&lt;h2 id=&#34;fleetの技術的概要:15effd7923038e72678d2e2222047b08&#34;&gt;fleetの技術的概要&lt;/h2&gt;
+
+&lt;p&gt;fleetはクラスタレベルのsystemdと捉えることができる（単一マシンのinit systemがsystemdで，クラスタのinit systemがfleet）．&lt;/p&gt;
+
+&lt;p&gt;&lt;img src=&#34;https://coreos.com/assets/images/media/fleet-schedule-diagram.png&#34; alt=&#34;https://coreos.com/assets/images/media/fleet-schedule-diagram.png&#34; /&gt;
+&lt;/p&gt;
+
+&lt;p&gt;&lt;a href=&#34;https://coreos.com/assets/images/media/fleet-schedule-diagram.png&#34;&gt;https://coreos.com/assets/images/media/fleet-schedule-diagram.png&lt;/a&gt;&lt;/p&gt;
+
+&lt;p&gt;fleetは&lt;strong&gt;engine&lt;/strong&gt;と&lt;strong&gt;agent&lt;/strong&gt;という大きく2つのコンポーネントから構成される．&lt;strong&gt;engine&lt;/strong&gt;はジョブスケジューリングとクラスタサイズの変更を管理する．&lt;strong&gt;agent&lt;/strong&gt;はマシンの代わりにジョブを引き受ける．Unitがクラスタに割り当てられると，&lt;strong&gt;agent&lt;/strong&gt;はUnitファイルを読み込み，それを開始する．そして，systemdの状態をfleetに通知する．&lt;/p&gt;
+
+&lt;p&gt;バックエンドでは&lt;code&gt;etcd&lt;/code&gt;クラスタが動いており，&lt;strong&gt;engine&lt;/strong&gt;と&lt;strong&gt;agent&lt;/strong&gt;の協調に使われる．&lt;/p&gt;
+
+&lt;h2 id=&#34;fleetctlによるサービスの管理:15effd7923038e72678d2e2222047b08&#34;&gt;fleetctlによるサービスの管理&lt;/h2&gt;
+
+&lt;p&gt;fleetの設定ファイルは，systemdのunitファイルにfleet特有の設定（e.g., クラスタ内での分散方法など）を加えたものを利用する． このファイルの詳細は後述するとして，ここでは以下のようなHello Worldを出力しつづける&lt;code&gt;hello.service&lt;/code&gt;を利用する．&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;[Unit]
+Description=My Service
+After=docker.service
+
+[Service]
+TimeoutStartSec=0
+ExecStartPre=-/usr/bin/docker kill hello
+ExecStartPre=-/usr/bin/docker rm hello
+ExecStartPre=/usr/bin/docker pull busybox
+ExecStart=/usr/bin/docker run --name hello busybox /bin/sh -c &amp;quot;while true; do echo Hello World; sleep 1; done&amp;quot;
+ExecStop=/usr/bin/docker stop hello
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;fleetによるサービス管理は&lt;code&gt;fleetctl&lt;/code&gt;コマンドを使って行う．サービスの起動は以下の流れで行われる．&lt;/p&gt;
+
+&lt;ol&gt;
+&lt;li&gt;Unitファイルを読み込む&lt;/li&gt;
+&lt;li&gt;クラスタ内の特定のマシンにスケジューリングする&lt;/li&gt;
+&lt;li&gt;サービスを起動する&lt;/li&gt;
+&lt;/ol&gt;
+
+&lt;h3 id=&#34;サービスの登録:15effd7923038e72678d2e2222047b08&#34;&gt;サービスの登録&lt;/h3&gt;
+
+&lt;p&gt;まず，&lt;code&gt;submit&lt;/code&gt;コマンドを使ってサービスを登録する．これは単にfleetがファイルをメモリ内に読み込むだけ．&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-bash&#34;&gt;$ fleetctl submit hello.service
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;fleetが読み込んだunitファイルは以下で一覧できる．&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-bash&#34;&gt;$ fleetctl list-unit-files
+UNIT            HASH    DSTATE          STATE           TARGET
+hello.service   3f8de4b inactive        inactive        -
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;&lt;code&gt;DSTATE&lt;/code&gt;とは望まれる状態であり，&lt;code&gt;STATE&lt;/code&gt;は実際の状態を示す（&lt;code&gt;DSTATE&lt;/code&gt;と&lt;code&gt;STATE&lt;/code&gt;が一致しているとき各種コマンドがちゃんと動いたと考えて良い）．&lt;code&gt;TARGET&lt;/code&gt;はサービスを実行するべきマシンを示す．今はまだスケジューリングをしていないので，&lt;code&gt;-&lt;/code&gt;となる．&lt;/p&gt;
+
+&lt;p&gt;読み込んだファイルの内容を確認することもできる．&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-bash&#34;&gt;$ fleetctl cat hello
+[Unit]
+Description=My First Service
+After=docker.service
+...
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;&lt;code&gt;submit&lt;/code&gt;コマンドを一度実行し，Unitファイルを変更して再び&lt;code&gt;submit&lt;/code&gt;してもアップロードは実行されない．ファイルを更新するには，一度アップロードしたものを削除する必要がある．&lt;/p&gt;
+
+&lt;h3 id=&#34;サービスのスケジューリング:15effd7923038e72678d2e2222047b08&#34;&gt;サービスのスケジューリング&lt;/h3&gt;
+
+&lt;p&gt;次に，サービスをスケジューリングする．スケジューリングとは，fleetエンジンがクラスタ内でサービスを実行するのに最も適したマシンを選択することである．これはUnitファイルの&lt;code&gt;[X-Fleet]&lt;/code&gt;セクションの既述と，クラスタ内のマシンの現在のリソース状態に基づき決定される．サービスがスケジューリングされると，Unitファイルはそのマシンに渡され，ローカルのsystemdインスタンスに読み込まれる．&lt;/p&gt;
+
+&lt;p&gt;スケジューリングは，&lt;code&gt;load&lt;/code&gt;コマンドで行う．&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-bash&#34;&gt;$ fleetctl load hello.service
+Unit hello.service loaded on 0d8b5e37.../10.132.181.182
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;読み込んだUnitファイルを確認する．&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-bash&#34;&gt;fleetctl list-unit-files
+UNIT            HASH    DSTATE  STATE   TARGET
+hello.service   3f8de4b loaded  loaded  0d8b5e37.../10.132.181.18
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;&lt;code&gt;TAGET&lt;/code&gt;セクションにサービスを実行するマシンが追加されているのが確認できる．&lt;code&gt;STATE&lt;/code&gt;はスケジューリングされたことを示している．&lt;/p&gt;
+
+&lt;p&gt;&lt;code&gt;list-units&lt;/code&gt;コマンドを使うと，実行中，もしくはスケジューリングされたサービスとその状態を確認することができる．&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-bash&#34;&gt;$ fleetctl list-units
+UNIT            MACHINE                         ACTIVE          SUB
+hello.service   0d8b5e37.../10.132.181.182      inactive        dead
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;これはsystemdから得られる情報であり，&lt;code&gt;ACTIVE&lt;/code&gt;はサービスの状態を示し，&lt;code&gt;SUB&lt;/code&gt;はより低レベルな状態を示す．&lt;/p&gt;
+
+&lt;h3 id=&#34;サービスを起動する:15effd7923038e72678d2e2222047b08&#34;&gt;サービスを起動する&lt;/h3&gt;
+
+&lt;p&gt;次にサービスを起動してみる．起動は&lt;code&gt;start&lt;/code&gt;コマンドで行う．&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-bash&#34;&gt;fleetctl start hello
+Unit hello.service launched on 0d8b5e37.../10.132.181.182
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;Unitファイルの状態を確認する．&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-bash&#34;&gt;$ fleetctl list-unit-files
+UNIT            HASH    DSTATE          STATE           TARGET
+hello.service   3f8de4b launched        launched        0d8b5e37.../10.132.181.182
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;次に，systemdの状態を確認する．&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-bash&#34;&gt;$ fleetctl list-units
+UNIT            MACHINE                         ACTIVE  SUB
+hello.service   0d8b5e37.../10.132.181.182      active  running
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;ちゃんとサービスが起動したことが確認できる．&lt;/p&gt;
+
+&lt;h3 id=&#34;サービスの詳細の状態を得る:15effd7923038e72678d2e2222047b08&#34;&gt;サービスの詳細の状態を得る&lt;/h3&gt;
+
+&lt;p&gt;&lt;code&gt;list-unit&lt;/code&gt;コマンドで，現在スケジュールされているUnitを一覧でき，&lt;code&gt;list-unit-files&lt;/code&gt;でfleetが知っている*全て*のUnitの状態を一覧できる．&lt;/p&gt;
+
+&lt;p&gt;一覧ではなく，各Unitの詳細をみることもできる．例えば，&lt;code&gt;status&lt;/code&gt;コマンドを使うと，そのUnitが動いているマシンの&lt;code&gt;systemctl status&lt;/code&gt;の結果を取得することができる．&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-bash&#34;&gt;$ fleetctl status hello
+● hello.service - My First Service
+   Loaded: loaded (/run/fleet/units/hello.service; linked-runtime)
+      Active: active (running) since Sun 2014-11-16 07:02:10 UTC; 8min ago
+        Process: 11863 ExecStartPre=/usr/bin/docker pull busybox (code=exited, status=0/SUCCESS)
+        Process: 11853 ExecStartPre=/usr/bin/docker rm hello (code=exited, status=0/SUCCESS)
+        Process: 11844 ExecStartPre=/usr/bin/docker kill hello (code=exited, status=0/SUCCESS)
+        Main PID: 11873 (docker)
+           CGroup: /system.slice/hello.service
+              └─11873 /usr/bin/docker run --name hello busybox /bin/sh -c while true; do echo Hello World; sleep 1; done
+
+Nov 16 07:10:59 core2 docker[11873]: Hello World
+Nov 16 07:11:00 core2 docker[11873]: Hello World
+Nov 16 07:11:01 core2 docker[11873]: Hello World
+Nov 16 07:11:02 core2 docker[11873]: Hello World
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;&lt;code&gt;journal&lt;/code&gt;コマンドを使うと，各サービスのjournalのエントリをみることもできる．&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-bash&#34;&gt;$ fleetctl journal hello
+-- Logs begin at Sat 2014-11-15 10:23:32 UTC, end at Sun 2014-11-16 07:12:54 UTC. --
+Nov 16 07:12:44 core2 docker[11873]: Hello World
+Nov 16 07:12:45 core2 docker[11873]: Hello World
+Nov 16 07:12:46 core2 docker[11873]: Hello World
+Nov 16 07:12:47 core2 docker[11873]: Hello World
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;&lt;code&gt;tail -f&lt;/code&gt;みたいなこともできる．&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-bash&#34;&gt;$ fleetctl journal -f hello
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;スケジューリングされたマシンにログインしていろいろ調査することもできる．このときスケジューリングされたマシンのIPを知る必要はなく，サービス名でログインできる．&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-bash&#34;&gt;$ fleetctl ssh hello
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;h3 id=&#34;サービスの停止:15effd7923038e72678d2e2222047b08&#34;&gt;サービスの停止&lt;/h3&gt;
+
+&lt;p&gt;まず，&lt;code&gt;stop&lt;/code&gt;コマンドでサービスを停止できる．&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-bash&#34;&gt;$ fleetctl stop hello
+Unit hello.service loaded on 0d8b5e37.../10.132.181.182
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-bash&#34;&gt; $ fleetctl list-unit-files
+ UNIT            HASH    DSTATE  STATE   TARGET
+ hello.service   3f8de4b loaded  loaded  0d8b5e37.../10.132.181.182
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;これにより，サービスは&lt;code&gt;loaded&lt;/code&gt;状態に戻ったことが確認できる．これはサービスは止まったが，スケジューリングされたマシンの&lt;code&gt;systemd&lt;/code&gt;には読み込まれた状態である．&lt;/p&gt;
+
+&lt;p&gt;これを削除するには，&lt;code&gt;unload&lt;/code&gt;コマンドを使う．&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-bash&#34;&gt;$ fleetctl unload hello
+Unit hello.service inactive
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-bash&#34;&gt;$ fleetctl list-unit-files
+UNIT            HASH    DSTATE          STATE           TARGET
+hello.service   3f8de4b inactive        inactive        -
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;&lt;code&gt;inactive&lt;/code&gt;状態になり，ターゲットのマシンも消えていることが確認できる．これは，スケジューリングを解除し，fleetにUnitファイルが読み込まれただけの状態である．&lt;/p&gt;
+
+&lt;p&gt;fleetが読み込んだUnitファイルを削除するには，&lt;code&gt;destroy&lt;/code&gt;コマンドを使う．&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-bash&#34;&gt;$ fleetctl destroy hello
+Destroyed hello.service
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-bash&#34;&gt;$ fleetctl list-unit-files
+UNIT    HASH    DSTATE  STATE   TARGE
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;完全に消えた．&lt;/p&gt;
+
+&lt;h2 id=&#34;unitファイル:15effd7923038e72678d2e2222047b08&#34;&gt;Unitファイル&lt;/h2&gt;
+
+&lt;p&gt;fleetによるスケジューリングはUnitファイルにより行う．UnitファイルはsystemdのUnitファイルにfleet特有の&lt;code&gt;[X-Fleet]&lt;/code&gt;セクションを加えたものを使う．systemdについて以下の記事が詳しい．&lt;/p&gt;
+
+&lt;ul&gt;
+&lt;li&gt;&lt;a href=&#34;http://d.hatena.ne.jp/enakai00/20130914/1379146157&#34;&gt;Systemd入門(1) - Unitの概念を理解する&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a href=&#34;http://d.hatena.ne.jp/enakai00/20130915/1379212787&#34;&gt;Systemd入門(2) - Serviceの操作方法&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a href=&#34;http://d.hatena.ne.jp/enakai00/20130916/1379295816&#34;&gt;Systemd入門(3) - cgroupsと動的生成Unitに関する小ネタ&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a href=&#34;http://d.hatena.ne.jp/enakai00/20130917/1379374797&#34;&gt;Systemd入門(4) - serviceタイプUnitの設定ファイル&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a href=&#34;http://d.hatena.ne.jp/enakai00/20130923/1379927579&#34;&gt;Systemd入門(5) - PrivateTmpの実装を見る&lt;/a&gt;&lt;/li&gt;
+&lt;/ul&gt;
+
+&lt;h3 id=&#34;unitファイルの名前:15effd7923038e72678d2e2222047b08&#34;&gt;Unitファイルの名前&lt;/h3&gt;
+
+&lt;p&gt;Unitファイル名には命名規則がある．&lt;code&gt;string.suffix&lt;/code&gt;もしくは&lt;code&gt;string@instance.suffix&lt;/code&gt;とする．&lt;/p&gt;
+
+&lt;ul&gt;
+&lt;li&gt;&lt;code&gt;string&lt;/code&gt;は必須．Unitの名前を指定する．&lt;code&gt; [a-zA-Z0-9:_.@-]+&lt;/code&gt;の正規表現に一致する必要がある&lt;/li&gt;
+&lt;li&gt;&lt;code&gt;instance&lt;/code&gt;は必須ではない．1つのUnitファイルから複数のUnitインスタンスを作成するときに利用する（例えば，&lt;code&gt;hello@.service&lt;/code&gt;ファイルから&lt;code&gt;hello@1.service&lt;/code&gt;，&lt;code&gt;hello@2.service&lt;/code&gt;を作る）．この値はUnitファイル内から&lt;code&gt;%i&lt;/code&gt;として参照することもできる．&lt;code&gt; [a-zA-Z0-9:_.@-]+&lt;/code&gt;の正規表現に一致する必要がある&lt;/li&gt;
+&lt;li&gt;&lt;code&gt;suffix&lt;/code&gt;は必須．Unitの属性を指定する．service, socket, device, mount, automount, timer, pathのいずれか．&lt;/li&gt;
+&lt;/ul&gt;
+
+&lt;h3 id=&#34;セクション:15effd7923038e72678d2e2222047b08&#34;&gt;セクション&lt;/h3&gt;
+
+&lt;p&gt;一般的なfleetの設定ファイルは以下のようになる（serviceの場合）．&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;[Unit]
+generic_unit_directive_1
+generic_unit_directive_2
+
+[Service]
+service_specific_directive_1
+service_specific_directive_2
+service_specific_directive_3
+
+[X-Fleet]
+fleet_specific_directive
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;&lt;code&gt;[Unit]&lt;/code&gt;セクションには，Unitの依存関係/順序関係など，Unitのタイプに依存しない設定を既述する（systemdと同様）．&lt;/p&gt;
+
+&lt;p&gt;&lt;code&gt;[Service]&lt;/code&gt;セクションには，service固有の設定を書く．例えば，起動・停止コマンドや，サービス起動前に実行するべきコマンド，環境変数ファイルの場所などを既述する（systemdと同様）．&lt;/p&gt;
+
+&lt;p&gt;&lt;code&gt;[X-Fleet]&lt;/code&gt;セクションには，fleet特有の設定を書く．どのようにクラスタにスケジューリングを行うかを定義する．具体的には以下のような設定ができる．&lt;/p&gt;
+
+&lt;ul&gt;
+&lt;li&gt;&lt;code&gt;MachineID&lt;/code&gt; - 特定のマシンにスケジューリングしたときに利用する．マシンのIDを指定する（&lt;code&gt;fleetctl list-machines -l &lt;/code&gt;）．&lt;/li&gt;
+&lt;li&gt;&lt;code&gt;MachineOf&lt;/code&gt; - 特定のUnitが実行されているマシンと同様のマシンにスケジューリングしたときに利用する．Unit名を指定する．&lt;/li&gt;
+&lt;li&gt;&lt;code&gt;MachineMetadata&lt;/code&gt; - マシンのメタデータに基づきスケジューリングしたいときに利用する．例えばRegionやRole, diskTypeなど．これらは&lt;code&gt;cloud-config&lt;/code&gt;の&lt;code&gt;fleet.metadata&lt;/code&gt;の項目で指定できる．&lt;/li&gt;
+&lt;li&gt;&lt;code&gt;Conflicts&lt;/code&gt; - 特定のUnitが実行されているマシンを避けたいときに利用する．&lt;code&gt;MachineOf&lt;/code&gt;の逆．&lt;/li&gt;
+&lt;li&gt;&lt;code&gt;Global&lt;/code&gt; - すべてのマシンにスケジューリングしたいときに利用する．&lt;/li&gt;
+&lt;/ul&gt;
+
+&lt;h3 id=&#34;apacheサービス:15effd7923038e72678d2e2222047b08&#34;&gt;Apacheサービス&lt;/h3&gt;
+
+&lt;p&gt;具体例としてApacheサービスを起動するためのUnitファイルを作る．ファイル名は&lt;code&gt;apache@.service&lt;/code&gt;とする．&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;[Unit]
+Description=Apache web server service
+After=etcd.service
+After=docker.service
+Requires=apache-discovery@%i.service
+
+[Service]
+TimeoutStartSec=0
+KillMode=none
+EnvironmentFile=/etc/environment
+ExecStartPre=-/usr/bin/docker kill apache%i
+ExecStartPre=-/usr/bin/docker rm apache%i
+ExecStartPre=/usr/bin/docker pull user_name/apache
+ExecStart=/usr/bin/docker run --name apache%i -p $COREOS_PUBLIC_IPV4:%i:80 user_name/apache /usr/sbin/apache2ctl -D FOREGROUND
+ExecStop=/usr/bin/docker stop apache%i
+
+[X-Fleet]
+X-Conflicts=apache@*.service
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;まず&lt;code&gt;[Unit]&lt;/code&gt;セクションには，サービス名とこのサービスを起動するための依存を既述する．&lt;code&gt;After&lt;/code&gt;にはこのサービスが起動する前に起動されているべきサービスを，&lt;code&gt;Require&lt;/code&gt;にはこのサービスが必要とするサービスを既述する．&lt;/p&gt;
+
+&lt;p&gt;&lt;code&gt;Require&lt;/code&gt;に書いたサービスが失敗したらこのサービスも起動に失敗する．失敗してもサービスを継続したい場合は&lt;code&gt;Want&lt;/code&gt;を使う．&lt;/p&gt;
+
+&lt;p&gt;次に&lt;code&gt;[Service]&lt;/code&gt;セクションには，具体的なサービスの起動・停止方法を書く．&lt;code&gt;TimeoutStartSec&lt;/code&gt;を0にしてタイムアウトを無効にしている（デフォルトは90秒）．これはDockerイメージのpullに時間がかかる可能性があるため．&lt;/p&gt;
+
+&lt;p&gt;&lt;code&gt;EnvironmentFile&lt;/code&gt;を指定するとその中に既述された環境変数が有効になる．&lt;code&gt;/etc/environment&lt;/code&gt;には&lt;code&gt;COREOS_PUBLIC_IPV4&lt;/code&gt;といった値が定義されている．&lt;/p&gt;
+
+&lt;p&gt;&lt;code&gt;ExecStartPre&lt;/code&gt;にはサービス起動前に実行するべきコマンドを定義する．&lt;code&gt;=-&lt;/code&gt;とした場合は，失敗してもサービスの起動を続行する（一度目の起動は&lt;code&gt;docker kill&lt;/code&gt;や&lt;code&gt;docker rm&lt;/code&gt;は必ず失敗する）．そして&lt;code&gt;ExecStart&lt;/code&gt;と&lt;code&gt;ExecStop&lt;/code&gt;で起動，停止コマンドを指定する．&lt;/p&gt;
+
+&lt;p&gt;最後に&lt;code&gt;[X-Fleet]&lt;/code&gt;には，fleetのスケジューリングに関わる設定を既述する．&lt;code&gt;X-Conflicts&lt;/code&gt;を指定すると，そのUnitが実行されているマシンではスケジューリングされなくなる．この場合，このapacheサービスは同じマシンにはスケジューリングされない．&lt;/p&gt;
+
+&lt;p&gt;さらにこのUnitファイルはテンプレートになっており，&lt;code&gt;%i&lt;/code&gt;には動的に値が代入される．スケジューリングする際に具体的な値を入れる．例えば，以下のようにすると，起動時には80という値が代入される．&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-bash&#34;&gt;$ fleetctl submit apache@.service
+$ fleetctl load apache@80.service
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;h3 id=&#34;テンプレートの扱い:15effd7923038e72678d2e2222047b08&#34;&gt;テンプレートの扱い&lt;/h3&gt;
+
+&lt;p&gt;fleetもsystemdもシンボリックリングを扱うことができる．そのため上述した&lt;code&gt;apache@.service&lt;/code&gt;のスケジューリングは以下のように既述できる．&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-bash&#34;&gt;$ ln -s apache@.service apache@8888.service
+$ fleetctl start apache@8888.service
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;これは扱うテンプレートとそのインスタンスが増えたときに管理が楽になる．例えば，&lt;code&gt;templeates&lt;/code&gt;と&lt;code&gt;instance&lt;/code&gt;，&lt;code&gt;static&lt;/code&gt;というディレクトリを作り，動的な変更のないUnitファイルは&lt;code&gt;static&lt;/code&gt;以下に，テンプレートとして使うUnitファイルは&lt;code&gt;templates&lt;/code&gt;以下に配置し，&lt;code&gt;instances&lt;/code&gt;にシンボリックリンクを作る．&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-bash&#34;&gt;$ mkdir templates instances static
+$ mv apache@.service templates/.
+$ mv hello.service static/.
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-bash&#34;&gt;$ cd instances
+$ ln -s ../templates/apache@.service apache@5555.service
+$ ln -s ../templates/apache@.service apache@6666.service
+$ ln -s ../templates/apache@.service apache@7777.service
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;こうしておくと，instanceは以下のように一気に起動できる．管理と運用が楽になる．&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-bash&#34;&gt;$ fleetctl start instances/* 
+&lt;/code&gt;&lt;/pre&gt;
+</description>
+    </item>
+    
+    <item>
+      <title>CoreOSに入門した</title>
+      <link>http://deeeet.com/writing/2014/11/17/coreos/</link>
+      <pubDate>Mon, 17 Nov 2014 00:00:00 +0000</pubDate>
+      
+      <guid>http://deeeet.com/writing/2014/11/17/coreos/</guid>
+      <description>
+
+&lt;p&gt;&lt;a href=&#34;https://coreos.com/&#34;&gt;CoreOS is Linux for Massive Server Deployments · CoreOS&lt;/a&gt;&lt;/p&gt;
+
+&lt;p&gt;&lt;a href=&#34;http://www.meetup.com/Docker-Tokyo/events/218561812/&#34;&gt;CoreOS + Docker Meetup Tokyo #1&lt;/a&gt;に参加してCoreOSにめっちゃ感動したので，CoreOSに入門していろいろ触ってみた．&lt;/p&gt;
+
+&lt;p&gt;まず，CoreOSの概要とそれを支える技術について説明する．次に実際にDigitalOcenan上にVagrantを使って実際にCoreOSクラスタを立てて，CoreOSで遊ぶ方法について書く．&lt;/p&gt;
+
+&lt;h2 id=&#34;coreosとは何か:ed60bb4aab1bbf7e1b4034d93c897a4f&#34;&gt;CoreOSとは何か&lt;/h2&gt;
+
+&lt;p&gt;&lt;a href=&#34;https://coreos.com/&#34;&gt;CoreOS&lt;/a&gt;は，GoogleやFacebook，Twitterといった企業が実現している柔軟かつスケーラブル，耐障害性の高いインフラの構築を目的としたLinuxディストリビューションである．軽量かつ使い捨てを前提にしており，クラウドなアーキテクチャのベストプラクティスを取り入れている．CoreOSの特徴は大きく4つ挙げられる．&lt;/p&gt;
+
+&lt;ul&gt;
+&lt;li&gt;ミニマルなデザイン&lt;/li&gt;
+&lt;li&gt;容易かつ安全なOSアップデート&lt;/li&gt;
+&lt;li&gt;Dockerコンテナによるアプリケーションの起動&lt;/li&gt;
+&lt;li&gt;クラスタリング&lt;/li&gt;
+&lt;/ul&gt;
+
+&lt;p&gt;CoreOSはとてもミニマルである．従来のLinuxディストリビューションが機能を追加することでその価値を高めていったのに対して，CoreOSは必要最低限まで機能を削ぎ落としていることに価値がある（&lt;a href=&#34;http://agilecatcloud.com/2014/11/17/coreos-%E3%81%AE%E8%AA%BF%E6%9F%BB%EF%BC%9A%E8%B6%B3%E3%81%97%E7%AE%97%E3%81%8B%E3%82%89%E5%BC%95%E3%81%8D%E7%AE%97%E3%81%B8%E3%81%A8%E3%80%81linux-%E3%83%87%E3%82%A3%E3%82%B9%E3%83%88%E3%83%AA/&#34;&gt;&amp;ldquo;CoreOS の調査：足し算から引き算へと，Linux ディストリビューションを再編する&amp;rdquo;&lt;/a&gt;）．&lt;/p&gt;
+
+&lt;p&gt;CoreOSは安全かつ容易なOSアップデート機構を持っている．これには&lt;a href=&#34;https://code.google.com/p/omaha/&#34;&gt;Omaha&lt;/a&gt;というChromeOSやChromeの更新に利用されているUpdate Engineを使っており，RootFSを丸ごと入れ替えることでアップデートを行う．これによりShellShockのような脆弱性が発見されても，いちいちパッチを当てるといったことやらずに済む．&lt;/p&gt;
+
+&lt;p&gt;CoreOSは専用のパッケージマネージャーをもたない．またRubyやPythonといった言語のRuntimeも持たない．全てのアプリケーションをDockerコンテナとして動作させる．これによりプロセスの隔離と，安全なマシンリソースの共有，アプリケーションのポータビリティという恩恵を受けることができる．&lt;/p&gt;
+
+&lt;p&gt;CoreOSはクラスタリングの機構を標準で持っている．クラスタリングについては，先週来日していたCoreOSのKelsey氏は&amp;rdquo;Datacenter as a Computer&amp;rdquo;という言葉を使っていた．データセンターの大量のサーバー群からクラスタを構築してまるでそれが1つのコンピュータとして扱えるようにすることをゴールとしているといった説明をしていた．&lt;/p&gt;
+
+&lt;p&gt;CoreOSはクラウドネイティブなOSである．Amazon EC2，DigitalOcean，Rackspace，OpenStack，QEMU/KVMといったあらゆるプラットフォームが対応を始めている．1つのクラスタを異なる2つのクラウドサーバにまたがって構築することもできるし，クラウドと自社のベアメタルサーバーを使って構築することもできる．&lt;/p&gt;
+
+&lt;p&gt;CoreOSの特徴については，&lt;a href=&#34;https://twitter.com/mopemope&#34;&gt;@mopemope&lt;/a&gt;さんの &lt;a href=&#34;http://qiita.com/mopemope/items/fa9424b094aae3eac580&#34;&gt;&amp;ldquo;CoreOS入門 - Qiita&amp;rdquo;&lt;/a&gt;や，&lt;a href=&#34;https://twitter.com/yungsang&#34;&gt;@yungsang&lt;/a&gt;さんの&lt;a href=&#34;https://gist.github.com/YungSang/73148282c1a081adb2ba&#34;&gt;&amp;ldquo;CoreOS とその関連技術に関するここ半年間の私の活動まとめ&amp;rdquo;&lt;/a&gt;が詳しい．&lt;/p&gt;
+
+&lt;h2 id=&#34;coreosを支える技術:ed60bb4aab1bbf7e1b4034d93c897a4f&#34;&gt;CoreOSを支える技術&lt;/h2&gt;
+
+&lt;p&gt;CoreOSを支える技術キーワードを挙げるとすれば以下の3つになる．&lt;/p&gt;
+
+&lt;ul&gt;
+&lt;li&gt;&lt;a href=&#34;https://www.docker.com/&#34;&gt;Docker&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a href=&#34;https://github.com/coreos/etcd&#34;&gt;etcd&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a href=&#34;https://github.com/coreos/fleet&#34;&gt;fleet&lt;/a&gt;&lt;/li&gt;
+&lt;/ul&gt;
+
+&lt;p&gt;これらについてざっと説明する．&lt;/p&gt;
+
+&lt;h3 id=&#34;docker:ed60bb4aab1bbf7e1b4034d93c897a4f&#34;&gt;Docker&lt;/h3&gt;
+
+&lt;p&gt;CoreOSは専用のパッケージマネージャーをもたない．またRubyやPythonといった言語のRuntimeも持たない．全てのアプリケーションをDockerコンテナとして動作させる．&lt;/p&gt;
+
+&lt;p&gt;&lt;img src=&#34;https://coreos.com/assets/images/media/Host-Diagram.png&#34; alt=&#34;https://coreos.com/assets/images/media/Host-Diagram.png&#34; /&gt;
+&lt;/p&gt;
+
+&lt;p&gt;&lt;a href=&#34;https://coreos.com/assets/images/media/Host-Diagram.png&#34;&gt;https://coreos.com/assets/images/media/Host-Diagram.png&lt;/a&gt;&lt;/p&gt;
+
+&lt;p&gt;Dockerを使うことで上図のようにコンテナによるプロセスの隔離と，安全なマシンリソースの共有，アプリケーションのポータビリティという恩恵を受けることができる．&lt;/p&gt;
+
+&lt;h3 id=&#34;etcd:ed60bb4aab1bbf7e1b4034d93c897a4f&#34;&gt;etcd&lt;/h3&gt;
+
+&lt;p&gt;CoreOSは複数のマシンからクラスタを形成する．クラスタを形成するために，CoreOSは&lt;code&gt;etcd&lt;/code&gt;という分散Key-Valuesストアを使い，各種設定をノード間で共有する（&lt;code&gt;etcd&lt;/code&gt;ってのは&amp;rdquo;&lt;code&gt;/etc&lt;/code&gt; distributed&amp;rdquo;という意味）．&lt;/p&gt;
+
+&lt;p&gt;&lt;img src=&#34;http://deeeet.com/images/etcd.png&#34; class=&#34;image&#34;&gt;&lt;/p&gt;
+
+&lt;p&gt;&lt;a href=&#34;https://coreos.com/assets/images/media/Three-Tier-Webapp.png&#34;&gt;https://coreos.com/assets/images/media/Three-Tier-Webapp.png&lt;/a&gt;&lt;/p&gt;
+
+&lt;p&gt;&lt;code&gt;etcd&lt;/code&gt;はクラスタのサービスディスカバリーとしても利用される．クラスタのメンバーの状態などを共有し，共有情報に基づき動的にアプリケーションの設定を行う．これらを行うetcdのコアはRaftのコンセンサスアルゴリズムである．Raftについては，&lt;a href=&#34;http://thesecretlivesofdata.com/raft/&#34;&gt;&amp;ldquo;Raft - The Secret Lives of Data&amp;rdquo;&lt;/a&gt;を見るとビジュアルにその動作を見ることができる．&lt;/p&gt;
+
+&lt;p&gt;etcdは&lt;a href=&#34;https://github.com/coreos/locksmith&#34;&gt;locksmith&lt;/a&gt;というクラスタの再起動時のリブートマネジャーにも使われている．&lt;/p&gt;
+
+&lt;h3 id=&#34;fleet:ed60bb4aab1bbf7e1b4034d93c897a4f&#34;&gt;fleet&lt;/h3&gt;
+
+&lt;p&gt;コンテナによるサービスをクラスタ内のどのマシンで起動するかをいちいち人手で決めるわけにはいけない．クラスタ内のリソースの状態や動いているサービスに基づき，適切なマシンでコンテナを動かすスケジューリングの仕組みが必要になる．&lt;/p&gt;
+
+&lt;p&gt;このスケジューリングとコンテナの管理にCoreOSは&lt;code&gt;fleet&lt;/code&gt;を用いる．&lt;code&gt;fleet&lt;/code&gt;はクラスタ全体のinit systemとして，クラスタのプロセス管理を行う．&lt;code&gt;fleet&lt;/code&gt;はこれを各マシンの&lt;code&gt;systemd&lt;/code&gt;を束ねることでこれを実現している．&lt;code&gt;fleet&lt;/code&gt;で管理するサービスは&lt;code&gt;systemd&lt;/code&gt;のUnitファイルを改良したものを用いる．&lt;/p&gt;
+
+&lt;p&gt;&lt;img src=&#34;https://coreos.com/assets/images/media/Fleet-Scheduling.png&#34; alt=&#34;https://coreos.com/assets/images/media/Fleet-Scheduling.png&#34; /&gt;
+&lt;/p&gt;
+
+&lt;p&gt;&lt;a href=&#34;https://coreos.com/assets/images/media/Fleet-Scheduling.png&#34;&gt;https://coreos.com/assets/images/media/Fleet-Scheduling.png&lt;/a&gt;&lt;/p&gt;
+
+&lt;p&gt;例えば，上図のようにAPIサーバーを動かすコンテナを6つ，LB用のコンテナを2つ起動したいとする．&lt;code&gt;fleet&lt;/code&gt;はマシンのリソース状態と&lt;code&gt;systemd&lt;/code&gt;のUnitファイルに既述した条件に基づき，これらを最も適したマシンで起動する．&lt;code&gt;fleet&lt;/code&gt;はこれらのコンテナがどこで動いているかも常に管理しており，コンテナの停止，削除，ログの確認なども行うことができる．&lt;/p&gt;
+
+&lt;p&gt;もしマシンに障害が発生しても&lt;code&gt;fleet&lt;/code&gt;は自動でフェイルオーバーを行う．適切なマシンを選択し直し，登録された分のコンテナが起動していることを保証する．&lt;/p&gt;
+
+&lt;h2 id=&#34;coreosの起動:ed60bb4aab1bbf7e1b4034d93c897a4f&#34;&gt;CoreOSの起動&lt;/h2&gt;
+
+&lt;p&gt;CoreOSは&lt;code&gt;cloud-config&lt;/code&gt;という設定ファイルを使って起動する．このファイルにより，CoreOSはクラスタ内の他のメンバーと接続し，基本的なサービスを起動し，重要なパラメータを設定する．&lt;/p&gt;
+
+&lt;p&gt;&lt;code&gt;cloud-config&lt;/code&gt;は&lt;a href=&#34;https://launchpad.net/cloud-init&#34;&gt;cloud-init&lt;/a&gt;にインスパイアされている．cloud-initはCoreOSが使わないツールも含むので，&lt;code&gt;cloud-config&lt;/code&gt;は必要最低限なものだけを実装したサブセットになる．さらに，例えばetcdの設定，systemdのunitなどといったCoreOS特有の設定項目も持つ．&lt;/p&gt;
+
+&lt;p&gt;最小限には，&lt;code&gt;cloud-config&lt;/code&gt;は，ホストに既存のクラスタへの参入方法と&lt;code&gt;etcd&lt;/code&gt;と&lt;code&gt;fleet&lt;/code&gt;の2つのサービスの起動方法を伝えればよい（これらは全て関連している）．これにより，新しいホストを，既存のサーバーに接続させ，設定する必要のあるツールを提供する．基本的に，これらがCoreOSノードを既存クラスタへ参入させるための要件となる．&lt;/p&gt;
+
+&lt;h2 id=&#34;coreosクラスタを立てる:ed60bb4aab1bbf7e1b4034d93c897a4f&#34;&gt;CoreOSクラスタを立てる&lt;/h2&gt;
+
+&lt;p&gt;&lt;a href=&#34;https://github.com/tcnksm/vagrant-digitalocean-coreos&#34;&gt;tcnksm/vagrant-digitalocean-coreos&lt;/a&gt;&lt;/p&gt;
+
+&lt;p&gt;Vagrantを使ってDigitalOcean上にCoreOSのクラスタを立ち上げてみる（ソースは全て上記のレポジトリにある）．&lt;/p&gt;
+
+&lt;h3 id=&#34;sshの準備:ed60bb4aab1bbf7e1b4034d93c897a4f&#34;&gt;SSHの準備&lt;/h3&gt;
+
+&lt;p&gt;まず，全てのCoreOSは少なくとも1つのSSH公開鍵が登録されている必要がある．DigitalOceanの場合は，公開鍵をDropletsに登録しておき，以下で秘密鍵をエージェントに登録しておく必要がある．&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-bash&#34;&gt;$ ssh-add
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;fleetを使った他nodeへの接続でもCoreOSはsshを使う．CoreOSへログインした後も同様の秘密鍵の情報が利用される必要があるので，sshの際は必ず&lt;code&gt;-A&lt;/code&gt;オプションを指定する．&lt;/p&gt;
+
+&lt;h3 id=&#34;サービスディスカバリーの設定:ed60bb4aab1bbf7e1b4034d93c897a4f&#34;&gt;サービスディスカバリーの設定&lt;/h3&gt;
+
+&lt;p&gt;etcdを使ってクラスタを形成するために，discovery用のサーバを別途準備する必要がある．CoreOSは&lt;a href=&#34;#&#34;&gt;https://discovery.etcd.io&lt;/a&gt;というdiscoveryサービスを運用しており，それをそのまま使うことができる．今回はこれを利用する．&lt;/p&gt;
+
+&lt;p&gt;この&lt;code&gt;/new&lt;/code&gt;ページにアクセスすれば，新しいクラスタ用のTokenが生成されるので，それをdiscovery用のURLとして利用する．&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-bash&#34;&gt;$ curl -w &amp;quot;n&amp;quot; https://discovery.etcd.io/new
+https://discovery.etcd.io/724ac1949c661bb3970ff8984b895bca
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;（1つのクラスタに付き1つの新しいTokenを生成する必要がある．また，同じIPで再びクラスタを再構成する場合も新しいTokenを取得する必要がある）&lt;/p&gt;
+
+&lt;h3 id=&#34;最小限のcloud-config:ed60bb4aab1bbf7e1b4034d93c897a4f&#34;&gt;最小限のcloud-config&lt;/h3&gt;
+
+&lt;p&gt;&lt;code&gt;cloud-config&lt;/code&gt;は&lt;code&gt;#cloud-config&lt;/code&gt;で始まるYAMLフォーマットで既述する．以下は最小限の設定内容になる．これを&lt;code&gt;user-data.yml&lt;/code&gt;という名前で作成する．&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-yaml&#34;&gt;# cloud-config
+
+coreos:
+  etcd:
+    discovery: https://discovery.etcd.io/c39365ee7d788fb27596150a451c2434
+    addr: $private_ipv4:4001
+    peer-addr: $private_ipv4:7001
+
+  fleet:
+    public-ip: $private_ipv4
+
+units:
+  - name: etcd.service
+    command: start
+  - name: fleet.service
+    command: start
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;&lt;code&gt;coreos.etcd.*&lt;/code&gt;パラメータには，etcdの設定ファイルとしてsystemdのunitファイルへ解釈される．もしプラットフォームがcoreos-cloudinitのテンプレート機能が使えるなら&lt;code&gt;$public_ipv4&lt;/code&gt;や&lt;code&gt;$private_ipv4&lt;/code&gt;といった変数が使える．&lt;/p&gt;
+
+&lt;p&gt;&lt;code&gt;coreos.fleet.*&lt;/code&gt;パラメータも&lt;code&gt;coreos.etcd.*&lt;/code&gt;のように，fleetの設定ファイルとして利用される．&lt;/p&gt;
+
+&lt;p&gt;&lt;code&gt;coreos.units.*&lt;/code&gt;パラメータは，起動後のsystemd unitを定義する．これらは，基本的なサービスの起動を行う．&lt;code&gt;name&lt;/code&gt;はサービスの名前で必須，&lt;code&gt;command&lt;/code&gt;はunitが実行するコマンド（start, stop, reload, restart, try-restart, reload-or-restart,…）で，デフォルトは何もしない．&lt;code&gt;content&lt;/code&gt;を使うと直接unit fileの既述もできる．&lt;/p&gt;
+
+&lt;p&gt;起動後の&lt;code&gt;etcd&lt;/code&gt;と&lt;code&gt;fleet&lt;/code&gt;の設定項目は以下で確認できる．&lt;/p&gt;
+
+&lt;ul&gt;
+&lt;li&gt;&lt;code&gt;/run/systemd/system/etcd.service/20-cloundinit.conf&lt;/code&gt;&lt;/li&gt;
+&lt;li&gt;&lt;code&gt;/run/systemd/system/fleet.service/20-cloundinit.conf &lt;/code&gt;&lt;/li&gt;
+&lt;/ul&gt;
+
+&lt;h3 id=&#34;vagrantfile:ed60bb4aab1bbf7e1b4034d93c897a4f&#34;&gt;Vagrantfile&lt;/h3&gt;
+
+&lt;p&gt;&lt;a href=&#34;https://github.com/smdahlen/vagrant-digitalocean&#34;&gt;vagrant-digitalocean&lt;/a&gt; pluginを使えばVagranを使ってDigitalOcean上にイメージを立てることができる．CoreOSには，現時点（2014年11月）では最新の&lt;code&gt;494.0.0&lt;/code&gt;を利用する．以下のような&lt;code&gt;Vagrantfile&lt;/code&gt;を準備する．&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-ruby&#34;&gt;$num_instances = 1
+$image         = &#39;494.0.0 (alpha)&#39;
+
+if ENV[&amp;quot;NUM_INSTANCES&amp;quot;].to_i &amp;gt; 0 &amp;amp;&amp;amp; ENV[&amp;quot;NUM_INSTANCES&amp;quot;]
+  $num_instances = ENV[&amp;quot;NUM_INSTANCES&amp;quot;].to_i
+end
+
+Vagrant.configure(&#39;2&#39;) do |config|
+  config.ssh.username = &#39;core&#39;
+    (1..$num_instances).each do |i|
+    config.vm.define &amp;quot;core-%02d&amp;quot;%i do |config|
+      config.vm.provider :digital_ocean do |provider, override|
+      override.ssh.private_key_path = &#39;/.ssh/idrsa&#39;
+      override.vm.box               = &#39;digital_ocean&#39;
+      override.vm.box_url           = &amp;quot;https://github.com/smdahlen/vagrant-digitalocean/raw/master/box/digital_ocean.box&amp;quot;
+      provider.token                = ENV[&#39;TOKEN&#39;]
+      provider.image                = $image
+      provider.region               = &#39;nyc3&#39;
+      provider.size                 = &#39;512MB&#39;
+      provider.ssh_key_name         = ENV[&#39;SSH_KEY_NAME&#39;]
+      provider.setup                = false
+      provider.private_networking   = true
+      provider.user_data            = File.read(&#39;user-data.yml&#39;)
+    end
+   end
+  end
+end
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;また現時点（2014年11月）では，&lt;a href=&#34;https://github.com/smdahlen/vagrant-digitalocean&#34;&gt;vagrant-digitalocean&lt;/a&gt; のバージョンは0.7であり，&lt;code&gt;user_data&lt;/code&gt;（&lt;code&gt;cloud-config&lt;/code&gt;ファイル）のポストに対応していない．GitHub上にある最新はそれに対応しているので，自分でビルドしてインストールする必要がある．&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-bash&#34;&gt;$ git clone https://github.com/smdahlen/vagrant-digitalocean
+$ gem build vagrant-digitalocean.gemspec
+$ vagrant plugin install vagrant-digitalocean-0.7.0.gem
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;h3 id=&#34;coreosを起動する:ed60bb4aab1bbf7e1b4034d93c897a4f&#34;&gt;CoreOSを起動する&lt;/h3&gt;
+
+&lt;p&gt;では，実際に上記の&lt;code&gt;user-data.yml&lt;/code&gt;と&lt;code&gt;Vagrantfile&lt;/code&gt;を使ってDigitalOcean上にクラスタを立ててみる．今回は3つのインスタンスを立てる．以下のようにするだけ．&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-bash&#34;&gt;export TOKEN=&amp;quot;YOUR_DIGITALOCEAN_TOKEN&amp;quot;
+export SSH_KEY_NAME=&amp;quot;YOUR_SSH_KEY&amp;quot;
+export NUM_INSTANCES=3
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-bash&#34;&gt;$  vagrant up --provider=digital_ocean
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;h3 id=&#34;クラスタの確認をする:ed60bb4aab1bbf7e1b4034d93c897a4f&#34;&gt;クラスタの確認をする&lt;/h3&gt;
+
+&lt;p&gt;クラスタがちゃんと形成されているかを確認する．&lt;code&gt;core1&lt;/code&gt;にログインする．&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-bash&#34;&gt;$ ssh -A core@core1_public_IP
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;以下のコマンドでクラスタのマシンを確認する．それぞれのマシンの&lt;code&gt;peer-addr&lt;/code&gt;が確認できる．&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-bash&#34;&gt;$ fleetctl list-machines
+MACHINE         IP              METADATA
+12c469d0...     10.102.100.105  -
+93093555...     10.102.101.102  -
+b463af61...     10.102.101.101  -
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;&lt;code&gt;etcd&lt;/code&gt;や&lt;code&gt;fleet&lt;/code&gt;，DockerといったCoreOSで重要なサービスも使えるようになっているはず．&lt;/p&gt;
+
+&lt;h2 id=&#34;参考:ed60bb4aab1bbf7e1b4034d93c897a4f&#34;&gt;参考&lt;/h2&gt;
+
+&lt;ul&gt;
+&lt;li&gt;&lt;a href=&#34;http://www.slideshare.net/YutakaMatsubara/coreos-35320632&#34;&gt;CoreOS入門 - SlideShare&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a href=&#34;http://qiita.com/mopemope/items/fa9424b094aae3eac580&#34;&gt;CoreOS入門 - Qiita&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a href=&#34;http://www.slideshare.net/yujiod/coreosdocker&#34;&gt;CoreOSによるDockerコンテナのクラスタリング&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a href=&#34;https://gist.github.com/YungSang/73148282c1a081adb2ba&#34;&gt;CoreOS とその関連技術に関するここ半年間の私の活動まとめ&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a href=&#34;https://www.digitalocean.com/community/tutorial_series/getting-started-with-coreos-2&#34;&gt;Getting Started with CoreOS | DigitalOcean&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a href=&#34;https://www.digitalocean.com/community/tutorials/how-to-troubleshoot-common-issues-with-your-coreos-servers&#34;&gt;How To Troubleshoot Common Issues with your CoreOS Servers | DigitalOcean&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a href=&#34;http://lwn.net/Articles/617452/&#34;&gt;Etcd and fleet [LWN.net]&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a href=&#34;http://qiita.com/voluntas/items/1d5c1a6b6e7bce4abac4&#34;&gt;etcd - CoreOS が提供してくれるもの - Qiita&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a href=&#34;http://knowledge.sakura.ad.jp/tech/2519/&#34;&gt;CoreOS + etcd + fleetによるクラスタリング事始め - さくらのナレッジ&lt;/a&gt;&lt;/li&gt;
+&lt;/ul&gt;
+</description>
+    </item>
+    
+  </channel>
+</rss>

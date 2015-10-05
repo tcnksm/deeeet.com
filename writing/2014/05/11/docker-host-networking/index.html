@@ -1,0 +1,354 @@
+<!doctype html>
+<html>
+  <head>
+    <meta http-equiv="content-type" content="text/html; charset=utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    
+    <title>DockerのHost networking機能 | SOTA</title>
+    
+    <link href="https://fonts.googleapis.com/css?family=Lato%3a900" rel="stylesheet" type="text/css">
+    <link rel="stylesheet" href="/css/main.css">
+    <link rel="shortcut icon" href="/favicon.png" type="image/x-icon" />
+    <link href="http://deeeet.com//index.xml" rel="alternate" type="application/rss+xml" title="" />
+    <meta name="title" content="http://deeeet.com/writing/2014/05/11/docker-host-networking/">
+    <link rel="canonical" href="http://deeeet.com/writing/2014/05/11/docker-host-networking/">
+    
+    <meta property="og:title" content="DockerのHost networking機能"/>
+    <meta property="og:url" content="http://deeeet.com/writing/2014/05/11/docker-host-networking/"/>
+  </head>
+  
+  <body>
+    <section class="site-nav">
+      <header>
+        <nav id="navigation">
+          <ul class="menu">
+            <li><a href="https://github.com/tcnksm/talks">Talks</a></li>
+            <li><a href="https://tcnksm.exposure.co/">Photos</a></li>
+          </ul>
+
+          <a class="name" href="/">SOTA</a>
+        </nav>        
+      </header>
+    </section>
+    
+
+
+<article>
+  <div class="container">
+    <header>
+      <div class="meta">
+        <time pubdate datetime="2014-05-11" title="2014-05-11">May 11, 2014</time>
+      </div>
+      <h1 class="title">DockerのHost networking機能</h1>
+    </header>
+    
+    <section>
+      
+
+<p><a href="http://blog.docker.io/2014/05/docker-0-11-release-candidate-for-1-0/">DOCKER 0.11 IS THE RELEASE CANDIDATE FOR 1.0</a></p>
+
+<p>1.0のRCである0.11はいくつかの新機能が追加された．例えば，SELinuxのサポートや，Host networking機能，Link機能でのホスト名，Docker deamonへのpingなど．</p>
+
+<p>この中でもHost networking機能がなかなか面白いので，実際に手を動かして検証してみた．事前知識として<a href="http://deeeet.com/writing/2014/05/11/docker-network/">&ldquo;Dockerのネットワークの基礎&rdquo;</a>も書きました．ネットワークに関して不安があるひとが先にみると，Host Networing機能の利点／欠点もわかりやすいと思います．</p>
+
+<h2 id="tl-dr:3c937ec6456eab7f73bb6e98d71750a1">TL;DR</h2>
+
+<p>Host networking機能を使うと，異なるホスト間のコンテナの連携がちょっぴりやりやすくなる．SerfやConsulのようなサービスディスカバリーツールとの相性も良さそう．</p>
+
+<p>まだ出たばかりの機能で実際に使ってるひとがいないので，あくまで個人の実感．<a href="https://news.ycombinator.com/item?id=7712769">HNのコメント</a>で同様の発言は見かけた．</p>
+
+<h2 id="ネットワークモード:3c937ec6456eab7f73bb6e98d71750a1">ネットワークモード</h2>
+
+<p>コンテナを起動するとき，<code>--net</code>オプションで4つのネットワークモードを選択することができる．</p>
+
+<ul>
+<li><code>--net=bridge</code>：仮想ブリッジ<code>docker0</code>に対して新しくネットワークスタックを作成する（default）</li>
+<li><code>--net=container:&lt;コンテナ名|コンテナID&gt;</code>：他のコンテナのネットワークスタックを再利用する</li>
+<li><code>--net=host</code>：ホストのネットワークスタックをコンテナ内で利用する</li>
+<li><code>--net=none</code>：ネットワークスタックを作成しない</li>
+</ul>
+
+<h3 id="bridge:3c937ec6456eab7f73bb6e98d71750a1">bridge</h3>
+
+<p>ブリッジモードはデフォルトの挙動で，ループバックの<code>lo</code>と仮想インターフェースの<code>eth1</code>がつくられる．<code>eth1</code>はホストの<code>veth</code>（Virtual Ethernet）とパイプされる．このモードは外部のネットワークとは隔離される．</p>
+
+<pre><code class="language-bash">$ docker run --net=bridge ubuntu ifconfig
+eth0      Link encap:Ethernet  HWaddr 96:e7:26:24:69:55
+               inet addr:172.17.0.2  Bcast:0.0.0.0  Mask:255.255.0.0
+
+lo        Link encap:Local Loopback
+            inet addr:127.0.0.1  Mask:255.0.0.0
+</code></pre>
+
+<h3 id="container:3c937ec6456eab7f73bb6e98d71750a1">container</h3>
+
+<p>コンテナモードでは既に起動しているコンテナのネットワークスタックが再利用される．以下の場合だと，あらかじめ起動した<code>hello</code>コンテナで作成したネットワークスタックがそのまま利用される．つまり，<code>hello</code>コンテナを起動したときにホスト側でつくられた<code>veth</code>と仮想インターフェース<code>eth0</code>のパイプがそのまま利用される．</p>
+
+<pre><code class="language-bash">$ docker run -d --name hello ubuntu /bin/sh -c &quot;while true; do echo hello world; sleep 1; done&quot;
+$ docker run --net=container:hello ubuntu ifconfig
+eth0      Link encap:Ethernet  HWaddr b2:f4:26:c4:17:16
+               inet addr:172.17.0.2  Bcast:0.0.0.0  Mask:255.255.0.0
+
+lo        Link encap:Local Loopback
+            inet addr:127.0.0.1  Mask:255.0.0.0          
+</code></pre>
+
+<h3 id="none:3c937ec6456eab7f73bb6e98d71750a1">none</h3>
+
+<p>この場合は，新しくネットワークスタックはつくられず，ループバックの<code>lo</code>だけになる．</p>
+
+<pre><code class="language-bash">$ docker run --net=none ubuntu ifconfig
+lo        Link encap:Local Loopback
+            inet addr:127.0.0.1  Mask:255.0.0.0
+</code></pre>
+
+<h3 id="host:3c937ec6456eab7f73bb6e98d71750a1">host</h3>
+
+<p>ホストネットワークモードでは，ホストのネットワークインターフェースがそのまま利用される．</p>
+
+<pre><code class="language-bash">$ ifconfig
+docker0   Link encap:Ethernet  HWaddr 00:00:00:00:00:00
+                  inet addr:172.17.42.1  Bcast:0.0.0.0  Mask:255.255.0.0
+
+eth0      Link encap:Ethernet  HWaddr 08:00:27:88:0c:a6
+               inet addr:10.0.2.15  Bcast:10.0.2.255  Mask:255.255.255.0
+
+eth1      Link encap:Ethernet  HWaddr 08:00:27:1c:28:3b
+               inet addr:192.168.50.4  Bcast:192.168.50.255  Mask:255.255.255.0
+          
+lo        Link encap:Local Loopback
+               inet addr:127.0.0.1  Mask:255.0.0.0
+</code></pre>
+
+<pre><code class="language-bash">$ docker run --net=host ubuntu ifconfig
+docker0   Link encap:Ethernet  HWaddr 00:00:00:00:00:00
+                  inet addr:172.17.42.1  Bcast:0.0.0.0  Mask:255.255.0.0
+          
+eth0      Link encap:Ethernet  HWaddr 08:00:27:88:0c:a6
+               inet addr:10.0.2.15  Bcast:10.0.2.255  Mask:255.255.255.0
+
+eth1      Link encap:Ethernet  HWaddr 08:00:27:1c:28:3b
+               inet addr:192.168.50.4  Bcast:192.168.50.255  Mask:255.255.255.0
+
+lo        Link encap:Local Loopback
+            inet addr:127.0.0.1  Mask:255.0.0.0
+</code></pre>
+
+<h2 id="host-networkingでできること-apache:3c937ec6456eab7f73bb6e98d71750a1">Host Networkingでできること（Apache）</h2>
+
+<p>簡単な例として<a href="https://gist.github.com/tcnksm/4381bbe7e8258c1f9e8d">Apacheコンテナ</a>へのアクセスしてみる．</p>
+
+<p>環境は以下のVagrantfile内で行った．</p>
+
+<pre><code class="language-ruby">Vagrant.configure(&quot;2&quot;) do |config|
+  config.vm.box = &quot;precise64&quot;
+  config.vm.box_url = &quot;http://files.vagrantup.com/precise64.box&quot;
+  config.vm.network :private_network, ip: &quot;192.168.50.4&quot;
+  config.vm.provision :docker do |d|
+      d.pull_images &quot;ubuntu&quot;  
+  end
+end
+</code></pre>
+
+<p>以下のようなDockerfileを準備してビルドする．</p>
+
+<pre><code class="language-bash">FROM ubuntu:12.04
+
+RUN apt-get update
+RUN apt-get install -y apache2
+
+ENV APACHE_RUN_USER www-data
+ENV APACHE_RUN_GROUP www-data
+ENV APACHE_LOG_DIR /var/log/apache2
+
+RUN echo 'Hello, docker' &gt; /var/www/index.html
+
+ENTRYPOINT [&quot;/usr/sbin/apache2&quot;]
+CMD [&quot;-D&quot;, &quot;FOREGROUND&quot;]
+</code></pre>
+
+<pre><code class="language-bash">$ docker build -t tcnksm/apache .
+</code></pre>
+
+<p>デフォルトのブリッジモードでコンテナを起動する場合は，仮想ブリッジ<code>docker0</code>内でExposeしたポートをホスト側のポートにマッピングして起動する必要がある．</p>
+
+<pre><code class="language-bash">$ docker run -d -p 80:80 tcnksm/apache
+</code></pre>
+
+<p>ホストネットワークモードで起動する場合は，コンテナ内でExposeしたポートは<strong>そのまま</strong>ホストのネットワークのポートとして利用される．</p>
+
+<pre><code class="language-bash">$ docker run -d --net=host tcnksm/apache
+</code></pre>
+
+<p>別のホストからアクセスしてみる．</p>
+
+<pre><code class="language-bash">$ curl 192.168.50.4
+Hello, docker
+</code></pre>
+
+<h2 id="host-networkingでできること-serf:3c937ec6456eab7f73bb6e98d71750a1">Host Networkingでできること（Serf）</h2>
+
+<p>Host Networkingを使うと複数ホスト間の連携が簡単になりそう．すぐ思いついたのはSerfだったので，複数ホストでSerfコンテナのクラスタを組んでみる．</p>
+
+<p>まず，複数ホスト（<code>n1</code>と<code>n2</code>）を立ち上げる<code>Vagrantfile</code>を準備する．それぞれ，Docker provisionだけ走らせる．</p>
+
+<pre><code class="language-ruby">Vagrant.configure(&quot;2&quot;) do |config|
+  config.vm.box = &quot;precise64&quot;
+  config.vm.box_url = &quot;http://files.vagrantup.com/precise64.box&quot;
+
+  config.vm.provision :docker do |d|
+      d.pull_images &quot;ubuntu&quot;
+  end
+
+  config.vm.define &quot;n1&quot; do |n1|
+      n1.vm.network &quot;private_network&quot;, ip: &quot;172.20.20.10&quot;
+  end
+
+  config.vm.define &quot;n2&quot; do |n2|
+      n2.vm.network &quot;private_network&quot;, ip: &quot;172.20.20.11&quot;
+  end
+end
+</code></pre>
+
+<p>次に，SerfコンテナをつくるためのDockerfileを準備し，それぞれのホストでビルドしておく．</p>
+
+<pre><code class="language-bash">FROM ubuntu
+
+RUN apt-get -y install unzip wget
+
+RUN cd /tmp/
+RUN wget --no-check-certificat https://dl.bintray.com/mitchellh/serf/0.5.0_linux_amd64.zip -O serf.zip
+
+RUN unzip serf.zip
+RUN chmod +x serf
+RUN mv serf /usr/local/bin/serf
+
+EXPOSE 7946
+</code></pre>
+
+<pre><code class="language-bash">$ vagrant ssh n1
+$ docker build -t tcnkms/serf .
+</code></pre>
+
+<pre><code class="language-bash">$ vagrant ssh n2
+$ docker build -t tcnkms/serf .
+</code></pre>
+
+<p>クラスタを形成してみる．まず，<code>n1</code>で<code>--net=host</code>を利用してSerfコンテナを起動する．</p>
+
+<pre><code class="language-bash">$ vagrant ssh n1
+$ docker run -t --net=host tcnksm/serf serf agent -node=agent1 -bind 172.20.20.10
+==&gt; Starting Serf agent...
+==&gt; Starting Serf agent RPC...
+==&gt; Serf agent running!
+         Node name: 'agent1'
+         Bind addr: '172.20.20.10:7946'
+         RPC addr: '127.0.0.1:7373'
+         Encrypted: false
+         Snapshot: false
+         Profile: lan
+</code></pre>
+
+<p>次に<code>n2</code>から，<code>n1</code>に立てたSerfコンテナにjoinする．</p>
+
+<pre><code class="language-bash">$ vagrant ssh n2
+$ docker run -t --net=host tcnksm/serf serf agent -node=agent2 -bind 172.20.20.11 -join 172.20.20.10
+==&gt; Starting Serf agent...
+==&gt; Starting Serf agent RPC...
+==&gt; Serf agent running!
+         Node name: 'agent2'
+         Bind addr: '172.20.20.11:7946'
+         RPC addr: '127.0.0.1:7373'
+         Encrypted: false
+         Snapshot: false
+         Profile: lan
+         ==&gt; Joining cluster...(replay: false)
+         Join completed. Synced with 1 initial agents
+         
+==&gt; Log data will now stream in as it occurs:
+
+    2014/05/11 15:34:50 [INFO] agent: Serf agent starting
+    2014/05/11 15:34:50 [INFO] serf: EventMemberJoin: agent2 172.20.20.11
+    2014/05/11 15:34:50 [INFO] agent: joining: [172.20.20.10] replay: false
+    2014/05/11 15:34:50 [INFO] serf: EventMemberJoin: agent1 172.20.20.10
+    2014/05/11 15:34:50 [INFO] agent: joined: 1 Err: &lt;nil&gt;
+    2014/05/11 15:34:51 [INFO] agent: Received event: member-join
+</code></pre>
+
+<p>joinできた．</p>
+
+<p>ものすごく簡単にできた．SerfのようなサービスディスカバリーツールとHost networking機能を連携すると新たな道が開けそう．<a href="http://www.consul.io/">Consul</a>も使ってみたいなあ．</p>
+
+<h3 id="参考:3c937ec6456eab7f73bb6e98d71750a1">参考</h3>
+
+<ul>
+<li><a href="http://deeeet.com/writing/2014/03/23/serf-basic/">Serf虎の巻</a></li>
+<li><a href="http://deeeet.com/writing/2014/03/31/docker-serf/">SerfでDockerコンテナのクラスタを形成する</a></li>
+<li><a href="http://deeeet.com/writing/2014/04/08/docker-serf-haproxy/">Docker+Serf+HAproxy (+Supervisor)</a></li>
+</ul>
+
+<h2 id="考慮するべきこと:3c937ec6456eab7f73bb6e98d71750a1">考慮するべきこと</h2>
+
+<p>Host Networking良さそうだけど考慮することがある．これは，Githubの<a href="https://github.com/dotcloud/docker/issues/2012">Issue</a>でも上がっていたことだけど，コンテナが&rdquo;Run anywhere&rdquo;ではなくなる．例えば，8000ポートをExposeしたコンテナを立てようとして，ホストが既にそのポートを利用していた場合など．</p>
+
+<p>コンテナがNATで隔離されるのはDockerの利点でもあるので，Dockerをどう使うかを考えた上で利用するべき機能だと思う．</p>
+
+<h3 id="スポンサー:3c937ec6456eab7f73bb6e98d71750a1">スポンサー</h3>
+
+<p>この記事は，<a href="https://twitter.com/deeeet/status/464569434867507201">docker飲み</a>のおつり（500円）で書かれました．<a href="https://twitter.com/kenjiskywalker">@kenjiskywalkerさん</a>，<a href="https://twitter.com/punytan">@punytanさん</a>，<a href="https://twitter.com/repeatedly">@repeatedlyさん</a>，<a href="https://twitter.com/sonots">@sonotsさん</a>，ありがとうございました．また，参加させてください．</p>
+
+      <div class="social">
+  
+  
+  <a href="https://twitter.com/share" class="twitter-share-button" data-via="deeeet" data-count="none">Tweet</a>
+  
+  
+</div>
+
+    </section>
+
+    <footer>
+      <address>
+        
+        <img src="/images/bio.jpeg"/>
+        
+        <p>Written by <strong><a rel="author" href="https://twitter.com/deeeet" title="Taichi Nakashima" target="_blank">Taichi Nakashima</a></strong><br>
+          <span class="muted">A Tokyo based PaaS engineer. Please contact me via twitter.</span>
+        </p>
+      </address>
+
+    </footer>
+
+  </div>
+</article>
+
+<script type="text/javascript" src="//ajax.googleapis.com/ajax/libs/jquery/1.7.2/jquery.min.js"></script>
+<script type="text/javascript" src="/js/main.js"></script>
+
+<script>!function(d,s,id){var js,fjs=d.getElementsByTagName(s)[0],p=/^http:/.test(d.location)?'http':'https';if(!d.getElementById(id)){js=d.createElement(s);js.id=id;js.src=p+'://platform.twitter.com/widgets.js';fjs.parentNode.insertBefore(js,fjs);}}(document, 'script', 'twitter-wjs');</script>
+
+
+<script type="text/javascript">var HN=[];HN.factory=function(e){return function(){HN.push([e].concat(Array.prototype.slice.call(arguments,0)))};},HN.on=HN.factory("on"),HN.once=HN.factory("once"),HN.off=HN.factory("off"),HN.emit=HN.factory("emit"),HN.load=function(){var e="hn-button.js";if(document.getElementById(e))return;var t=document.createElement("script");t.id=e,t.src="//hn-button.herokuapp.com/hn-button.js";var n=document.getElementsByTagName("script")[0];n.parentNode.insertBefore(t,n)},HN.load();</script>
+
+
+  <script>
+  (function(i,s,o,g,r,a,m){i['GoogleAnalyticsObject']=r;i[r]=i[r]||function(){
+  (i[r].q=i[r].q||[]).push(arguments)},i[r].l=1*new Date();a=s.createElement(o),
+  m=s.getElementsByTagName(o)[0];a.async=1;a.src=g;m.parentNode.insertBefore(a,m)
+  })(window,document,'script','//www.google-analytics.com/analytics.js','ga');
+
+  ga('create', 'UA-45390253-1', 'auto');
+  ga('send', 'pageview');
+
+</script>
+
+
+
+<script>
+  $(document).ready(function() {
+  
+  $('p:has(img)').css('text-align', 'center');
+  $('iframe').css('style', 'display: block; margin: 0px auto;');
+  });
+</script>
+

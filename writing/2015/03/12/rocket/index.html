@@ -1,0 +1,441 @@
+<!doctype html>
+<html>
+  <head>
+    <meta http-equiv="content-type" content="text/html; charset=utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    
+    <title>AppcとCoreOS/Rocket | SOTA</title>
+    
+    <link href="https://fonts.googleapis.com/css?family=Lato%3a900" rel="stylesheet" type="text/css">
+    <link rel="stylesheet" href="/css/main.css">
+    <link rel="shortcut icon" href="/favicon.png" type="image/x-icon" />
+    <link href="http://deeeet.com//index.xml" rel="alternate" type="application/rss+xml" title="" />
+    <meta name="title" content="http://deeeet.com/writing/2015/03/12/rocket/">
+    <link rel="canonical" href="http://deeeet.com/writing/2015/03/12/rocket/">
+    
+    <meta property="og:title" content="AppcとCoreOS/Rocket"/>
+    <meta property="og:url" content="http://deeeet.com/writing/2015/03/12/rocket/"/>
+  </head>
+  
+  <body>
+    <section class="site-nav">
+      <header>
+        <nav id="navigation">
+          <ul class="menu">
+            <li><a href="https://github.com/tcnksm/talks">Talks</a></li>
+            <li><a href="https://tcnksm.exposure.co/">Photos</a></li>
+          </ul>
+
+          <a class="name" href="/">SOTA</a>
+        </nav>        
+      </header>
+    </section>
+    
+
+
+<div class="container">
+  <div class="article-cover">
+    <div>
+      <img src="/images/rocket.png" class="image">
+    </div>
+  </div>
+</div>
+
+<article>
+  <div class="container">
+    <header>
+      <div class="meta">
+        <time pubdate datetime="2015-03-12" title="2015-03-12">March 12, 2015</time>
+      </div>
+      <h1 class="title">AppcとCoreOS/Rocket</h1>
+    </header>
+    
+    <section>
+      
+
+<p><a href="http://deeeet.com/writing/2015/02/17/docker-bad-points/">Dockerの諸問題とRocket登場の経緯</a></p>
+
+<p>Rocketはリリースした直後にちょっと触ってそのまま放置していた．App containerの一連のツールとRocketが現状どんな感じかをざっと触ってみる．まだまだ全然使えると思えないが今後差分だけ追えるようにしておく．</p>
+
+<p>なお，今回試した一連のツールをすぐに試せるVagrantfileをつくったので触ってみたいひとはどうぞ．</p>
+
+<p><a href="https://github.com/tcnksm/vagrant-appc">https://github.com/tcnksm/vagrant-appc</a></p>
+
+<h2 id="概要:413510169f1d30325fc757ed0e8dc4df">概要</h2>
+
+<p>App Container SpecやRocketが登場の経緯は前回書いたのでここでは省略し，これらは一体何なのかを簡単に書いておく．</p>
+
+<p>まず，App Container（appc）Specはコンテナで動くアプリケーションの&rdquo;仕様&rdquo;である．なぜ仕様が必要かというと，コンテナという概念は今まで存在したが曖昧なものだったため．namespaceやcgroupを使った..という何となくのものはあったが，統一的なものは存在しなかったため．appc specはOpenかつSecure，Composable，Simpleであることを理念に掲げて作成されている．</p>
+
+<p>appcには仕様だけではなくいくつかのツールも提供されている．例えば，appcの元になるApp Container Image (ACI)の構築と検証を行う<code>actool</code>や，DockerイメージからACIをつくる<code>docker2aci</code>，Go言語のバイナリからACIをつくる<code>goaci</code>などがある．</p>
+
+<p>では，Rocketは何かというと，そのappcを動かす<strong>runtimeの実装の1つ</strong>である．つまりappcとRocketは別のものであり実装は他にも存在する．例えば，現時点ではFreeBSDのJail/ZFSとGo言語で実装された<a href="https://github.com/3ofcoins/jetpack">Jetpack</a>や，C++のライブラリとして<a href="https://github.com/cdaylward/libappc">libappc</a>とそれを使ったruntimeである<a href="https://github.com/cdaylward/nosecone">Nose Cone</a>などがある．</p>
+
+<p>今回はこれらのappc関連ツールとRocketを実際に触ってみる．</p>
+
+<h2 id="appc-tools:413510169f1d30325fc757ed0e8dc4df">Appc tools</h2>
+
+<p>まず，<a href="https://github.com/appc">https://github.com/appc</a>にあるAppcの一連のツールを触ってみる．</p>
+
+<h3 id="actoolによるイメージのbuild:413510169f1d30325fc757ed0e8dc4df">actoolによるイメージのbuild</h3>
+
+<p><code>actool</code>はRootファイルシステムとjsonで既述されるmanifestファイルを基にACIをビルドするツール．ビルドだけではなく，manifestやACIが仕様通りであるかの検証を行うこともできる．</p>
+
+<p>例として，以下のGo言語で書かれてサンプルWebアプリケーションを動かすためのACIを作成する．</p>
+
+<pre><code class="language-go">package main
+
+import (
+    &quot;log&quot;
+    &quot;net/http&quot;
+)
+
+func main()
+    http.HandleFunc(&quot;/&quot;, func(w http.ResponseWriter, r *http.Request) {
+        log.Printf(&quot;Request from %vn&quot;, r.RemoteAddr)
+        w.Write([]byte(&quot;Hello from App Container&quot;))
+    })
+        
+    log.Fatal(http.ListenAndServe(&quot;:5000&quot;, nil))
+}
+</code></pre>
+
+<p>ルートファイルシステムを準備する．</p>
+
+<pre><code class="language-bash">$ mkdir hello
+$ mkdir hello/rootfs
+$ mkdir hello/rootfs
+</code></pre>
+
+<p>サンプルアプリケーションを静的リンクでビルドする（go1.4の場合は<code>-installsuffix</code>が必要）．</p>
+
+<pre><code class="language-bash">$ CGO_ENABLED=0 GOOS=linux go build -a -tags netgo -ldflags '-w' -o hello-web
+</code></pre>
+
+<pre><code class="language-bash">$ file hello-web
+hello-web: ELF 64-bit LSB  executable, x86-64, version 1 (SYSV), statically linked, not stripped
+</code></pre>
+
+<p>バイナリをRootFS内に配置する．</p>
+
+<pre><code class="language-bash">$ mv hello-web hello/rootfs/bin/.
+</code></pre>
+
+<p>次にイメージのmanifestファイルを作成する．</p>
+
+<pre><code class="language-bash">$ cat &lt;&lt; EOF &gt; hello/manifest
+{
+  &quot;acKind&quot;: &quot;ImageManifest&quot;,
+  &quot;acVersion&quot;: &quot;0.3.0&quot;,
+  &quot;name&quot;: &quot;hello&quot;,
+  &quot;labels&quot;: [
+    &quot;name&quot;: &quot;os&quot;, &quot;value&quot;: &quot;linux&quot;,
+    &quot;name&quot;: &quot;arch&quot;, &quot;value&quot;: &quot;amd64&quot;
+   ],
+  &quot;app&quot;:
+    &quot;exec&quot;: [
+      &quot;/bin/hello-web&quot;
+    ],
+  &quot;user&quot;: &quot;0&quot;,
+  &quot;group&quot;: &quot;0&quot;
+}
+EOF
+</code></pre>
+
+<p><code>actool validate</code>を使うと仕様通りにmanifestファイルが作成されているかを検証することができる．</p>
+
+<pre><code class="language-bash">$ actool -debug validate hello/manifest
+hello/manifest: valid ImageManifest
+</code></pre>
+
+<p>また同じく<code>actool validate</code>を使いイメージのレイアウトが仕様通りであるかを検証する．</p>
+
+<pre><code class="language-bash">$ actool -debug validate hello
+hello: valid image layout
+</code></pre>
+
+<p><code>actool build</code>でイメージをビルドする．</p>
+
+<pre><code class="language-bash">$ actool build hello/ hello.aci
+</code></pre>
+
+<p><code>actool validate</code>でACIが仕様通りであるかを検証する．</p>
+
+<pre><code class="language-bash">$ actool -debug validate hello.aci
+hello.aci: valid app container image
+</code></pre>
+
+<p>ちなみにACIはただのtarファイルである．</p>
+
+<pre><code class="language-bash">$ tar xvf hello.aci
+rootfs
+rootfs/bin
+rootfs/bin/hello-web
+manifest
+</code></pre>
+
+<p>また<a href="https://github.com/appc/spec">appc/spec</a>にはACIを実行するApp Container Executor（例えばRocket）を検証するためのACIも提供されている．</p>
+
+<pre><code class="language-bash">$ EXECUTOR run ace_validator.aci
+</code></pre>
+
+<h3 id="actoolによるイメージのdiscovery:413510169f1d30325fc757ed0e8dc4df">actoolによるイメージのdiscovery</h3>
+
+<p>DockerはDockerHubやDocker registryによりコンテナのイメージを配布するということを当たり前にした．が，イメージを配置するだけなのに専用のregistryプロトコルを使わないといけなかったり，イメージがちゃんとダウンロードされたかを検証する方法をちゃんと提供していないなど問題がいくつかある．</p>
+
+<p>appc specでは，インターネット上に配置したACIとその検証を行うための署名のURLをACIの名前から解決する方法も仕様として定めている（この仕様はなかなか面白いので後で別途記事を書く予定）．</p>
+
+<p><code>actool discover</code>を使うとACIの名前から適切にACIとその署名，公開鍵のURLを見つけられるかを確認することができる（<code>ASC</code>は署名で<code>Keys</code>は公開鍵）．</p>
+
+<pre><code class="language-bash">$ actool discover -insecure coreos.com/etcd
+ACI: https://github.com/coreos/etcd/releases/download/latest/etcd-latest-linux-amd64.aci
+ASC: https://github.com/coreos/etcd/releases/download/latest/etcd-latest-linux-amd64.aci.asc
+Keys: https://coreos.com/dist/pubkeys/aci-pubkeys.gpg
+</code></pre>
+
+<h3 id="docker2aci:413510169f1d30325fc757ed0e8dc4df">docker2aci</h3>
+
+<p>actoolによるイメージのbuildは現時点では正直しんどい．それに対してDockerはDockerfileで簡単にイメージを作ることができるし，DockerHubには既に多くの良いDockerイメージが存在している．この利点を活かすために<a href="https://github.com/appc/docker2aci">docker2aci</a>というツールが提供されている．</p>
+
+<p>例えば，Dockerhubにある<code>crosbymichael/redis</code>からACIを作成するには以下を実行すれば良い．<code>crosbymichael-redis-latest.aci</code>が作成される．</p>
+
+<pre><code class="language-bash">$ docker2aci crosbymichael/redis:latest
+</code></pre>
+
+<p>Dockerのイメージはやはり便利らしく，CloudFoundryのコンテナruntimeであるGardenもDocker imageをRootFSとして利用できるようにしているらしい（参考: <a href="http://www.slideshare.net/jacopen/diego-45603123">新しいDiegoの仕組み入門</a>）．</p>
+
+<p>ちなみに，逆にDockerでACIを使えるようにするというPRもある（<a href="https://github.com/docker/docker/pull/10776">https://github.com/docker/docker/pull/10776</a>）．</p>
+
+<pre><code class="language-bash">$ docker pull --format aci coreos.com/etcd:v2.0.0
+$ docker run --format aci coreos.com/etcd
+</code></pre>
+
+<p>が，DockerのCTOのSolomon Hykes氏が「ユーザに何のメリットがあるの？」とかコメントしていて感慨深い．</p>
+
+<h3 id="goaci:413510169f1d30325fc757ed0e8dc4df">goaci</h3>
+
+<p>上では自分でRootFSを作ってGo言語のサンプルアプリケーションをビルドするなどしたが，<code>go get</code>のようにGo言語のアプリケーションをACIに変換するツールも提供されている．</p>
+
+<pre><code class="language-bash">$ acigo github.com/coreos/etcd
+</code></pre>
+
+<p><code>$GOPATH</code>を書き換えて<code>go get</code>を実行している．そして，静的リンクでコンパイルを実行し，デフォルト値で基本的なmanifestファイルを準備してACIのビルドを行っているだけ．</p>
+
+<h2 id="rocket:413510169f1d30325fc757ed0e8dc4df">Rocket</h2>
+
+<p><a href="https://github.com/coreos/rocket/blob/master/Documentation/commands.md">Rocket Commands</a></p>
+
+<p>現時点(v0.4.0)のRocketでやれることを一通りやってみる．</p>
+
+<h3 id="trust-fetch:413510169f1d30325fc757ed0e8dc4df">trust, fetch</h3>
+
+<p>上述したappcのdiscoveryと署名の仕様に従ってインターネット上からイメージを取得することができる．ここでは例として<code>coreos.com/etcd</code>というACIを取得する．</p>
+
+<p>まず，<code>rkt trust</code>コマンドで取得するACIの公開鍵を取得する．</p>
+
+<pre><code class="language-bash">$ sudo rkt trust --insecure-allow-http --prefix coreos.com/etcd
+...
+Added key for prefix &quot;coreos.com/etcd&quot; at &quot;/etc/rkt/trustedkeys/prefix.d/coreos.com/etcd/8b86de38890ddb7291867b025210bd8888182190&quot;
+</code></pre>
+
+<p>次に<code>rkt fetch</code>コマンドでACIを取得する．署名も同時にダウンロードして上で取得した公開鍵をつかって署名の検証も行う．</p>
+
+<pre><code class="language-bash">$ sudo rkt fetch coreos.com/etcd:v2.0.0
+</code></pre>
+
+<p>もちろんイメージのURLを知っていればそれをそれを直接指定することもできる．</p>
+
+<pre><code class="language-bash">$ sudo rkt fetch https://github.com/coreos/etcd/releases/download/v2.0.0/etcd-v2.0.0-linux-amd64.aci
+</code></pre>
+
+<h3 id="run:413510169f1d30325fc757ed0e8dc4df">run</h3>
+
+<p><code>rkt run</code>でコンテナを起動する．上で<code>actool</code>を使って作成した<code>hello.aci</code>を動かすには以下のようにする．</p>
+
+<pre><code class="language-bash">$ sudo rkt run hello.aci &amp;
+</code></pre>
+
+<p>コンテナにアクセスしてみる．</p>
+
+<pre><code class="language-bash">$ curl localhost:50000
+Hello from App Container
+</code></pre>
+
+<p>コンテナを殺すには普通にプロセスをkillすればよい（フォアグランドで実行した場合は，<code>^]</code>を3回叩けば死ぬ）．</p>
+
+<p>Dockerと比較した場合のRocketの大きな特徴は中央集権デーモンが存在しないことである．Rocketでコンテナをつくればそれは1つのプロセスとして存在することになる．そのためupstartやsystemdといった既存のツールで個々のコンテナプロセスを管理することができる．</p>
+
+<p>ちなみに署名の検証を無視すればDockerHub上のイメージを使うこともできる</p>
+
+<pre><code class="language-bash">$ sudo rkt --insecure-skip-verify run docker://redis
+</code></pre>
+
+<h3 id="list-status:413510169f1d30325fc757ed0e8dc4df">list, status</h3>
+
+<p><code>rkt list</code>でコンテナの一覧を確認できる．</p>
+
+<pre><code class="language-bash">$ sudo rkt list
+UUID                                    ACI             STATE
+2bbe6aaa-a41d-43cd-b5b2-ff8058662bb6    hello           active
+b1c946f5-bd54-43e6-b241-289077adf12f    coreos.com/etcd inactive
+</code></pre>
+
+<p><code>rkt status</code>でコンテナの状態（PIDと終了状態）を確認できる．</p>
+
+<pre><code class="language-bash">$ sudo rkt status 2bbe6aaa-a41d-43cd-b5b2-ff8058662bb6
+pid=21967
+exited=false
+</code></pre>
+
+<h3 id="gc:413510169f1d30325fc757ed0e8dc4df">gc</h3>
+
+<p><code>rkt gc</code>で古いinactiveなコンテナを破棄することができる．<code>-grace-period </code>でinactiveからどれだけ時間の経過したものを破棄するかを指定できる．</p>
+
+<pre><code class="language-bash">$ sudo rkt gc -grace-period=10s
+</code></pre>
+
+<p>これをsystemdの<code>OnCalendar</code>で定期実行してゴミ捨て場にならないようにする．</p>
+
+<h3 id="enter:413510169f1d30325fc757ed0e8dc4df">enter</h3>
+
+<p><code>rkt enter</code>でコンテナのnamespace内に入ることができる．</p>
+
+<pre><code class="language-bash">$ sudo rkt enter 29d47fda-23f5-423f-9457-708d775ee9d9
+No command specified, assuming &quot;/bin/bash&quot;
+root@rootfs:/#
+</code></pre>
+
+<h2 id="rocketのアーキテクチャ:413510169f1d30325fc757ed0e8dc4df">Rocketのアーキテクチャ</h2>
+
+<ul>
+<li><a href="https://github.com/coreos/rocket/blob/master/Documentation/architecture.md">Rocket architecture</a></li>
+<li><a href="http://qiita.com/mopemope/items/9f163e4715a8bb5846e9">CoreOS - はじめてのRocket - Qiita</a></li>
+</ul>
+
+<p>Rocketの内部について簡単にまとめておく．Rocketは<code>rkt</code>コマンドのみで構成され，Dockerのようなデーモンはない．そのため，既に起動しているコンテナに影響を与えることなくRocketそのものをアップデートすることができる．</p>
+
+<p>Rocketの起動はstage0 -&gt; stage1 -&gt; stage2の3つのstageに分けられる．各stageはモジュラーな構成になっている．これらが具体的に何をしているのかを簡単に説明する．</p>
+
+<h3 id="stage0:413510169f1d30325fc757ed0e8dc4df">Stage0</h3>
+
+<p>Stage0は<code>rkt</code>がコンテナを動かすための初期設定を行う．</p>
+
+<ul>
+<li>ACIの取得</li>
+<li>もし<code>--stage1-image</code>が指定されたらStage1のACIの取得（デフォルトは<code>rkt</code>と同じディレクトリの<code>stage1.aci</code>）</li>
+<li>コンテナのUUIDの生成</li>
+<li>コンテナのRuntime Manifestの生成</li>
+<li>コンテナのためのファイルシステムの作成</li>
+<li>Stage1とStage2用のディレクトリの作成</li>
+<li>Stage1のACIのコンテナファイルシステムへの展開</li>
+<li>ACIの展開とアプリケーションのStage2ディレクトリへのコピー</li>
+</ul>
+
+<h3 id="stage1:413510169f1d30325fc757ed0e8dc4df">Stage1</h3>
+
+<p>Stage1では，cgroupやnamespaceの設定やプロセスの起動，ホストのルートとしての各種オペレーションを実行する．</p>
+
+<ul>
+<li>コンテナのRuntime ManifestからsystemdのUnitファイルの生成</li>
+<li>外部Volumeの準備</li>
+<li>root systemdの起動</li>
+</ul>
+
+<p>以下のようなコマンドを実行している．</p>
+
+<pre><code class="language-bash">stage1/rootfs/usr/lib/ld-linux-x86-64.so.2 \
+stage1/rootfs/usr/bin/systemd-nspawn \
+    --boot \
+    --register false \
+    --quiet \
+    --uuid=81387c20-df38-4e17-9bab-985269148fbb \
+    --directory=stage1/rootfs \
+    -- \
+    --default-standard-output=tty \
+    --log-target=null \
+    --show-status=0
+</code></pre>
+
+<p><code>systemd-nspawn</code>を使っているのがわかる．これについては以下が詳しい．</p>
+
+<ul>
+<li><a href="http://lwn.net/Articles/572957/">Creating containers with systemd-nspawn LWN.net</a></li>
+<li><a href="http://www.geeks-dev.com/docker%E3%82%88%E3%82%8A%E6%9F%94%E8%BB%9F%E3%81%AA%E3%82%B3%E3%83%B3%E3%83%86%E3%83%8A%E5%9E%8B%E4%BB%AE%E6%83%B3%E5%8C%96systemd-nspawn%E3%82%92%E4%BD%BF%E3%81%A3%E3%81%A6%E3%81%BF%E3%81%9F/">Dockerより柔軟なコンテナ型仮想化 systemd-nspawn を使ってみた</a></li>
+</ul>
+
+<h3 id="stage2:413510169f1d30325fc757ed0e8dc4df">Stage2</h3>
+
+<p>アプリケーションの起動．例えば上で作成した<code>hello.aci</code>の場合は以下のプロセスが起動する．</p>
+
+<pre><code class="language-bash">/bin/hello-web
+</code></pre>
+
+<h2 id="まとめ:413510169f1d30325fc757ed0e8dc4df">まとめ</h2>
+
+<p>今週末の日曜日（3/15）に<a href="http://rebuild.fm/">rebuild.fm</a>で喋ります．</p>
+
+<h2 id="参考:413510169f1d30325fc757ed0e8dc4df">参考</h2>
+
+<ul>
+<li><a href="https://github.com/appc/spec/releases/tag/v0.4.0">https://github.com/appc/spec/releases/tag/v0.4.0</a></li>
+<li><a href="https://github.com/coreos/rocket/releases/tag/v0.4.0">https://github.com/coreos/rocket/releases/tag/v0.4.0</a></li>
+<li><a href="https://coreos.com/blog/rocket-and-appc-0.3.1/">Announcing Rocket and App Container v0.3.1</a></li>
+<li><a href="http://opensource.com/business/15/2/interview-jonathan-boulle-rocket">Rocket and the application container spec</a></li>
+<li><a href="http://www.socallinuxexpo.org/sites/default/files/presentations/appc%20%2B%20rocket%20(SCALE%2013x).pdf">Rocket and the App Container Spec (PDF)</a></li>
+</ul>
+
+      <div class="social">
+  
+  
+  <a href="https://twitter.com/share" class="twitter-share-button" data-via="deeeet" data-count="none">Tweet</a>
+  
+  
+</div>
+
+    </section>
+
+    <footer>
+      <address>
+        
+        <img src="/images/bio.jpeg"/>
+        
+        <p>Written by <strong><a rel="author" href="https://twitter.com/deeeet" title="Taichi Nakashima" target="_blank">Taichi Nakashima</a></strong><br>
+          <span class="muted">A Tokyo based PaaS engineer. Please contact me via twitter.</span>
+        </p>
+      </address>
+
+    </footer>
+
+  </div>
+</article>
+
+<script type="text/javascript" src="//ajax.googleapis.com/ajax/libs/jquery/1.7.2/jquery.min.js"></script>
+<script type="text/javascript" src="/js/main.js"></script>
+
+<script>!function(d,s,id){var js,fjs=d.getElementsByTagName(s)[0],p=/^http:/.test(d.location)?'http':'https';if(!d.getElementById(id)){js=d.createElement(s);js.id=id;js.src=p+'://platform.twitter.com/widgets.js';fjs.parentNode.insertBefore(js,fjs);}}(document, 'script', 'twitter-wjs');</script>
+
+
+<script type="text/javascript">var HN=[];HN.factory=function(e){return function(){HN.push([e].concat(Array.prototype.slice.call(arguments,0)))};},HN.on=HN.factory("on"),HN.once=HN.factory("once"),HN.off=HN.factory("off"),HN.emit=HN.factory("emit"),HN.load=function(){var e="hn-button.js";if(document.getElementById(e))return;var t=document.createElement("script");t.id=e,t.src="//hn-button.herokuapp.com/hn-button.js";var n=document.getElementsByTagName("script")[0];n.parentNode.insertBefore(t,n)},HN.load();</script>
+
+
+  <script>
+  (function(i,s,o,g,r,a,m){i['GoogleAnalyticsObject']=r;i[r]=i[r]||function(){
+  (i[r].q=i[r].q||[]).push(arguments)},i[r].l=1*new Date();a=s.createElement(o),
+  m=s.getElementsByTagName(o)[0];a.async=1;a.src=g;m.parentNode.insertBefore(a,m)
+  })(window,document,'script','//www.google-analytics.com/analytics.js','ga');
+
+  ga('create', 'UA-45390253-1', 'auto');
+  ga('send', 'pageview');
+
+</script>
+
+
+
+<script>
+  $(document).ready(function() {
+  
+  $('p:has(img)').css('text-align', 'center');
+  $('iframe').css('style', 'display: block; margin: 0px auto;');
+  });
+</script>
+

@@ -1,0 +1,179 @@
+<?xml version="1.0" encoding="utf-8" standalone="yes" ?>
+<rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom">
+  <channel>
+    <title>Vagrant Docker on SOTA</title>
+    <link>http://deeeet.com/categories/vagrant-docker/</link>
+    <description>Recent content in Vagrant Docker on SOTA</description>
+    <generator>Hugo -- gohugo.io</generator>
+    <language>ja-jp</language>
+    <copyright>Copyright (C) 2013-2015 Taichi Nakashima All Right Reserved.</copyright>
+    <lastBuildDate>Thu, 08 May 2014 00:00:00 +0000</lastBuildDate>
+    <atom:link href="http://deeeet.com/categories/vagrant-docker/index.xml" rel="self" type="application/rss+xml" />
+    
+    <item>
+      <title>Vagrant1.6のDocker provider</title>
+      <link>http://deeeet.com/writing/2014/05/08/vagrant-docker-provider/</link>
+      <pubDate>Thu, 08 May 2014 00:00:00 +0000</pubDate>
+      
+      <guid>http://deeeet.com/writing/2014/05/08/vagrant-docker-provider/</guid>
+      <description>
+
+&lt;p&gt;&lt;a href=&#34;http://www.vagrantup.com/blog/feature-preview-vagrant-1-6-docker-dev-environments.html&#34;&gt;Feature Preview: Docker-Based Development Environments&lt;/a&gt;&lt;/p&gt;
+
+&lt;p&gt;Vagrant 1.6からDocker providerがサポートされた．つまり，VagrantでVMだけでなくコンテナも管理できるようになった．&lt;/p&gt;
+
+&lt;p&gt;この機能はネイティブでDockerをサポートしてないOSXでも使え，この場合は裏側でProxy VM（&lt;a href=&#34;https://vagrantcloud.com/mitchellh/boot2docker&#34;&gt;boot2docker box&lt;/a&gt;）が勝手に立ち上がって，その上でコンテナが立ち上がる．つまり，以下のようになる．&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;OSX -&amp;gt; (Proxy VM) -&amp;gt; Docker Container
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;OSXの場合，これは今までboot2dockerを使ってやってきたのと変わらない．ただ，Docker providerを使うと，boot2dockerの立ち上げまで面倒を見てくれる．&lt;/p&gt;
+
+&lt;h2 id=&#34;何が嬉しいのか:0adf6cf775d9b8f37f78106628b21de7&#34;&gt;何が嬉しいのか&lt;/h2&gt;
+
+&lt;p&gt;VagrantでDockerコンテナを立ち上げる利点はかなりあると思う，&lt;/p&gt;
+
+&lt;ul&gt;
+&lt;li&gt;&lt;code&gt;vagrant up&lt;/code&gt;だけで環境を立ち上げられる&lt;/li&gt;
+&lt;li&gt;同様のインターフェースでLinuxでもOSXでも動かせる&lt;/li&gt;
+&lt;li&gt;コンテナの立ち上げの設定をVagrantfileに書ける&lt;/li&gt;
+&lt;li&gt;Proxy VMの設定をVagranfileに書ける&lt;/li&gt;
+&lt;li&gt;Vagrantの機能（syncd folder，ネットワーク設定，&lt;code&gt;vagrant ssh&lt;/code&gt;，provisioner，&lt;code&gt;vagrant share&lt;/code&gt;）が使える&lt;/li&gt;
+&lt;li&gt;プラグインが書ける&lt;/li&gt;
+&lt;/ul&gt;
+
+&lt;p&gt;これはそのままVagrantの利点だけど，それをDockerコンテナに持ち込めるのがよい．つまり，&lt;a href=&#34;http://mitchellh.com/the-tao-of-vagrant&#34;&gt;Vagrant道&lt;/a&gt;をDockerコンテナを使った開発にも適用できるようになる．&lt;/p&gt;
+
+&lt;p&gt;自分的には，&lt;code&gt;Vagrantfile&lt;/code&gt;にコンテナの設定などを再現可能な状態で簡単に残せるのがよい．今までOSXでDocker使うときは，&lt;code&gt;boot2docker init&lt;/code&gt;して，&lt;code&gt;VBoxManage modifyvm&lt;/code&gt;でポートフォワードして，&lt;code&gt;export DOCKER_HOST&lt;/code&gt;して，などなど一手間あったが，&lt;code&gt;vagrant up&lt;/code&gt;だけになる．それだけでも嬉しい．&lt;/p&gt;
+
+&lt;p&gt;また，v1.6から任意のディレクトリからVagrantのVMを操作できるようになった（&lt;a href=&#34;http://www.vagrantup.com/blog/feature-preview-vagrant-1-6-global-status.html&#34;&gt;Global Status and Control&lt;/a&gt;）ので，ほとんどDockerを扱うような感覚で扱える．&lt;/p&gt;
+
+&lt;h2 id=&#34;使ってみた:0adf6cf775d9b8f37f78106628b21de7&#34;&gt;使ってみた&lt;/h2&gt;
+
+&lt;p&gt;OSX上でざっと触ってみた．最新版(1.6.1)をインストールしておく．&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-bash&#34;&gt;$ vagrant -v
+Vagrant 1.6.1
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;h3 id=&#34;dockerfile:0adf6cf775d9b8f37f78106628b21de7&#34;&gt;Dockerfile&lt;/h3&gt;
+
+&lt;p&gt;まず&lt;code&gt;Dockerfile&lt;/code&gt;の準備．ここでは例としてApacheコンテナを立ち上げる．&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-bash&#34;&gt;FROM ubuntu:12.04
+
+RUN apt-get update
+RUN apt-get install -y apache2
+
+ENV APACHE_RUN_USER www-data
+ENV APACHE_RUN_GROUP www-data
+ENV APACHE_LOG_DIR /var/log/apache2
+
+RUN echo &#39;Hello, vagrant docker provider&#39; &amp;gt; /var/www/index.html
+
+EXPOSE 80
+ENTRYPOINT [&amp;quot;/usr/sbin/apache2&amp;quot;]
+CMD [&amp;quot;-D&amp;quot;, &amp;quot;FOREGROUND&amp;quot;]
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;h3 id=&#34;vagrantfile:0adf6cf775d9b8f37f78106628b21de7&#34;&gt;Vagrantfile&lt;/h3&gt;
+
+&lt;p&gt;次にコンテナ用の&lt;code&gt;Vagrantfile&lt;/code&gt;を準備する．&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-ruby&#34;&gt;Vagrant.configure(&amp;quot;2&amp;quot;) do |config|
+    config.vm.provider &amp;quot;docker&amp;quot; do |d|
+        d.build_dir = &amp;quot;.&amp;quot;
+    end
+    config.vm.network :forwarded_port, guest: 80, host: 8080
+end          
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;やっているのは，&lt;/p&gt;
+
+&lt;ul&gt;
+&lt;li&gt;カレントディレクトリ（&lt;code&gt;.&lt;/code&gt;）のDockerfileをもとにイメージをビルド&lt;/li&gt;
+&lt;li&gt;そのイメージからコンテナの立ち上げ&lt;/li&gt;
+&lt;/ul&gt;
+
+&lt;p&gt;コンテナの立ち上げの際は，Proxy VMの8080ポートをコンテナの80ポートにフォワードする．&lt;/p&gt;
+
+&lt;p&gt;Linuxの場合は得に意識する必要はないけど，OSXの場合は，この&lt;code&gt;Vagrantfile&lt;/code&gt;は&lt;strong&gt;Proxy VMから見たコンテナ&lt;/strong&gt;というのを意識しないといけない．ポートフォワードは，Proxy VMからコンテナへのポートフォーワードで，OSXからではない．&lt;/p&gt;
+
+&lt;p&gt;後述するがOSXからコンテナに直接アクセスするには，Proxy VMのための&lt;code&gt;Vagrantfile&lt;/code&gt;が必要になる．&lt;/p&gt;
+
+&lt;h3 id=&#34;vagrant-up:0adf6cf775d9b8f37f78106628b21de7&#34;&gt;vagrant up&lt;/h3&gt;
+
+&lt;p&gt;あとは，いつも通りに立ち上げるだけ．&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-bash&#34;&gt;$ vagrant up --provider=docker
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;これを実行すると，VagrantはProxy VM（boot2docker box）のインストールと起動，Dockerイメージのビルド，コンテナの起動までをよしなにやってくれる．&lt;/p&gt;
+
+&lt;p&gt;&lt;a href=&#34;http://www.vagrantup.com/blog/feature-preview-vagrant-1-6-global-status.html&#34;&gt;global status&lt;/a&gt;を見てみると，VMとコンテナの両方が起動しているのが確認できる．&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-bash&#34;&gt;$ vagrant global-status
+2bb2281  default virtualbox running   /Users/deeeet/.vagrant.d/data/docker-host
+4f5f9d8  default docker     preparing /Users/deeeet/dev/sample/
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;コンテナの操作には，以下のコマンドが使える．&lt;/p&gt;
+
+&lt;ul&gt;
+&lt;li&gt;&lt;code&gt;vagrant reload&lt;/code&gt;でDockerfileの再ビルドを実行する&lt;/li&gt;
+&lt;li&gt;&lt;code&gt;vagrant docker-logs&lt;/code&gt;で立ち上がったコンテナのログを確認する&lt;/li&gt;
+&lt;/ul&gt;
+
+&lt;p&gt;また，ホスト（OSX）の4243ポートはProxy VMの4243ポートへフォワードされているので，&lt;code&gt;tcp://localhost:4243&lt;/code&gt;を介してDockerコマンドを直接叩くこともできる．&lt;/p&gt;
+
+&lt;h3 id=&#34;vagrantfile-proxy-vm:0adf6cf775d9b8f37f78106628b21de7&#34;&gt;Vagrantfile (Proxy VM)&lt;/h3&gt;
+
+&lt;p&gt;上の例は，コンテナの起動まではちゃんと動作する．しかし，OSXからコンテナにアクセスするといったことができない．というのもOSXからProxy VMのポートフォワードが設定されていないので，そもそも到達しない．&lt;/p&gt;
+
+&lt;p&gt;このようにデフォルトのProxy VMにはまだまだ不都合がありそうなので，自分で設定を触れるようにしておく．Docker providerでは，Proxy VMのための&lt;code&gt;Vagrantfile&lt;/code&gt;を指定することができる．以下のように&lt;code&gt;vagrant_vagrantfile&lt;/code&gt;を使う．&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-bash&#34;&gt;Vagrant.configure(&amp;quot;2&amp;quot;) do |config|
+    config.vm.provider &amp;quot;docker&amp;quot; do |d|
+        d.vagrant_vagrantfile = &amp;quot;proxy-vm/Vagrantfile&amp;quot;
+        d.build_dir = &amp;quot;.&amp;quot;
+    end
+    config.vm.network :forwarded_port, guest: 80, host: 8080
+end
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;デフォルトのProxy VMには，以下のVagrantfileが使われいる．&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-ruby&#34;&gt;# https://github.com/mitchellh/vagrant/blob/master/plugins/providers/docker/hostmachine/Vagrantfile
+
+Vagrant.configure(&amp;quot;2&amp;quot;) do |config|
+    config.vm.box = &amp;quot;mitchellh/boot2docker&amp;quot;
+
+    config.vm.provider &amp;quot;virtualbox&amp;quot; do |v|
+        # On VirtualBox, we don&#39;t have guest additions or a functional vboxsf
+        # in TinyCore Linux, so tell Vagrant that so it can be smarter.
+        v.check_guest_additions = false
+        v.functional_vboxsf     = false
+    end
+
+    # b2d doesn&#39;t support NFS
+    config.nfs.functional = false
+end
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;基本は，このVagrantfileを利用し，設定したい内容を追記する．そして，&lt;code&gt;vagrant_vagrantfile&lt;/code&gt;でこのVagrantfile指定する形にする．&lt;/p&gt;
+
+&lt;p&gt;上の例の場合は，このVagranfileに以下のポートフォワードの設定を追記して起動し直せば，OSXからコンテナのindex.htmlにアクセスすることができるようになる．&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-ruby&#34;&gt;config.vm.network :forwarded_port, guest: 8080, host: 8080
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;h2 id=&#34;雑感:0adf6cf775d9b8f37f78106628b21de7&#34;&gt;雑感&lt;/h2&gt;
+
+&lt;p&gt;他にも&lt;code&gt;vagrant ssh&lt;/code&gt;やsyncd folderも使えそう．sshできれば，chefやpuppetのprovisionerをコンテナに流せるし，syncd folderは，Dockerのvolume機能と相性が良さそう．&lt;/p&gt;
+
+&lt;p&gt;ただDockerを普通に操作するのと比べて，少し意識を変えないといけない．その辺，もう少し触ってみて様子をみたい．&lt;/p&gt;
+</description>
+    </item>
+    
+  </channel>
+</rss>

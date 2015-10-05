@@ -1,0 +1,192 @@
+<!doctype html>
+<html>
+  <head>
+    <meta http-equiv="content-type" content="text/html; charset=utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    
+    <title>Dockerで複数バージョンのrubyがインストールされたイメージを作る | SOTA</title>
+    
+    <link href="https://fonts.googleapis.com/css?family=Lato%3a900" rel="stylesheet" type="text/css">
+    <link rel="stylesheet" href="/css/main.css">
+    <link rel="shortcut icon" href="/favicon.png" type="image/x-icon" />
+    <link href="http://deeeet.com//index.xml" rel="alternate" type="application/rss+xml" title="" />
+    <meta name="title" content="http://deeeet.com/writing/2013/12/12/docker-rbenv/">
+    <link rel="canonical" href="http://deeeet.com/writing/2013/12/12/docker-rbenv/">
+    
+    <meta property="og:title" content="Dockerで複数バージョンのrubyがインストールされたイメージを作る"/>
+    <meta property="og:url" content="http://deeeet.com/writing/2013/12/12/docker-rbenv/"/>
+  </head>
+  
+  <body>
+    <section class="site-nav">
+      <header>
+        <nav id="navigation">
+          <ul class="menu">
+            <li><a href="https://github.com/tcnksm/talks">Talks</a></li>
+            <li><a href="https://tcnksm.exposure.co/">Photos</a></li>
+          </ul>
+
+          <a class="name" href="/">SOTA</a>
+        </nav>        
+      </header>
+    </section>
+    
+
+
+<article>
+  <div class="container">
+    <header>
+      <div class="meta">
+        <time pubdate datetime="2013-12-12" title="2013-12-12">December 12, 2013</time>
+      </div>
+      <h1 class="title">Dockerで複数バージョンのrubyがインストールされたイメージを作る</h1>
+    </header>
+    
+    <section>
+      
+
+<p><a href="https://github.com/tcnksm/docker-rbenv">tcnksm/docker-rbenv</a></p>
+
+<p>これにより，rbenvにより複数バージョンのrubyがインストールされたイメージをつくることができる．</p>
+
+<p>イメージはdocker.ioに置いてある（<a href="https://index.docker.io/u/tcnksm/rbenv/">tcnksm/rbenv</a>）ためすぐに使うことができる．</p>
+
+<pre><code>$ docker pull tcnksm/rbenv
+</code></pre>
+
+<p>もしくはDockerfileで</p>
+
+<pre><code>FROM tcnksm/rbenv
+</code></pre>
+
+<p>とするだけ．</p>
+
+<p>具体的な使い方は，<a href="http://deeeet.com/writing/2013/12/13/ci-with-docker/">Dockerで継続的インテグレーション</a>に書いた．例えば，<a href="https://github.com/guard/guard">guard</a>と連携して，複数バージョンに対するrspecテストをローカルで実現するなど．</p>
+
+<h2 id="dockerfile:a2c6ff5276f0d6b4be04d2aacec1353b">Dockerfile</h2>
+
+<p>以下では，このイメージを作成するためのDockerfileの詳細な説明とオリジナルのイメージを作成する方法について書く．Dockerfileは以下．</p>
+
+<pre><code>FROM base
+
+MAINTAINER tcnksm &quot;https://github.com/tcnksm&quot;
+
+# Install packages for building ruby
+RUN apt-get update
+RUN apt-get install -y --force-yes build-essential curl git
+RUN apt-get install -y --force-yes zlib1g-dev libssl-dev libreadline-dev libyaml-dev libxml2-dev libxslt-dev
+RUN apt-get clean
+
+# Install rbenv and ruby-build
+RUN git clone https://github.com/sstephenson/rbenv.git /root/.rbenv
+RUN git clone https://github.com/sstephenson/ruby-build.git /root/.rbenv/plugins/ruby-build
+RUN ./root/.rbenv/plugins/ruby-build/install.sh
+ENV PATH /root/.rbenv/bin:$PATH
+RUN echo 'eval &quot;$(rbenv init -)&quot;' &gt;&gt; /etc/profile.d/rbenv.sh # or /etc/profile
+
+# Install multiple versions of ruby
+ENV CONFIGURE_OPTS --disable-install-doc
+ADD ./versions.txt /root/versions.txt
+RUN xargs -L 1 rbenv install &lt; /root/versions.txt
+
+# Install Bundler for each version of ruby
+RUN echo 'gem: --no-rdoc --no-ri' &gt;&gt; /.gemrc
+RUN bash -l -c 'for v in $(cat /root/versions.txt); do rbenv global $v; gem install bundler; done'
+</code></pre>
+
+<p>基本的には普段rbenvとruby-buildによるインストールと同じことをしている．つまり，</p>
+
+<ol>
+<li>ベースイメージを持ってくる(<code>FROM base</code>)</li>
+<li>rubyのビルドに必要なパッケージのインストール(<code>RUN apt-get ...</code>)</li>
+<li><a href="https://github.com/tcnksm/docker-rbenv/tree/master">rbenv</a>のダウンロード</li>
+<li><a href="https://github.com/sstephenson/ruby-build">ruby-build</a>のダウンロード</li>
+<li>rbenvの環境変数を設定(<code>ENV PATH /root/.rbenv/bin:$PATH</code>)</li>
+<li>ログインコマンドの設定(<code>RUN echo 'eval &quot;$(rbenv init -)&quot;' &gt;&gt; /etc/profile.d/rbenv.sh</code>)</li>
+<li>インストールしたいrubyのバージョンを記述した<code>versions.txt</code>をイメージ内に配置</li>
+<li><code>versions.txt</code>に記載されたバージョンを<code>rbenv install</code>でインストール</li>
+<li><code>versions.txt</code>に記載されたバージョンごとに<code>bundler</code>をインストール</li>
+</ol>
+
+<p>別のバージョンがインストールされたイメージを作りたい場合は<code>verions.txt</code>を編集するだけ．</p>
+
+<p>さらに，Gemfileをもとに基本的なrubygemsをインストールしたい場合はDockerfileを以下のようにする．</p>
+
+<pre><code>ADD ./Gemfile /root/Gemfile
+RUN bash -l -c 'cd /root/; for v in $(cat rubies.txt); do rbenv global $v; bundle install; done'
+</code></pre>
+
+<p>イメージの作成は以下のコマンドで行う．</p>
+
+<pre><code class="language-bash">docker build -t USERNAME/IMAGENAME .
+</code></pre>
+
+<p>docker.ioに上げたい場合は以下を実行する．</p>
+
+<pre><code class="language-bash">docker login
+docker push USERNAME/IMAGENAME 
+</code></pre>
+
+<p>参考</p>
+
+<ul>
+<li><a href="http://www.sitepoint.com/docker-for-rubyists/">Docker for Rubyists</a></li>
+<li><a href="https://github.com/miyagawa/docker-plenv-vanilla">docker-plenv-vanilla</a></li>
+<li><a href="https://gist.github.com/tcnksm/7700047">Docker虎の巻</a></li>
+</ul>
+
+      <div class="social">
+  
+  
+  <a href="https://twitter.com/share" class="twitter-share-button" data-via="deeeet" data-count="none">Tweet</a>
+  
+  
+</div>
+
+    </section>
+
+    <footer>
+      <address>
+        
+        <img src="/images/bio.jpeg"/>
+        
+        <p>Written by <strong><a rel="author" href="https://twitter.com/deeeet" title="Taichi Nakashima" target="_blank">Taichi Nakashima</a></strong><br>
+          <span class="muted">A Tokyo based PaaS engineer. Please contact me via twitter.</span>
+        </p>
+      </address>
+
+    </footer>
+
+  </div>
+</article>
+
+<script type="text/javascript" src="//ajax.googleapis.com/ajax/libs/jquery/1.7.2/jquery.min.js"></script>
+<script type="text/javascript" src="/js/main.js"></script>
+
+<script>!function(d,s,id){var js,fjs=d.getElementsByTagName(s)[0],p=/^http:/.test(d.location)?'http':'https';if(!d.getElementById(id)){js=d.createElement(s);js.id=id;js.src=p+'://platform.twitter.com/widgets.js';fjs.parentNode.insertBefore(js,fjs);}}(document, 'script', 'twitter-wjs');</script>
+
+
+<script type="text/javascript">var HN=[];HN.factory=function(e){return function(){HN.push([e].concat(Array.prototype.slice.call(arguments,0)))};},HN.on=HN.factory("on"),HN.once=HN.factory("once"),HN.off=HN.factory("off"),HN.emit=HN.factory("emit"),HN.load=function(){var e="hn-button.js";if(document.getElementById(e))return;var t=document.createElement("script");t.id=e,t.src="//hn-button.herokuapp.com/hn-button.js";var n=document.getElementsByTagName("script")[0];n.parentNode.insertBefore(t,n)},HN.load();</script>
+
+
+  <script>
+  (function(i,s,o,g,r,a,m){i['GoogleAnalyticsObject']=r;i[r]=i[r]||function(){
+  (i[r].q=i[r].q||[]).push(arguments)},i[r].l=1*new Date();a=s.createElement(o),
+  m=s.getElementsByTagName(o)[0];a.async=1;a.src=g;m.parentNode.insertBefore(a,m)
+  })(window,document,'script','//www.google-analytics.com/analytics.js','ga');
+
+  ga('create', 'UA-45390253-1', 'auto');
+  ga('send', 'pageview');
+
+</script>
+
+
+
+<script>
+  $(document).ready(function() {
+  
+  $('p:has(img)').css('text-align', 'center');
+  $('iframe').css('style', 'display: block; margin: 0px auto;');
+  });
+</script>
+

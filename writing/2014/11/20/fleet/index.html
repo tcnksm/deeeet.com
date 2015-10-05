@@ -1,0 +1,444 @@
+<!doctype html>
+<html>
+  <head>
+    <meta http-equiv="content-type" content="text/html; charset=utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    
+    <title>Fleetの使い方，Unitファイルの書き方 | SOTA</title>
+    
+    <link href="https://fonts.googleapis.com/css?family=Lato%3a900" rel="stylesheet" type="text/css">
+    <link rel="stylesheet" href="/css/main.css">
+    <link rel="shortcut icon" href="/favicon.png" type="image/x-icon" />
+    <link href="http://deeeet.com//index.xml" rel="alternate" type="application/rss+xml" title="" />
+    <meta name="title" content="http://deeeet.com/writing/2014/11/20/fleet/">
+    <link rel="canonical" href="http://deeeet.com/writing/2014/11/20/fleet/">
+    
+    <meta property="og:title" content="Fleetの使い方，Unitファイルの書き方"/>
+    <meta property="og:url" content="http://deeeet.com/writing/2014/11/20/fleet/"/>
+  </head>
+  
+  <body>
+    <section class="site-nav">
+      <header>
+        <nav id="navigation">
+          <ul class="menu">
+            <li><a href="https://github.com/tcnksm/talks">Talks</a></li>
+            <li><a href="https://tcnksm.exposure.co/">Photos</a></li>
+          </ul>
+
+          <a class="name" href="/">SOTA</a>
+        </nav>        
+      </header>
+    </section>
+    
+
+
+<article>
+  <div class="container">
+    <header>
+      <div class="meta">
+        <time pubdate datetime="2014-11-20" title="2014-11-20">November 20, 2014</time>
+      </div>
+      <h1 class="title">Fleetの使い方，Unitファイルの書き方</h1>
+    </header>
+    
+    <section>
+      
+
+<p><a href="http://deeeet.com/writing/2014/11/17/coreos/">CoreOSに入門した | SOTA</a></p>
+
+<p>CoreOSではすべてのアプリケーションをDockerで動かす．このとき，コンテナによるサービスをCoreOSクラスタのどのマシンで起動するかをいちいち人手で決めるわけにはいけない．クラスタ内のリソースの状態や動いているサービスに基づき，適切なマシンでコンテナを動かすスケジューリングの仕組みが必要になる．</p>
+
+<p>このスケジューリングとコンテナの管理にCoreOSはfleetを用いる． fleetを使うとCoreOSクラスタが1つのinit systemで動いているかのようにそれを扱うことができるようになる．開発者はどのマシンでどのDockerコンテナが動いているかを気にする必要がなくなる．</p>
+
+<p>例えば，5つのコンテナを動かす必要があれば，fleetはクラスタのどこかでその5つのコンテナが動いてることを保証する．もしコンテナが動いているマシンに障害があっても，fleetはそのコンテナを別のマシンにスケジューリングしなおす（フェイルオーバー）．</p>
+
+<p>スケジューリングは柔軟で，マシンのRegionやRoleによって振り分けることもできるし，同じサービスを同じマシンでは動かさないようにするといった設定もできる．例えば，複数のDBコンテナを別々のマシンに分散させるといったこともできる．</p>
+
+<p>DigitalOceanの<a href="https://www.digitalocean.com/community/tutorial_series/getting-started-with-coreos-2">&ldquo;Getting Started with CoreOS&rdquo;</a>シリーズの</p>
+
+<ul>
+<li><a href="https://www.digitalocean.com/community/tutorials/how-to-use-fleet-and-fleetctl-to-manage-your-coreos-cluster">How To Use Fleet and Fleetctl to Manage your CoreOS Cluster</a></li>
+<li><a href="https://www.digitalocean.com/community/tutorials/how-to-create-flexible-services-for-a-coreos-cluster-with-fleet-unit-files">How to Create Flexible Services for a CoreOS Cluster with Fleet Unit Files</a></li>
+</ul>
+
+<p>において，fleetを操作するための<code>fleettcl</code>コマンドの使い方と，その設定ファイルであるUnitファイルの書き方を良い感じに解説していたので，それらを参考にfleetの使い方をまとめておく．</p>
+
+<p>まずfleetの技術的概要をまとめる，次に<code>fleetctl</code>コマンドによるサービスの管理方法を書く．最後にUnitファイルの書き方について説明する．</p>
+
+<h2 id="fleetの技術的概要:15effd7923038e72678d2e2222047b08">fleetの技術的概要</h2>
+
+<p>fleetはクラスタレベルのsystemdと捉えることができる（単一マシンのinit systemがsystemdで，クラスタのinit systemがfleet）．</p>
+
+<p><img src="https://coreos.com/assets/images/media/fleet-schedule-diagram.png" alt="https://coreos.com/assets/images/media/fleet-schedule-diagram.png" />
+</p>
+
+<p><a href="https://coreos.com/assets/images/media/fleet-schedule-diagram.png">https://coreos.com/assets/images/media/fleet-schedule-diagram.png</a></p>
+
+<p>fleetは<strong>engine</strong>と<strong>agent</strong>という大きく2つのコンポーネントから構成される．<strong>engine</strong>はジョブスケジューリングとクラスタサイズの変更を管理する．<strong>agent</strong>はマシンの代わりにジョブを引き受ける．Unitがクラスタに割り当てられると，<strong>agent</strong>はUnitファイルを読み込み，それを開始する．そして，systemdの状態をfleetに通知する．</p>
+
+<p>バックエンドでは<code>etcd</code>クラスタが動いており，<strong>engine</strong>と<strong>agent</strong>の協調に使われる．</p>
+
+<h2 id="fleetctlによるサービスの管理:15effd7923038e72678d2e2222047b08">fleetctlによるサービスの管理</h2>
+
+<p>fleetの設定ファイルは，systemdのunitファイルにfleet特有の設定（e.g., クラスタ内での分散方法など）を加えたものを利用する． このファイルの詳細は後述するとして，ここでは以下のようなHello Worldを出力しつづける<code>hello.service</code>を利用する．</p>
+
+<pre><code>[Unit]
+Description=My Service
+After=docker.service
+
+[Service]
+TimeoutStartSec=0
+ExecStartPre=-/usr/bin/docker kill hello
+ExecStartPre=-/usr/bin/docker rm hello
+ExecStartPre=/usr/bin/docker pull busybox
+ExecStart=/usr/bin/docker run --name hello busybox /bin/sh -c &quot;while true; do echo Hello World; sleep 1; done&quot;
+ExecStop=/usr/bin/docker stop hello
+</code></pre>
+
+<p>fleetによるサービス管理は<code>fleetctl</code>コマンドを使って行う．サービスの起動は以下の流れで行われる．</p>
+
+<ol>
+<li>Unitファイルを読み込む</li>
+<li>クラスタ内の特定のマシンにスケジューリングする</li>
+<li>サービスを起動する</li>
+</ol>
+
+<h3 id="サービスの登録:15effd7923038e72678d2e2222047b08">サービスの登録</h3>
+
+<p>まず，<code>submit</code>コマンドを使ってサービスを登録する．これは単にfleetがファイルをメモリ内に読み込むだけ．</p>
+
+<pre><code class="language-bash">$ fleetctl submit hello.service
+</code></pre>
+
+<p>fleetが読み込んだunitファイルは以下で一覧できる．</p>
+
+<pre><code class="language-bash">$ fleetctl list-unit-files
+UNIT            HASH    DSTATE          STATE           TARGET
+hello.service   3f8de4b inactive        inactive        -
+</code></pre>
+
+<p><code>DSTATE</code>とは望まれる状態であり，<code>STATE</code>は実際の状態を示す（<code>DSTATE</code>と<code>STATE</code>が一致しているとき各種コマンドがちゃんと動いたと考えて良い）．<code>TARGET</code>はサービスを実行するべきマシンを示す．今はまだスケジューリングをしていないので，<code>-</code>となる．</p>
+
+<p>読み込んだファイルの内容を確認することもできる．</p>
+
+<pre><code class="language-bash">$ fleetctl cat hello
+[Unit]
+Description=My First Service
+After=docker.service
+...
+</code></pre>
+
+<p><code>submit</code>コマンドを一度実行し，Unitファイルを変更して再び<code>submit</code>してもアップロードは実行されない．ファイルを更新するには，一度アップロードしたものを削除する必要がある．</p>
+
+<h3 id="サービスのスケジューリング:15effd7923038e72678d2e2222047b08">サービスのスケジューリング</h3>
+
+<p>次に，サービスをスケジューリングする．スケジューリングとは，fleetエンジンがクラスタ内でサービスを実行するのに最も適したマシンを選択することである．これはUnitファイルの<code>[X-Fleet]</code>セクションの既述と，クラスタ内のマシンの現在のリソース状態に基づき決定される．サービスがスケジューリングされると，Unitファイルはそのマシンに渡され，ローカルのsystemdインスタンスに読み込まれる．</p>
+
+<p>スケジューリングは，<code>load</code>コマンドで行う．</p>
+
+<pre><code class="language-bash">$ fleetctl load hello.service
+Unit hello.service loaded on 0d8b5e37.../10.132.181.182
+</code></pre>
+
+<p>読み込んだUnitファイルを確認する．</p>
+
+<pre><code class="language-bash">fleetctl list-unit-files
+UNIT            HASH    DSTATE  STATE   TARGET
+hello.service   3f8de4b loaded  loaded  0d8b5e37.../10.132.181.18
+</code></pre>
+
+<p><code>TAGET</code>セクションにサービスを実行するマシンが追加されているのが確認できる．<code>STATE</code>はスケジューリングされたことを示している．</p>
+
+<p><code>list-units</code>コマンドを使うと，実行中，もしくはスケジューリングされたサービスとその状態を確認することができる．</p>
+
+<pre><code class="language-bash">$ fleetctl list-units
+UNIT            MACHINE                         ACTIVE          SUB
+hello.service   0d8b5e37.../10.132.181.182      inactive        dead
+</code></pre>
+
+<p>これはsystemdから得られる情報であり，<code>ACTIVE</code>はサービスの状態を示し，<code>SUB</code>はより低レベルな状態を示す．</p>
+
+<h3 id="サービスを起動する:15effd7923038e72678d2e2222047b08">サービスを起動する</h3>
+
+<p>次にサービスを起動してみる．起動は<code>start</code>コマンドで行う．</p>
+
+<pre><code class="language-bash">fleetctl start hello
+Unit hello.service launched on 0d8b5e37.../10.132.181.182
+</code></pre>
+
+<p>Unitファイルの状態を確認する．</p>
+
+<pre><code class="language-bash">$ fleetctl list-unit-files
+UNIT            HASH    DSTATE          STATE           TARGET
+hello.service   3f8de4b launched        launched        0d8b5e37.../10.132.181.182
+</code></pre>
+
+<p>次に，systemdの状態を確認する．</p>
+
+<pre><code class="language-bash">$ fleetctl list-units
+UNIT            MACHINE                         ACTIVE  SUB
+hello.service   0d8b5e37.../10.132.181.182      active  running
+</code></pre>
+
+<p>ちゃんとサービスが起動したことが確認できる．</p>
+
+<h3 id="サービスの詳細の状態を得る:15effd7923038e72678d2e2222047b08">サービスの詳細の状態を得る</h3>
+
+<p><code>list-unit</code>コマンドで，現在スケジュールされているUnitを一覧でき，<code>list-unit-files</code>でfleetが知っている*全て*のUnitの状態を一覧できる．</p>
+
+<p>一覧ではなく，各Unitの詳細をみることもできる．例えば，<code>status</code>コマンドを使うと，そのUnitが動いているマシンの<code>systemctl status</code>の結果を取得することができる．</p>
+
+<pre><code class="language-bash">$ fleetctl status hello
+● hello.service - My First Service
+   Loaded: loaded (/run/fleet/units/hello.service; linked-runtime)
+      Active: active (running) since Sun 2014-11-16 07:02:10 UTC; 8min ago
+        Process: 11863 ExecStartPre=/usr/bin/docker pull busybox (code=exited, status=0/SUCCESS)
+        Process: 11853 ExecStartPre=/usr/bin/docker rm hello (code=exited, status=0/SUCCESS)
+        Process: 11844 ExecStartPre=/usr/bin/docker kill hello (code=exited, status=0/SUCCESS)
+        Main PID: 11873 (docker)
+           CGroup: /system.slice/hello.service
+              └─11873 /usr/bin/docker run --name hello busybox /bin/sh -c while true; do echo Hello World; sleep 1; done
+
+Nov 16 07:10:59 core2 docker[11873]: Hello World
+Nov 16 07:11:00 core2 docker[11873]: Hello World
+Nov 16 07:11:01 core2 docker[11873]: Hello World
+Nov 16 07:11:02 core2 docker[11873]: Hello World
+</code></pre>
+
+<p><code>journal</code>コマンドを使うと，各サービスのjournalのエントリをみることもできる．</p>
+
+<pre><code class="language-bash">$ fleetctl journal hello
+-- Logs begin at Sat 2014-11-15 10:23:32 UTC, end at Sun 2014-11-16 07:12:54 UTC. --
+Nov 16 07:12:44 core2 docker[11873]: Hello World
+Nov 16 07:12:45 core2 docker[11873]: Hello World
+Nov 16 07:12:46 core2 docker[11873]: Hello World
+Nov 16 07:12:47 core2 docker[11873]: Hello World
+</code></pre>
+
+<p><code>tail -f</code>みたいなこともできる．</p>
+
+<pre><code class="language-bash">$ fleetctl journal -f hello
+</code></pre>
+
+<p>スケジューリングされたマシンにログインしていろいろ調査することもできる．このときスケジューリングされたマシンのIPを知る必要はなく，サービス名でログインできる．</p>
+
+<pre><code class="language-bash">$ fleetctl ssh hello
+</code></pre>
+
+<h3 id="サービスの停止:15effd7923038e72678d2e2222047b08">サービスの停止</h3>
+
+<p>まず，<code>stop</code>コマンドでサービスを停止できる．</p>
+
+<pre><code class="language-bash">$ fleetctl stop hello
+Unit hello.service loaded on 0d8b5e37.../10.132.181.182
+</code></pre>
+
+<pre><code class="language-bash"> $ fleetctl list-unit-files
+ UNIT            HASH    DSTATE  STATE   TARGET
+ hello.service   3f8de4b loaded  loaded  0d8b5e37.../10.132.181.182
+</code></pre>
+
+<p>これにより，サービスは<code>loaded</code>状態に戻ったことが確認できる．これはサービスは止まったが，スケジューリングされたマシンの<code>systemd</code>には読み込まれた状態である．</p>
+
+<p>これを削除するには，<code>unload</code>コマンドを使う．</p>
+
+<pre><code class="language-bash">$ fleetctl unload hello
+Unit hello.service inactive
+</code></pre>
+
+<pre><code class="language-bash">$ fleetctl list-unit-files
+UNIT            HASH    DSTATE          STATE           TARGET
+hello.service   3f8de4b inactive        inactive        -
+</code></pre>
+
+<p><code>inactive</code>状態になり，ターゲットのマシンも消えていることが確認できる．これは，スケジューリングを解除し，fleetにUnitファイルが読み込まれただけの状態である．</p>
+
+<p>fleetが読み込んだUnitファイルを削除するには，<code>destroy</code>コマンドを使う．</p>
+
+<pre><code class="language-bash">$ fleetctl destroy hello
+Destroyed hello.service
+</code></pre>
+
+<pre><code class="language-bash">$ fleetctl list-unit-files
+UNIT    HASH    DSTATE  STATE   TARGE
+</code></pre>
+
+<p>完全に消えた．</p>
+
+<h2 id="unitファイル:15effd7923038e72678d2e2222047b08">Unitファイル</h2>
+
+<p>fleetによるスケジューリングはUnitファイルにより行う．UnitファイルはsystemdのUnitファイルにfleet特有の<code>[X-Fleet]</code>セクションを加えたものを使う．systemdについて以下の記事が詳しい．</p>
+
+<ul>
+<li><a href="http://d.hatena.ne.jp/enakai00/20130914/1379146157">Systemd入門(1) - Unitの概念を理解する</a></li>
+<li><a href="http://d.hatena.ne.jp/enakai00/20130915/1379212787">Systemd入門(2) - Serviceの操作方法</a></li>
+<li><a href="http://d.hatena.ne.jp/enakai00/20130916/1379295816">Systemd入門(3) - cgroupsと動的生成Unitに関する小ネタ</a></li>
+<li><a href="http://d.hatena.ne.jp/enakai00/20130917/1379374797">Systemd入門(4) - serviceタイプUnitの設定ファイル</a></li>
+<li><a href="http://d.hatena.ne.jp/enakai00/20130923/1379927579">Systemd入門(5) - PrivateTmpの実装を見る</a></li>
+</ul>
+
+<h3 id="unitファイルの名前:15effd7923038e72678d2e2222047b08">Unitファイルの名前</h3>
+
+<p>Unitファイル名には命名規則がある．<code>string.suffix</code>もしくは<code>string@instance.suffix</code>とする．</p>
+
+<ul>
+<li><code>string</code>は必須．Unitの名前を指定する．<code> [a-zA-Z0-9:_.@-]+</code>の正規表現に一致する必要がある</li>
+<li><code>instance</code>は必須ではない．1つのUnitファイルから複数のUnitインスタンスを作成するときに利用する（例えば，<code>hello@.service</code>ファイルから<code>hello@1.service</code>，<code>hello@2.service</code>を作る）．この値はUnitファイル内から<code>%i</code>として参照することもできる．<code> [a-zA-Z0-9:_.@-]+</code>の正規表現に一致する必要がある</li>
+<li><code>suffix</code>は必須．Unitの属性を指定する．service, socket, device, mount, automount, timer, pathのいずれか．</li>
+</ul>
+
+<h3 id="セクション:15effd7923038e72678d2e2222047b08">セクション</h3>
+
+<p>一般的なfleetの設定ファイルは以下のようになる（serviceの場合）．</p>
+
+<pre><code>[Unit]
+generic_unit_directive_1
+generic_unit_directive_2
+
+[Service]
+service_specific_directive_1
+service_specific_directive_2
+service_specific_directive_3
+
+[X-Fleet]
+fleet_specific_directive
+</code></pre>
+
+<p><code>[Unit]</code>セクションには，Unitの依存関係/順序関係など，Unitのタイプに依存しない設定を既述する（systemdと同様）．</p>
+
+<p><code>[Service]</code>セクションには，service固有の設定を書く．例えば，起動・停止コマンドや，サービス起動前に実行するべきコマンド，環境変数ファイルの場所などを既述する（systemdと同様）．</p>
+
+<p><code>[X-Fleet]</code>セクションには，fleet特有の設定を書く．どのようにクラスタにスケジューリングを行うかを定義する．具体的には以下のような設定ができる．</p>
+
+<ul>
+<li><code>MachineID</code> - 特定のマシンにスケジューリングしたときに利用する．マシンのIDを指定する（<code>fleetctl list-machines -l </code>）．</li>
+<li><code>MachineOf</code> - 特定のUnitが実行されているマシンと同様のマシンにスケジューリングしたときに利用する．Unit名を指定する．</li>
+<li><code>MachineMetadata</code> - マシンのメタデータに基づきスケジューリングしたいときに利用する．例えばRegionやRole, diskTypeなど．これらは<code>cloud-config</code>の<code>fleet.metadata</code>の項目で指定できる．</li>
+<li><code>Conflicts</code> - 特定のUnitが実行されているマシンを避けたいときに利用する．<code>MachineOf</code>の逆．</li>
+<li><code>Global</code> - すべてのマシンにスケジューリングしたいときに利用する．</li>
+</ul>
+
+<h3 id="apacheサービス:15effd7923038e72678d2e2222047b08">Apacheサービス</h3>
+
+<p>具体例としてApacheサービスを起動するためのUnitファイルを作る．ファイル名は<code>apache@.service</code>とする．</p>
+
+<pre><code>[Unit]
+Description=Apache web server service
+After=etcd.service
+After=docker.service
+Requires=apache-discovery@%i.service
+
+[Service]
+TimeoutStartSec=0
+KillMode=none
+EnvironmentFile=/etc/environment
+ExecStartPre=-/usr/bin/docker kill apache%i
+ExecStartPre=-/usr/bin/docker rm apache%i
+ExecStartPre=/usr/bin/docker pull user_name/apache
+ExecStart=/usr/bin/docker run --name apache%i -p $COREOS_PUBLIC_IPV4:%i:80 user_name/apache /usr/sbin/apache2ctl -D FOREGROUND
+ExecStop=/usr/bin/docker stop apache%i
+
+[X-Fleet]
+X-Conflicts=apache@*.service
+</code></pre>
+
+<p>まず<code>[Unit]</code>セクションには，サービス名とこのサービスを起動するための依存を既述する．<code>After</code>にはこのサービスが起動する前に起動されているべきサービスを，<code>Require</code>にはこのサービスが必要とするサービスを既述する．</p>
+
+<p><code>Require</code>に書いたサービスが失敗したらこのサービスも起動に失敗する．失敗してもサービスを継続したい場合は<code>Want</code>を使う．</p>
+
+<p>次に<code>[Service]</code>セクションには，具体的なサービスの起動・停止方法を書く．<code>TimeoutStartSec</code>を0にしてタイムアウトを無効にしている（デフォルトは90秒）．これはDockerイメージのpullに時間がかかる可能性があるため．</p>
+
+<p><code>EnvironmentFile</code>を指定するとその中に既述された環境変数が有効になる．<code>/etc/environment</code>には<code>COREOS_PUBLIC_IPV4</code>といった値が定義されている．</p>
+
+<p><code>ExecStartPre</code>にはサービス起動前に実行するべきコマンドを定義する．<code>=-</code>とした場合は，失敗してもサービスの起動を続行する（一度目の起動は<code>docker kill</code>や<code>docker rm</code>は必ず失敗する）．そして<code>ExecStart</code>と<code>ExecStop</code>で起動，停止コマンドを指定する．</p>
+
+<p>最後に<code>[X-Fleet]</code>には，fleetのスケジューリングに関わる設定を既述する．<code>X-Conflicts</code>を指定すると，そのUnitが実行されているマシンではスケジューリングされなくなる．この場合，このapacheサービスは同じマシンにはスケジューリングされない．</p>
+
+<p>さらにこのUnitファイルはテンプレートになっており，<code>%i</code>には動的に値が代入される．スケジューリングする際に具体的な値を入れる．例えば，以下のようにすると，起動時には80という値が代入される．</p>
+
+<pre><code class="language-bash">$ fleetctl submit apache@.service
+$ fleetctl load apache@80.service
+</code></pre>
+
+<h3 id="テンプレートの扱い:15effd7923038e72678d2e2222047b08">テンプレートの扱い</h3>
+
+<p>fleetもsystemdもシンボリックリングを扱うことができる．そのため上述した<code>apache@.service</code>のスケジューリングは以下のように既述できる．</p>
+
+<pre><code class="language-bash">$ ln -s apache@.service apache@8888.service
+$ fleetctl start apache@8888.service
+</code></pre>
+
+<p>これは扱うテンプレートとそのインスタンスが増えたときに管理が楽になる．例えば，<code>templeates</code>と<code>instance</code>，<code>static</code>というディレクトリを作り，動的な変更のないUnitファイルは<code>static</code>以下に，テンプレートとして使うUnitファイルは<code>templates</code>以下に配置し，<code>instances</code>にシンボリックリンクを作る．</p>
+
+<pre><code class="language-bash">$ mkdir templates instances static
+$ mv apache@.service templates/.
+$ mv hello.service static/.
+</code></pre>
+
+<pre><code class="language-bash">$ cd instances
+$ ln -s ../templates/apache@.service apache@5555.service
+$ ln -s ../templates/apache@.service apache@6666.service
+$ ln -s ../templates/apache@.service apache@7777.service
+</code></pre>
+
+<p>こうしておくと，instanceは以下のように一気に起動できる．管理と運用が楽になる．</p>
+
+<pre><code class="language-bash">$ fleetctl start instances/* 
+</code></pre>
+
+      <div class="social">
+  
+  
+  <a href="https://twitter.com/share" class="twitter-share-button" data-via="deeeet" data-count="none">Tweet</a>
+  
+  
+</div>
+
+    </section>
+
+    <footer>
+      <address>
+        
+        <img src="/images/bio.jpeg"/>
+        
+        <p>Written by <strong><a rel="author" href="https://twitter.com/deeeet" title="Taichi Nakashima" target="_blank">Taichi Nakashima</a></strong><br>
+          <span class="muted">A Tokyo based PaaS engineer. Please contact me via twitter.</span>
+        </p>
+      </address>
+
+    </footer>
+
+  </div>
+</article>
+
+<script type="text/javascript" src="//ajax.googleapis.com/ajax/libs/jquery/1.7.2/jquery.min.js"></script>
+<script type="text/javascript" src="/js/main.js"></script>
+
+<script>!function(d,s,id){var js,fjs=d.getElementsByTagName(s)[0],p=/^http:/.test(d.location)?'http':'https';if(!d.getElementById(id)){js=d.createElement(s);js.id=id;js.src=p+'://platform.twitter.com/widgets.js';fjs.parentNode.insertBefore(js,fjs);}}(document, 'script', 'twitter-wjs');</script>
+
+
+<script type="text/javascript">var HN=[];HN.factory=function(e){return function(){HN.push([e].concat(Array.prototype.slice.call(arguments,0)))};},HN.on=HN.factory("on"),HN.once=HN.factory("once"),HN.off=HN.factory("off"),HN.emit=HN.factory("emit"),HN.load=function(){var e="hn-button.js";if(document.getElementById(e))return;var t=document.createElement("script");t.id=e,t.src="//hn-button.herokuapp.com/hn-button.js";var n=document.getElementsByTagName("script")[0];n.parentNode.insertBefore(t,n)},HN.load();</script>
+
+
+  <script>
+  (function(i,s,o,g,r,a,m){i['GoogleAnalyticsObject']=r;i[r]=i[r]||function(){
+  (i[r].q=i[r].q||[]).push(arguments)},i[r].l=1*new Date();a=s.createElement(o),
+  m=s.getElementsByTagName(o)[0];a.async=1;a.src=g;m.parentNode.insertBefore(a,m)
+  })(window,document,'script','//www.google-analytics.com/analytics.js','ga');
+
+  ga('create', 'UA-45390253-1', 'auto');
+  ga('send', 'pageview');
+
+</script>
+
+
+
+<script>
+  $(document).ready(function() {
+  
+  $('p:has(img)').css('text-align', 'center');
+  $('iframe').css('style', 'display: block; margin: 0px auto;');
+  });
+</script>
+

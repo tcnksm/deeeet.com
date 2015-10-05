@@ -1,0 +1,217 @@
+<!doctype html>
+<html>
+  <head>
+    <meta http-equiv="content-type" content="text/html; charset=utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    
+    <title>RubyのコマンドラインツールのMan Pageをつくる | SOTA</title>
+    
+    <link href="https://fonts.googleapis.com/css?family=Lato%3a900" rel="stylesheet" type="text/css">
+    <link rel="stylesheet" href="/css/main.css">
+    <link rel="shortcut icon" href="/favicon.png" type="image/x-icon" />
+    <link href="http://deeeet.com//index.xml" rel="alternate" type="application/rss+xml" title="" />
+    <meta name="title" content="http://deeeet.com/writing/2014/03/17/gem-man/">
+    <link rel="canonical" href="http://deeeet.com/writing/2014/03/17/gem-man/">
+    
+    <meta property="og:title" content="RubyのコマンドラインツールのMan Pageをつくる"/>
+    <meta property="og:url" content="http://deeeet.com/writing/2014/03/17/gem-man/"/>
+  </head>
+  
+  <body>
+    <section class="site-nav">
+      <header>
+        <nav id="navigation">
+          <ul class="menu">
+            <li><a href="https://github.com/tcnksm/talks">Talks</a></li>
+            <li><a href="https://tcnksm.exposure.co/">Photos</a></li>
+          </ul>
+
+          <a class="name" href="/">SOTA</a>
+        </nav>        
+      </header>
+    </section>
+    
+
+
+<article>
+  <div class="container">
+    <header>
+      <div class="meta">
+        <time pubdate datetime="2014-03-17" title="2014-03-17">March 17, 2014</time>
+      </div>
+      <h1 class="title">RubyのコマンドラインツールのMan Pageをつくる</h1>
+    </header>
+    
+    <section>
+      
+
+<p>コマンドラインツールでは，<code>--help</code>オプションで簡単に使い方やオプションの説明を出力する．単純に使ってもらう分にはこれで足りる．ただ，さらにそのコマンドラインツールを使ってもらいたい場合には，詳細なドキュメントや使い方の例，簡単なチュートリアルをコマンドライン上で提供できるのがよい．単純に<code>Optparse</code>などでこれをやろうとすると，スペースが足りないし，ちょっとヘルプを見たいだけのユーザには邪魔になる．</p>
+
+<p>伝統的なUNIXコマンドは，<code>man</code>コマンドを通じてそのような詳細な情報を提供している．例えば，<code>man ls</code>と打てば，<code>ls</code>コマンドの詳細が見れる．RubyでつくったコマンドラインツールでもMan Pageを通じて，同様の情報を提供できるとよい．</p>
+
+<p>しかし，Rubygems.orgを通してコマンドラインツールを配信する場合，標準の<code>man</code>コマンドを通じてMan pageを提供するのは難しい．GithubのChris Wanstrath氏による<a href="https://github.com/defunkt/gem-man">gem-man</a>を使えば，<code>gem man</code>コマンドを通じて標準の<code>man</code>と同様のMan Pageを簡単に提供できる．</p>
+
+<p>さらに，Man Pageは，<a href="http://ja.wikipedia.org/wiki/Roff">nroff</a>という専用の言語で書かれており，わざわざ習得するのはめんどい．これも，<a href="https://github.com/rtomayko/ronn">rtomayko/ronn</a>を使えば，MarkdownでMan pageを書いて，nroff形式に変換することができる．</p>
+
+<h2 id="tl-dr:bf2fcdda1e637907b0367db7d80738a2">TL;DR</h2>
+
+<ul>
+<li><code>gem man</code>でrubyでつくったコマンドラインツールのMan Pageを提供する</li>
+<li><a href="https://github.com/rtomayko/ronn">ronn</a>でMarkdown形式をMan Pageのnroff形式を吐き出す</li>
+</ul>
+
+<p>以下のようなものをつくる．</p>
+
+<pre><code class="language-bash">$ gem man your_app
+
+NAME
+    your_app - Sample of gem-man and ronn
+
+SYNOPSIS
+    your_app [options]
+
+DESCRIPTION
+    your_app is a simple command-line tool for ...
+
+OPTIONS
+    -h, --help
+      Show help page.
+etc...      
+</code></pre>
+
+<h2 id="install:bf2fcdda1e637907b0367db7d80738a2">Install</h2>
+
+<p>Gemとして<code>gem-man</code>と<code>ronn</code>をインストールする．</p>
+
+<pre><code class="language-bash">$ gem install gem-man ronn
+</code></pre>
+
+<p>Rubygemsとして配布する場合は，gemspecに以下を追記する．</p>
+
+<pre><code class="language-ruby"># your_app.gemspec
+spec.add_dependency &quot;gem-man&quot;
+spec.add_development_dependency &quot;ronn&quot;
+</code></pre>
+
+<p>Man Pageのソースは，プロジェクトのルートの<code>man</code>ディレクトリに配置し，ファイル名は<code>your_app.1.ronn</code>とする．</p>
+
+<pre><code class="language-bash">$ mkdir man
+$ touch man/your_app.1.ronn
+</code></pre>
+
+<p><code>.1</code>というファイル名は必須でMan Pageのセクション番号を示す．</p>
+
+<h2 id="ronnでman-pageをつくる:bf2fcdda1e637907b0367db7d80738a2">ronnでMan Pageをつくる</h2>
+
+<p>ronnを使えば，Man PageをMarkdown形式で書き，nroff形式で吐き出すことができる．例えば，以下のように書く．</p>
+
+<pre><code>your_app(1) - Sample of gem-man and ronn
+====
+
+## SYNOPSIS
+
+`your_app` [options]
+
+## DESCRIPTION
+
+**your_app** is a simple command-line tool for ...
+
+## OPTIONS
+
+  * -h, --help
+      Show help page.
+
+## Exmaple
+...
+</code></pre>
+
+<p><code>##</code>でセクションの始まり，<code>*</code>でリストなど，普段<code>README.md</code>などで書いてるのと同じ感じで作成できる．また，<code>&lt;&gt;</code>で囲めばリンクとなり，<code>man/index.txt</code>を準備すれば，他のMan Pageにリンクを貼ることもできる．</p>
+
+<p>後は，以下のコマンドでnroff形式で吐き出すだけ．</p>
+
+<pre><code class="language-bash">$ ronn man/your_app.1.ronn
+roff: man/your_app.1
+html: man/your_app.1.html                                     
+</code></pre>
+
+<p>同時にHTML形式も吐き出される（例えば，ronnだと<a href="http://rtomayko.github.io/ronn/ronn.1.html">こんな感じ</a>のページが生成される）．生成結果は，標準の<code>man</code>を使ってプレビューできる．</p>
+
+<pre><code>$ man man/your_app.1
+</code></pre>
+
+<h2 id="gem-manを使う:bf2fcdda1e637907b0367db7d80738a2">gem-manを使う</h2>
+
+<p>後は，上で作成したmanディレクトリを一緒にgemとして配布すれば，ユーザは以下のコマンドで作成したMan Pageを表示できるようになる．</p>
+
+<pre><code>$ gem man your_app
+</code></pre>
+
+<p>UNIXの他のコマンドと同様に扱いたい場合は，以下のようなAliasを設定すればよい．</p>
+
+<pre><code class="language-bash">$ alias man='gem man -s'
+</code></pre>
+
+<p>Man Pageがあれば，わざわざブラウザを立ち上げることなく，詳細のドキュメントをユーザに提示でき，より親切なコマンドラインツールをつくれる．</p>
+
+<h2 id="参考:bf2fcdda1e637907b0367db7d80738a2">参考</h2>
+
+<ul>
+<li><a href="http://pragprog.com/book/dccar/build-awesome-command-line-applications-in-ruby">Build Awesome Command-Line Applications in Ruby</a></li>
+<li><a href="https://github.com/tcnksm/rbdock">tcnksm/rbdock</a></li>
+</ul>
+
+      <div class="social">
+  
+  
+  <a href="https://twitter.com/share" class="twitter-share-button" data-via="deeeet" data-count="none">Tweet</a>
+  
+  
+</div>
+
+    </section>
+
+    <footer>
+      <address>
+        
+        <img src="/images/bio.jpeg"/>
+        
+        <p>Written by <strong><a rel="author" href="https://twitter.com/deeeet" title="Taichi Nakashima" target="_blank">Taichi Nakashima</a></strong><br>
+          <span class="muted">A Tokyo based PaaS engineer. Please contact me via twitter.</span>
+        </p>
+      </address>
+
+    </footer>
+
+  </div>
+</article>
+
+<script type="text/javascript" src="//ajax.googleapis.com/ajax/libs/jquery/1.7.2/jquery.min.js"></script>
+<script type="text/javascript" src="/js/main.js"></script>
+
+<script>!function(d,s,id){var js,fjs=d.getElementsByTagName(s)[0],p=/^http:/.test(d.location)?'http':'https';if(!d.getElementById(id)){js=d.createElement(s);js.id=id;js.src=p+'://platform.twitter.com/widgets.js';fjs.parentNode.insertBefore(js,fjs);}}(document, 'script', 'twitter-wjs');</script>
+
+
+<script type="text/javascript">var HN=[];HN.factory=function(e){return function(){HN.push([e].concat(Array.prototype.slice.call(arguments,0)))};},HN.on=HN.factory("on"),HN.once=HN.factory("once"),HN.off=HN.factory("off"),HN.emit=HN.factory("emit"),HN.load=function(){var e="hn-button.js";if(document.getElementById(e))return;var t=document.createElement("script");t.id=e,t.src="//hn-button.herokuapp.com/hn-button.js";var n=document.getElementsByTagName("script")[0];n.parentNode.insertBefore(t,n)},HN.load();</script>
+
+
+  <script>
+  (function(i,s,o,g,r,a,m){i['GoogleAnalyticsObject']=r;i[r]=i[r]||function(){
+  (i[r].q=i[r].q||[]).push(arguments)},i[r].l=1*new Date();a=s.createElement(o),
+  m=s.getElementsByTagName(o)[0];a.async=1;a.src=g;m.parentNode.insertBefore(a,m)
+  })(window,document,'script','//www.google-analytics.com/analytics.js','ga');
+
+  ga('create', 'UA-45390253-1', 'auto');
+  ga('send', 'pageview');
+
+</script>
+
+
+
+<script>
+  $(document).ready(function() {
+  
+  $('p:has(img)').css('text-align', 'center');
+  $('iframe').css('style', 'display: block; margin: 0px auto;');
+  });
+</script>
+

@@ -1,0 +1,231 @@
+<!doctype html>
+<html>
+  <head>
+    <meta http-equiv="content-type" content="text/html; charset=utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    
+    <title>&#34;実践Vagrant&#34;を読んだ | SOTA</title>
+    
+    <link href="https://fonts.googleapis.com/css?family=Lato%3a900" rel="stylesheet" type="text/css">
+    <link rel="stylesheet" href="/css/main.css">
+    <link rel="shortcut icon" href="/favicon.png" type="image/x-icon" />
+    <link href="http://deeeet.com//index.xml" rel="alternate" type="application/rss+xml" title="" />
+    <meta name="title" content="http://deeeet.com/writing/2014/02/25/vagrant-up-and-running/">
+    <link rel="canonical" href="http://deeeet.com/writing/2014/02/25/vagrant-up-and-running/">
+    
+    <meta property="og:title" content="&#34;実践Vagrant&#34;を読んだ"/>
+    <meta property="og:url" content="http://deeeet.com/writing/2014/02/25/vagrant-up-and-running/"/>
+  </head>
+  
+  <body>
+    <section class="site-nav">
+      <header>
+        <nav id="navigation">
+          <ul class="menu">
+            <li><a href="https://github.com/tcnksm/talks">Talks</a></li>
+            <li><a href="https://tcnksm.exposure.co/">Photos</a></li>
+          </ul>
+
+          <a class="name" href="/">SOTA</a>
+        </nav>        
+      </header>
+    </section>
+    
+
+
+<article>
+  <div class="container">
+    <header>
+      <div class="meta">
+        <time pubdate datetime="2014-02-25" title="2014-02-25">February 25, 2014</time>
+      </div>
+      <h1 class="title">&#34;実践Vagrant&#34;を読んだ</h1>
+    </header>
+    
+    <section>
+      
+
+<p><a href="http://www.oreilly.co.jp/books/9784873116655/">O&rsquo;Reilly Japan - 実践 Vagrant</a></p>
+
+<p>Vagrantは普通に問題なく使えているし，本をわざわざ読む必要もないと思ったが，以下のようなモチベーションで購入．</p>
+
+<ul>
+<li>Mitchell Hashimoto氏の設計思想的な部分を知りたかった</li>
+<li>プラグインをつくりたかった</li>
+<li>落ち穂拾い</li>
+</ul>
+
+<p>まず，設計思想．1章に&rdquo;Vagrant道&rdquo;という節があり，ユースケースというか，Vagrantを使った高レベルなワークフローが説明されている．開発者や運用技術者からみて，普段のプロジェクトの中でVagrantがどのような役割を果たすのかが簡単にまとめられている．Vagrantが近年の開発環境にあまりに自然に入り込んできたのは，このようなビジョンがあってからこそだと思う．誰もが理解できるビジョンを掲げ，それをコードに落とし込むところがMitchell氏のすごさなんだと改めて認識した．開発者としても，ビジョン-&gt;コードの流れを参考にしたい．</p>
+
+<h2 id="プラグインの開発:f2e3a2c3e354e5248072de122eac172d">プラグインの開発</h2>
+
+<p>次にプラグイン．これを読んでからいくつかプラグインを作ってみた．公開したのは以下．</p>
+
+<ul>
+<li><a href="http://deeeet.com/writing/2014/02/19/vagrant-pushover/">プロビジョニングの終了をiOS/Androidに通知するVagrantのpluginつくった</a></li>
+<li><a href="http://deeeet.com/writing/2014/02/24/vagrant-secret/">他人に共有したくない設定をVagrantfileに書くためのpluginつくった</a></li>
+</ul>
+
+<p>プラグインを作るのはとても簡単．本書でカバーされているのは，以下．</p>
+
+<ul>
+<li>新しいサブコマンドの開発 (command)</li>
+<li>新しい設定オプションの開発 (config)</li>
+<li><code>config.vm.provision :docker</code>のような新しいプロビジョナーの開発 (provisioner)</li>
+<li><code>vagrant up</code>のような既存動作を変更 (hook)</li>
+</ul>
+
+<p>プラグインはrubygemsとして開発する．rubygemを作ったことがあるひとであればすんなりと開発できる．詳しくは書かないが，基本はrubyのDSLによる簡単な記述し，そのDSLの戻り値を決められたメソッドを実装したクラスにするだけ．</p>
+
+<p>すこしハマった部分．本書や公式ドキュメントだと<code>Vagrantfile</code>に<code>Vagrant.require_plugin &quot;my_plugin&quot;</code>を記述してプラグインのテストを行うように書かれているが，自分の環境だとうまく動かなかった．そのため，プラグインをビルドして，直接システムのVagrantに読み込ませてテストを行った．毎回コマンド打つのは億劫なので，以下のようなRakeタスクを作った．</p>
+
+<pre><code class="language-ruby">require &quot;vagrant-secret&quot;
+require &quot;bundler/gem_tasks&quot;
+
+version = VagrantPlugins::Secret::VERSION
+
+desc &quot;Install plugin to system vagrant.&quot;
+task :install_plugin do
+    system(&quot;git add -u&quot;)
+    Rake::Task[:build].execute
+    system(&quot;/usr/bin/vagrant plugin install pkg/vagrant-secret-#{version}.gem&quot;)
+end
+
+desc &quot;Uninstall plugin&quot;
+task :uninstall_plugin do
+    system(&quot;/usr/bin/vagrant plugin uninstall vagrant-secret&quot;)
+end
+
+# alias
+task :i =&gt; :install_plugin
+task :u =&gt; :uninstall_plugin
+</code></pre>
+
+<p>ちょっとTips．プラグイン定義の先頭に以下を記述して，プラグインが実際にVagrantの中で動作しているかを確認するのがよい．これは，本書のコラムに書かれていた内容．他のVagrant pluginのプロジェクトにも採用されている．</p>
+
+<pre><code class="language-ruby">begin
+    require &quot;vagrant&quot;
+rescue LoadError
+    raise &quot;The Vagrant plugin must be run within Vagrant.&quot;
+end
+</code></pre>
+
+<p>また，本書には書かれていないけど，プラグインはVagrantfileに直接書くことができる．例えば，OSXからDockerを簡単に使えるようにするプロジェクトである<a href="https://github.com/fnichol/dvm/blob/master/Vagrantfile">dvm</a>の<code>Vagrantfile</code>でやられてたりする．本書の<code>apt-get</code>プロビジョナーを<code>Vagrantfile</code>に直接書くと，<a href="https://gist.github.com/tcnksm/39be2506b8a5e846cd59">こうなる</a>．ものすごい単純なプラグインをつくる場合や，試しにつくってみたい場合はこれで足りる．</p>
+
+<p>公式にも丁寧な<a href="http://docs.vagrantup.com/v2/plugins/development-basics.html">ドキュメント</a>がある．また，Vagrantのコマンドそのものもプラグインとして<a href="https://github.com/mitchellh/vagrant/tree/master/plugins/commands">実装されている</a>ので参考になった．</p>
+
+<h2 id="落ち穂拾い:f2e3a2c3e354e5248072de122eac172d">落ち穂拾い</h2>
+
+<p>最後に落ち穂拾い．ざっと読んで自分が知らなかったや，試してなかったことなどをまとめておく．</p>
+
+<p>まず，ネットワークの設定について．<code>forward_port</code>や<code>private_network</code>はよく使うが，<code>public_network</code>もある．これを使うと，仮想マシンを物理マシン上のデバイスにして，仮想マシンをネットワーク上の別の物理マシンであるかのように見せることができるようになる．</p>
+
+<p>これができると何が良いかというと，<code>private_network</code>のようにアクセス可能なIPを持たせるだけでなく，隔離されないので，ゲストマシンが提供するWebサイトをモバイルから確認したり，他のひとと共同作業ができるようになる．設定を有効にし，<code>vagrat up</code>してブリッジしたいデバイスを選択するだけ．</p>
+
+<p>次に，複数マシン構成のクラスタのモデリング．以下のようにすれば，Webアプリ用のマシンとDB用のマシンをそれぞれ立ち上げることができる．</p>
+
+<pre><code class="language-ruby">Vagrant.configure(&quot;2&quot;) do |config|
+    config.vm.box = &quot;precise64&quot;
+
+    config.vm.define :web do |web|
+        web.vm.network :private_network, ip: &quot;192.168.50.4&quot;
+    end
+
+    config.vm.define :db do |db|
+        db.vm.network :private_network, ip: &quot;192.168.50.5&quot;
+    end
+end
+</code></pre>
+
+<p>新しいサブマシンを定義するブロックは，単にVagrantfileを作成するときの設定ブロックがもうひとつあるだけ．webやdbというのはただの設定変数．また，サブマシンの設定は，プログラミングの変数スコープのように全体的な設定（上で言うと<code>config.vm.box</code>）を引き継ぐ．</p>
+
+<p><code>vagrant up</code>や<code>vagrant reload</code>といったコマンドは，対象マシンの名前を指定して実行できるようになる．例えば，<code>vagrant provision web</code>とすれば，webと名付けられたサブマシンのみのプロビジョニングが実行される．複数のサブマシンが存在するとき，引数なしでコマンドを実行すると全てのマシンが対象となる．</p>
+
+<p>複数のサブマシンを同一のネットワーク上に配置することができる．Vagrantはデフォルトで，255.255.255.0というサブネットマスクを使用するため，上の例のように最初の3つの部分（オクテット）が同じであれば，マシンは同一ネットワーク上に存在することになる．</p>
+
+<pre><code class="language-bash">$ vagrant ssh web
+$ ping 192.168.50.5
+vagrant@precise64:~$ ping 192.168.50.5
+PING 192.168.50.5 (192.168.50.5) 56(84) bytes of data.
+64 bytes from 192.168.50.5: icmp_req=1 ttl=64 time=0.483 ms
+64 bytes from 192.168.50.5: icmp_req=2 ttl=64 time=0.374 ms
+64 bytes from 192.168.50.5: icmp_req=3 ttl=64 time=0.327 ms
+</code></pre>
+
+<p>最後にボックス．Vagrantのボックスは，拡張子こそ<code>.box</code>となっているが，単なるtarファイルに過ぎない．以下のファイルが含まれる．</p>
+
+<ul>
+<li><code>box-disk.vmdk</code>: VirtualBoxのエクスポートで得られる．圧縮されたハードディスク．</li>
+<li><code>bok.ovf</code>: VirtualBoxのエクスポートで得られる．マシンを動作させるための仮想ハードウェア．</li>
+<li><code>Vagranfile</code>: 普段使うものと同じ．デフォルト値などを記述する．</li>
+<li><code>metadata.json</code>: Vagratに対して，このボックスが使うシステムを伝える．</li>
+</ul>
+
+<p>プロビジョナーを走らせたり，手動であれこれセットアップしたVagrant環境をboxとして吐き出すことができる．以下のようにするだけ．これで<code>package.box</code>が作成される．</p>
+
+<pre><code class="language-bash">$ vagrant package
+</code></pre>
+
+<p>VirtualBoxを使って，スクラッチで新しいボックスを生成することもできる．Vagrantユーザの作成やSSHサーバのインストールなどが必要になる．</p>
+
+<p>以上．</p>
+
+<p>わかったつもりでいても知らない設定などが多く含まれていたのでよかった．Vagrantを既に使っている人は，公式のドキュメントやその他のブログポストなどで十分足りると思う（それがVagrantというツールのすごいところでもある）．なぜ，Vagrantが良いのかわからないレベルだと本書はとても最適な一冊だと思う．また，プラグインを作りたいひとにもおすすめできる．デブサミの会場で先行販売されてたので思わず購入したが，発売日に電子版の販売がアナウンスされてた．</p>
+
+<p>あるべきなのになかなかなかった．なければしんどいのに，あれば空気のように当然のものとして使ってしまう．それがVagrant．</p>
+
+      <div class="social">
+  
+  
+  <a href="https://twitter.com/share" class="twitter-share-button" data-via="deeeet" data-count="none">Tweet</a>
+  
+  
+</div>
+
+    </section>
+
+    <footer>
+      <address>
+        
+        <img src="/images/bio.jpeg"/>
+        
+        <p>Written by <strong><a rel="author" href="https://twitter.com/deeeet" title="Taichi Nakashima" target="_blank">Taichi Nakashima</a></strong><br>
+          <span class="muted">A Tokyo based PaaS engineer. Please contact me via twitter.</span>
+        </p>
+      </address>
+
+    </footer>
+
+  </div>
+</article>
+
+<script type="text/javascript" src="//ajax.googleapis.com/ajax/libs/jquery/1.7.2/jquery.min.js"></script>
+<script type="text/javascript" src="/js/main.js"></script>
+
+<script>!function(d,s,id){var js,fjs=d.getElementsByTagName(s)[0],p=/^http:/.test(d.location)?'http':'https';if(!d.getElementById(id)){js=d.createElement(s);js.id=id;js.src=p+'://platform.twitter.com/widgets.js';fjs.parentNode.insertBefore(js,fjs);}}(document, 'script', 'twitter-wjs');</script>
+
+
+<script type="text/javascript">var HN=[];HN.factory=function(e){return function(){HN.push([e].concat(Array.prototype.slice.call(arguments,0)))};},HN.on=HN.factory("on"),HN.once=HN.factory("once"),HN.off=HN.factory("off"),HN.emit=HN.factory("emit"),HN.load=function(){var e="hn-button.js";if(document.getElementById(e))return;var t=document.createElement("script");t.id=e,t.src="//hn-button.herokuapp.com/hn-button.js";var n=document.getElementsByTagName("script")[0];n.parentNode.insertBefore(t,n)},HN.load();</script>
+
+
+  <script>
+  (function(i,s,o,g,r,a,m){i['GoogleAnalyticsObject']=r;i[r]=i[r]||function(){
+  (i[r].q=i[r].q||[]).push(arguments)},i[r].l=1*new Date();a=s.createElement(o),
+  m=s.getElementsByTagName(o)[0];a.async=1;a.src=g;m.parentNode.insertBefore(a,m)
+  })(window,document,'script','//www.google-analytics.com/analytics.js','ga');
+
+  ga('create', 'UA-45390253-1', 'auto');
+  ga('send', 'pageview');
+
+</script>
+
+
+
+<script>
+  $(document).ready(function() {
+  
+  $('p:has(img)').css('text-align', 'center');
+  $('iframe').css('style', 'display: block; margin: 0px auto;');
+  });
+</script>
+

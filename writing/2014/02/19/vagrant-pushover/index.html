@@ -1,0 +1,174 @@
+<!doctype html>
+<html>
+  <head>
+    <meta http-equiv="content-type" content="text/html; charset=utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    
+    <title>プロビジョニングの終了をiOS/Androidに通知するVagrantのpluginつくった | SOTA</title>
+    
+    <link href="https://fonts.googleapis.com/css?family=Lato%3a900" rel="stylesheet" type="text/css">
+    <link rel="stylesheet" href="/css/main.css">
+    <link rel="shortcut icon" href="/favicon.png" type="image/x-icon" />
+    <link href="http://deeeet.com//index.xml" rel="alternate" type="application/rss+xml" title="" />
+    <meta name="title" content="http://deeeet.com/writing/2014/02/19/vagrant-pushover/">
+    <link rel="canonical" href="http://deeeet.com/writing/2014/02/19/vagrant-pushover/">
+    
+    <meta property="og:title" content="プロビジョニングの終了をiOS/Androidに通知するVagrantのpluginつくった"/>
+    <meta property="og:url" content="http://deeeet.com/writing/2014/02/19/vagrant-pushover/"/>
+  </head>
+  
+  <body>
+    <section class="site-nav">
+      <header>
+        <nav id="navigation">
+          <ul class="menu">
+            <li><a href="https://github.com/tcnksm/talks">Talks</a></li>
+            <li><a href="https://tcnksm.exposure.co/">Photos</a></li>
+          </ul>
+
+          <a class="name" href="/">SOTA</a>
+        </nav>        
+      </header>
+    </section>
+    
+
+
+<article>
+  <div class="container">
+    <header>
+      <div class="meta">
+        <time pubdate datetime="2014-02-19" title="2014-02-19">February 19, 2014</time>
+      </div>
+      <h1 class="title">プロビジョニングの終了をiOS/Androidに通知するVagrantのpluginつくった</h1>
+    </header>
+    
+    <section>
+      
+
+<p><a href="https://github.com/tcnksm/vagrant-pushover">tcnksm/vagrant-pushover</a></p>
+
+<p>Vagrantのプロビジョニングはものすごく時間がかかる．その時間を使って美味しい珈琲を淹れたい．でも，席を外したらいつプロビジョニングが終わったかわからない．プロビジョニングの終了を告げる通知が欲しい．</p>
+
+<p>少し前から<a href="https://pushover.net/">Pushover</a>というiOS/Androidアプリで遊んでいる．シンプルなHTTP POSTを介してアプリに通知が送れる（詳しくは，<a href="http://deeeet.com/writing/2014/02/09/pushover/">&ldquo;Pushover使ってみた&rdquo;</a>に書いた）．メールで通知でもよかったんだけど，せっかくなので，Pushoverに通知が送れるVagrantプラグインを作った．</p>
+
+<p>以下のような通知を受け取ることができる．</p>
+
+<p><img src="/images/vagrant-pushover.png" class="image"></p>
+
+<h2 id="インストール:606fff50e41ab1fc56aeccfb0ef2e776">インストール</h2>
+
+<p>Vagrantのプラグインとしてインストールする．</p>
+
+<pre><code class="language-bash">$ vagrant plugin install vagrant-pushover
+</code></pre>
+
+<h2 id="使い方:606fff50e41ab1fc56aeccfb0ef2e776">使い方</h2>
+
+<p>以下のようにVagrantfileに設定を記述するだけ．</p>
+
+<pre><code class="language-ruby">Vagrant.configure(&quot;2&quot;) do |config|
+    config.pushover.set do |p|
+        p.user  = &quot;YOUR KEY&quot;
+        p.token = &quot;YOUR APP TOKEN&quot;
+    end
+end                        
+</code></pre>
+
+<p><code>user</code>はPushoverにサインアップ後に<a href="https://pushover.net/">Dashboard</a>から，<code>token</code>はアプリケーションの登録をすると取得できる．</p>
+
+<p>既存コマンドのフックとして記述してあるので，他に特別なことをする必要はなく，いつも通りにコマンドを実行するだけでよい．通知が行われるのは，プロビジョニングが行われる以下の場合のみ．</p>
+
+<ul>
+<li><code>vagrant up</code></li>
+<li><code>vagrant up --provision</code></li>
+<li><code>vagrant reload --provision</code></li>
+<li><code>vagrant provision</code></li>
+</ul>
+
+<p>ただし<code>vagrant up</code>は，マシンの状態が<code>:running</code>でない場合，プロビジョニングが一度も行われていない場合に通知が行われる．</p>
+
+<p>他にも，通知のメッセージのタイトルや本文，通知音もVagrantfileの設定から行うことができる．API通りに実装してあるので，詳しくは<a href="https://pushover.net/api">公式ドキュメント</a>を参照してください．</p>
+
+<h2 id="vagrantfileを共有したい場合:606fff50e41ab1fc56aeccfb0ef2e776">Vagrantfileを共有したい場合</h2>
+
+<p><code>token</code>や<code>user</code>がベタ書きされているのはよろしくないので，別ファイルとして記述できるようにもしてある．</p>
+
+<p>以下のコマンドで設定ファイルを吐き出す．</p>
+
+<pre><code class="language-bash">$ vagrant pushover-init
+</code></pre>
+
+<p>設定ファイルは，<code>.vagrant/pushover.rb</code>として吐き出されるので，中身を編集して<code>token</code>と<code>user</code>を記述する．設定の読み込みを有効にするには，Vagrantfileを以下のように記述するだけ．</p>
+
+<pre><code class="language-ruby">Vagrant.configure(&quot;2&quot;) do |config|
+    config.pushover.read_key
+end
+</code></pre>
+
+<p>以上．</p>
+
+<p>Vagrantのプラグインを作るのはとても簡単（実際2日もかかってない）．また，プラグインを作ることでVagrantの内部でどのようなことが行われているのか大分理解できる．作成には，<a href="http://www.amazon.co.jp/%E5%AE%9F%E8%B7%B5-Vagrant-Mitchell-Hashimoto/dp/4873116651">&ldquo;実践Vagrant&rdquo;</a>を参考にした．<a href="http://docs.vagrantup.com/v2/plugins/">公式ドキュメント</a>も充実している．すべてのVagrantのコマンドはプラグインとして実装されているので，作るときは参考になる．Mitchell Hashimotoさんが自らつくったプラグイン<a href="https://github.com/mitchellh/vagrant-aws">vagrant-aws</a>も参考になった．プラグインの作り方は，そのうちまとめる．</p>
+
+<p>Pushoverを使ってるひとにしか使えないかなりニッチなプラグインだけど，プロビジョニング中に美味しい珈琲を淹れたいひとは是非使ってください．バグなどはGithubのissueか<a href="https://twitter.com/deeeet">@deeeet</a>までお願いします．</p>
+
+<p>参考</p>
+
+<ul>
+<li><a href="http://deeeet.com/writing/2014/01/21/third-wave-tokyo/">東京サードウェーブコーヒー</a></li>
+</ul>
+
+      <div class="social">
+  
+  
+  <a href="https://twitter.com/share" class="twitter-share-button" data-via="deeeet" data-count="none">Tweet</a>
+  
+  
+</div>
+
+    </section>
+
+    <footer>
+      <address>
+        
+        <img src="/images/bio.jpeg"/>
+        
+        <p>Written by <strong><a rel="author" href="https://twitter.com/deeeet" title="Taichi Nakashima" target="_blank">Taichi Nakashima</a></strong><br>
+          <span class="muted">A Tokyo based PaaS engineer. Please contact me via twitter.</span>
+        </p>
+      </address>
+
+    </footer>
+
+  </div>
+</article>
+
+<script type="text/javascript" src="//ajax.googleapis.com/ajax/libs/jquery/1.7.2/jquery.min.js"></script>
+<script type="text/javascript" src="/js/main.js"></script>
+
+<script>!function(d,s,id){var js,fjs=d.getElementsByTagName(s)[0],p=/^http:/.test(d.location)?'http':'https';if(!d.getElementById(id)){js=d.createElement(s);js.id=id;js.src=p+'://platform.twitter.com/widgets.js';fjs.parentNode.insertBefore(js,fjs);}}(document, 'script', 'twitter-wjs');</script>
+
+
+<script type="text/javascript">var HN=[];HN.factory=function(e){return function(){HN.push([e].concat(Array.prototype.slice.call(arguments,0)))};},HN.on=HN.factory("on"),HN.once=HN.factory("once"),HN.off=HN.factory("off"),HN.emit=HN.factory("emit"),HN.load=function(){var e="hn-button.js";if(document.getElementById(e))return;var t=document.createElement("script");t.id=e,t.src="//hn-button.herokuapp.com/hn-button.js";var n=document.getElementsByTagName("script")[0];n.parentNode.insertBefore(t,n)},HN.load();</script>
+
+
+  <script>
+  (function(i,s,o,g,r,a,m){i['GoogleAnalyticsObject']=r;i[r]=i[r]||function(){
+  (i[r].q=i[r].q||[]).push(arguments)},i[r].l=1*new Date();a=s.createElement(o),
+  m=s.getElementsByTagName(o)[0];a.async=1;a.src=g;m.parentNode.insertBefore(a,m)
+  })(window,document,'script','//www.google-analytics.com/analytics.js','ga');
+
+  ga('create', 'UA-45390253-1', 'auto');
+  ga('send', 'pageview');
+
+</script>
+
+
+
+<script>
+  $(document).ready(function() {
+  
+  $('p:has(img)').css('text-align', 'center');
+  $('iframe').css('style', 'display: block; margin: 0px auto;');
+  });
+</script>
+

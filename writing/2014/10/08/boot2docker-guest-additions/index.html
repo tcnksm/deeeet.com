@@ -1,0 +1,203 @@
+<!doctype html>
+<html>
+  <head>
+    <meta http-equiv="content-type" content="text/html; charset=utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    
+    <title>boot2dockerでのVolume問題が解決しそう | SOTA</title>
+    
+    <link href="https://fonts.googleapis.com/css?family=Lato%3a900" rel="stylesheet" type="text/css">
+    <link rel="stylesheet" href="/css/main.css">
+    <link rel="shortcut icon" href="/favicon.png" type="image/x-icon" />
+    <link href="http://deeeet.com//index.xml" rel="alternate" type="application/rss+xml" title="" />
+    <meta name="title" content="http://deeeet.com/writing/2014/10/08/boot2docker-guest-additions/">
+    <link rel="canonical" href="http://deeeet.com/writing/2014/10/08/boot2docker-guest-additions/">
+    
+    <meta property="og:title" content="boot2dockerでのVolume問題が解決しそう"/>
+    <meta property="og:url" content="http://deeeet.com/writing/2014/10/08/boot2docker-guest-additions/"/>
+  </head>
+  
+  <body>
+    <section class="site-nav">
+      <header>
+        <nav id="navigation">
+          <ul class="menu">
+            <li><a href="https://github.com/tcnksm/talks">Talks</a></li>
+            <li><a href="https://tcnksm.exposure.co/">Photos</a></li>
+          </ul>
+
+          <a class="name" href="/">SOTA</a>
+        </nav>        
+      </header>
+    </section>
+    
+
+
+<article>
+  <div class="container">
+    <header>
+      <div class="meta">
+        <time pubdate datetime="2014-10-08" title="2014-10-08">October 08, 2014</time>
+      </div>
+      <h1 class="title">boot2dockerでのVolume問題が解決しそう</h1>
+    </header>
+    
+    <section>
+      
+
+<p>（追記）Docker 1.3がリリースされた．boot2dockerはデフォルトでVirtualBox Guest Additionsをサポートし，boot2docker-cliは<code>init</code>のときにホストのディレクトリを<code>boot2docker-vm</code>上にマウントするようになった（<a href="https://blog.docker.com/2014/10/docker-1-3-signed-images-process-injection-security-options-mac-shared-directories/">Docker 1.3: signed images, process injection, security options, Mac shared directories | Docker Blog</a>）．</p>
+
+<h2 id="tl-dr:2c676e1635ff74062223008773201cad">TL;DR</h2>
+
+<p>OSXやWindowsでboot2dockerを使う場合に特別な操作をしなくても<code>-v</code>オプション（Volume）が使えるようになる．</p>
+
+<h2 id="背景:2c676e1635ff74062223008773201cad">背景</h2>
+
+<p>OSXやWindowsでboot2dockerを使うひとが最も不満に感じるのは<code>-v</code>オプション（Volume）が使えないことだと思う．例えば，以下のようにカレントディレクトリをマウントし，そのファイルを参照しようとしてもファイルはないなどと言われる．</p>
+
+<pre><code class="language-bash">$ echo 'hello from OSX' &gt; hello
+$ docker run -v &quot;$(pwd)&quot;:/osx busybox cat /osx/hello
+cat: can't open '/osx/hello': No such file or directory
+</code></pre>
+
+<p>boot2dockerを使う場合，Dockerデーモンはboot2docker-vm上で動き，OSXやWindowsから叩くdockerコマンドはそれに対するリモートクライアントとして動作する．Dockerはリモートクライアントからのvolumeをまだサポートしていないため，上記のコマンドはboot2docker-vm内のディレクトリをマウントする．よって，ローカルにあるファイルは発見されない．</p>
+
+<p>現時点でそれを解決するには，OSXやwindowsのディレクトリをboot2docker内にマウントするしかない．しかし，boot2dockerはVirtualBox Guest Additionsをサポートしていないため，独自スクリプトでisoイメージを1から作るか，他人がつくった非公式のisoを使うしかなかった（誰もが一度はググっていろいろ回った結果<a href="https://github.com/boot2docker/boot2docker/pull/284">VBox guest additions #284</a>にたどりついては面倒くせえと思っていたと思う）．</p>
+
+<p>VirtualBox Guest Additionsをサポートが進まなかったのは，boot2dockerのシンプルさが失われること，またパフォーマンスへの危惧が大きい．</p>
+
+<h2 id="どうなるのか:2c676e1635ff74062223008773201cad">どうなるのか</h2>
+
+<p>まず，そもそもDocker自体がリモートクライアントからのvolumeに対応しようとしている（FUSEが検討されている）．が，まだ議論が進んでいる．</p>
+
+<ul>
+<li><a href="https://github.com/docker/docker/issues/7249">Proposal: Remote Shared Volumes #7249</a></li>
+</ul>
+
+<p>その間の<strong>穴埋め</strong>をboot2dockerがすることになった．理由として，OSXやWindowsでDockerを使う場合には公式的にboot2dockerを使うことになっている以上，<code>-v</code>オプション（Volume）を使えないのはユーザビリティに影響があるため．</p>
+
+<ul>
+<li><a href="https://github.com/boot2docker/boot2docker/pull/534">VirtualBox Guest Additions #534</a></li>
+<li><a href="https://github.com/boot2docker/boot2docker-cli/pull/258">Add VirtualBox shared folders creation #258</a></li>
+</ul>
+
+<p>上記のPull Requestにより，boot2docker-vmにはVirtualbox Guest Additionsがデフォルトでインストールされるようになった．かつ，boot2docker-cliは<code>init</code>の際に，OSXの場合は<code>/Users</code>をWindowsの場合は，<code>/c/Users</code>を自動でマウントするようになった（オプションで無効にすることもできる）．</p>
+
+<p>要するに，何も考えずにOSX，WindowsでVolumeが使えるようになる．</p>
+
+<p>boot2dockerはDockerのバージョンアップに合わせてリリースされているので，1.2.1もしくは1.3としてリリースされそう．</p>
+
+<h2 id="試したい:2c676e1635ff74062223008773201cad">試したい</h2>
+
+<p>2014年10月現在，Virtualbox Guest Additionsがインストールされたboot2docker-vmイメージまだ配布されていない．待ちきれないひとは最新boot2dockerのビルド，boot2docker-cliのインストールが必要になる．</p>
+
+<h3 id="boot2docker-vmのビルド:2c676e1635ff74062223008773201cad">boot2docker-vmのビルド</h3>
+
+<p>イメージのビルドはDockerコンテナ内で行われるのでdockerの環境さえあればよい．</p>
+
+<p>まず，Dockerfileを取得する．</p>
+
+<pre><code class="language-bash">$ git clone https://github.com/boot2docker/boot2docker
+$ cd boot2docker
+</code></pre>
+
+<p>Dockerfileをもとにイメージをビルドする．これには多少時間かかる．</p>
+
+<pre><code class="language-bash">$ docker build -t user/boot2docker .
+</code></pre>
+
+<p>これで<code>user/boot2docker</code>イメージ内にboot2docker-vmが生成されているので，コンテナを起動して取り出す．</p>
+
+<pre><code class="language-bash">$ docker run -i -t --rm user/boot2docker /bin/bash
+</code></pre>
+
+<pre><code class="language-bash">$ docker cp &lt;Container-ID&gt;:boot2docker.iso image
+</code></pre>
+
+<p>あとは，現在のboot2docker-vmと入れ替えるだけ（バックアップなどをしておくこと）．</p>
+
+<pre><code class="language-bash">$ mv image/boot2docker.iso /.boot2docker/boot2docker.iso
+</code></pre>
+
+<h3 id="boot2docker-cliのインストール:2c676e1635ff74062223008773201cad">boot2docker-cliのインストール</h3>
+
+<p>boot2docker-cliはGoで書かれているので，ソースを取得してクロスコンパイルする．</p>
+
+<pre><code class="language-bash">$ go get github.com/boot2docker/boot2docker-cli
+$ cd $GOPATH/src/github.com/boot2docker/boot2docker-cli
+$ make darwin
+</code></pre>
+
+<p>こちらはバイナリも既に配布されている，<a href="https://github.com/boot2docker/boot2docker-cli/releases/tag/v1.2.0">https://github.com/boot2docker/boot2docker-cli/releases/tag/v1.2.0</a>．</p>
+
+<p>あとは，いつものようにboot2dockerを起動するだけで自動でマウントが実行される．</p>
+
+<pre><code class="language-bash">$ ./boot2docker-v1.2.0-darwin-amd64 init
+</code></pre>
+
+<p>今は最初のコマンドもしっかり動作するはず．</p>
+
+<pre><code class="language-bash">$ echo 'hello from OSX' &gt; hello
+$ docker run -v &quot;$(pwd)&quot;:/osx busybox cat /osx/hello
+hello from OSX
+</code></pre>
+
+<h2 id="まとめ:2c676e1635ff74062223008773201cad">まとめ</h2>
+
+<p>実感として，Virtualbox Guest Additions版は以前のものより遅く感じた．が，Volumeが簡単に使えることを考えれば，全然許せるレベル．ローカル開発環境を整えやすくなりそう．<a href="https://github.com/docker/fig">docker/fig</a>の利用も簡単になりそう．</p>
+
+      <div class="social">
+  
+  
+  <a href="https://twitter.com/share" class="twitter-share-button" data-via="deeeet" data-count="none">Tweet</a>
+  
+  
+</div>
+
+    </section>
+
+    <footer>
+      <address>
+        
+        <img src="/images/bio.jpeg"/>
+        
+        <p>Written by <strong><a rel="author" href="https://twitter.com/deeeet" title="Taichi Nakashima" target="_blank">Taichi Nakashima</a></strong><br>
+          <span class="muted">A Tokyo based PaaS engineer. Please contact me via twitter.</span>
+        </p>
+      </address>
+
+    </footer>
+
+  </div>
+</article>
+
+<script type="text/javascript" src="//ajax.googleapis.com/ajax/libs/jquery/1.7.2/jquery.min.js"></script>
+<script type="text/javascript" src="/js/main.js"></script>
+
+<script>!function(d,s,id){var js,fjs=d.getElementsByTagName(s)[0],p=/^http:/.test(d.location)?'http':'https';if(!d.getElementById(id)){js=d.createElement(s);js.id=id;js.src=p+'://platform.twitter.com/widgets.js';fjs.parentNode.insertBefore(js,fjs);}}(document, 'script', 'twitter-wjs');</script>
+
+
+<script type="text/javascript">var HN=[];HN.factory=function(e){return function(){HN.push([e].concat(Array.prototype.slice.call(arguments,0)))};},HN.on=HN.factory("on"),HN.once=HN.factory("once"),HN.off=HN.factory("off"),HN.emit=HN.factory("emit"),HN.load=function(){var e="hn-button.js";if(document.getElementById(e))return;var t=document.createElement("script");t.id=e,t.src="//hn-button.herokuapp.com/hn-button.js";var n=document.getElementsByTagName("script")[0];n.parentNode.insertBefore(t,n)},HN.load();</script>
+
+
+  <script>
+  (function(i,s,o,g,r,a,m){i['GoogleAnalyticsObject']=r;i[r]=i[r]||function(){
+  (i[r].q=i[r].q||[]).push(arguments)},i[r].l=1*new Date();a=s.createElement(o),
+  m=s.getElementsByTagName(o)[0];a.async=1;a.src=g;m.parentNode.insertBefore(a,m)
+  })(window,document,'script','//www.google-analytics.com/analytics.js','ga');
+
+  ga('create', 'UA-45390253-1', 'auto');
+  ga('send', 'pageview');
+
+</script>
+
+
+
+<script>
+  $(document).ready(function() {
+  
+  $('p:has(img)').css('text-align', 'center');
+  $('iframe').css('style', 'display: block; margin: 0px auto;');
+  });
+</script>
+

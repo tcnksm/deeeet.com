@@ -1,0 +1,207 @@
+<!doctype html>
+<html>
+  <head>
+    <meta http-equiv="content-type" content="text/html; charset=utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    
+    <title>高速に自作パッケージをGithubにリリースするghrというツールをつくった | SOTA</title>
+    
+    <link href="https://fonts.googleapis.com/css?family=Lato%3a900" rel="stylesheet" type="text/css">
+    <link rel="stylesheet" href="/css/main.css">
+    <link rel="shortcut icon" href="/favicon.png" type="image/x-icon" />
+    <link href="http://deeeet.com//index.xml" rel="alternate" type="application/rss+xml" title="" />
+    <meta name="title" content="http://deeeet.com/writing/2014/07/29/ghr/">
+    <link rel="canonical" href="http://deeeet.com/writing/2014/07/29/ghr/">
+    
+    <meta property="og:title" content="高速に自作パッケージをGithubにリリースするghrというツールをつくった"/>
+    <meta property="og:url" content="http://deeeet.com/writing/2014/07/29/ghr/"/>
+  </head>
+  
+  <body>
+    <section class="site-nav">
+      <header>
+        <nav id="navigation">
+          <ul class="menu">
+            <li><a href="https://github.com/tcnksm/talks">Talks</a></li>
+            <li><a href="https://tcnksm.exposure.co/">Photos</a></li>
+          </ul>
+
+          <a class="name" href="/">SOTA</a>
+        </nav>        
+      </header>
+    </section>
+    
+
+
+<article>
+  <div class="container">
+    <header>
+      <div class="meta">
+        <time pubdate datetime="2014-07-29" title="2014-07-29">July 29, 2014</time>
+      </div>
+      <h1 class="title">高速に自作パッケージをGithubにリリースするghrというツールをつくった</h1>
+    </header>
+    
+    <section>
+      
+
+<p><a href="https://github.com/tcnksm/ghr">tcnksm/ghr・Github</a></p>
+
+<p><code>ghr</code>を使えば，1コマンドでGithubにリリースページの作成とそこへのパッケージのアップロードが可能になる．複数パッケージのアップロードは並列で実行される．</p>
+
+<h2 id="デモ:01596050dc09dbf47cc7250edf4170a2">デモ</h2>
+
+<p>以下は簡単な動作例．</p>
+
+<p><img src="/images/ghr.gif" class="image"></p>
+
+<p>上のデモでは，<code>v0.1.0</code>タグでリリースを作成し，<code>pkg/dist/v0.1.0</code>以下の6つのファイルを並列でアップロードしている（<code>ghr</code>を<code>ghr</code>でリリースしている）．1ファイルあたり，2.0M程度なのでまあま速いかと．アップロード結果は，<a href="https://github.com/tcnksm/ghr/releases/tag/v0.1.0">ここ</a>で見られる．</p>
+
+<h2 id="背景:01596050dc09dbf47cc7250edf4170a2">背景</h2>
+
+<p><a href="http://deeeet.com/writing/2014/07/23/github-release/">&ldquo;Go言語のツールをクロスコンパイルしてGithubにリリースする&rdquo;</a></p>
+
+<p>上で書いたように<code>curl</code>使って頑張ってAPIを叩いていたが，やっぱシェルスクリプトは嫌だし，アップロードが遅い．</p>
+
+<p>Githubへのリリースを行う専用ツールで<a href="https://github.com/aktau/github-release">aktau/github-release</a>というのもあるが，オプションが多くて，<code>curl</code>を使うのと大差ない．Descriptionなどは後でページから編集した方がよい．</p>
+
+<p>とういことで，シンプルなインターフェース，かつ高速にリリース可能なものをつくった．</p>
+
+<h2 id="使い方:01596050dc09dbf47cc7250edf4170a2">使い方</h2>
+
+<p>事前準備として<a href="https://github.com/settings/applications">GithubのAPI Token</a>を環境変数にセットしておく．</p>
+
+<pre><code class="language-bash">$ export GITHUB_TOKEN=&quot;....&quot;
+</code></pre>
+
+<p>あとは，プロジェクトのディレクトリで以下を実行するだけ．</p>
+
+<pre><code class="language-bash">$ ghr &lt;tag&gt; &lt;package&gt;
+</code></pre>
+
+<p>例えば，上のデモでは，以下を実行している．</p>
+
+<pre><code class="language-bash">$ ghr v0.1.0 pkg/dist/v0.1.0
+--&gt; Uploading: pkg/dist/v0.1.0/ghr_0.1.0_darwin_386.zip
+--&gt; Uploading: pkg/dist/v0.1.0/ghr_0.1.0_darwin_amd64.zip
+--&gt; Uploading: pkg/dist/v0.1.0/ghr_0.1.0_linux_386.zip
+--&gt; Uploading: pkg/dist/v0.1.0/ghr_0.1.0_linux_amd64.zip
+--&gt; Uploading: pkg/dist/v0.1.0/ghr_0.1.0_windows_386.zip
+--&gt; Uploading: pkg/dist/v0.1.0/ghr_0.1.0_windows_amd64.zip
+</code></pre>
+
+<p>ディレクトリを指定すれば，そのディレクトリ以下の全てのファイルが，ファイルを指定すれば，そのファイルのみがアップロードされる．</p>
+
+<p>Go言語プロジェクトの場合は，<a href="https://github.com/mitchellh/gox">mitchellh/gox</a>で並列クロスコンパイルすれば，もっと幸せになる．</p>
+
+<h2 id="インストール:01596050dc09dbf47cc7250edf4170a2">インストール</h2>
+
+<p>OSXの場合は，[Homebrew]()でインストールできる．</p>
+
+<pre><code class="language-bash">$ brew tap tcnksm/ghr
+$ brew install ghr
+</code></pre>
+
+<p>他のプラットフォームの場合は，<a href="https://github.com/tcnksm/ghr/releases">リリースページ</a>からパッケージをダウンロードして，<code>$PATH</code>の通ったところに配置する．</p>
+
+<h2 id="実装:01596050dc09dbf47cc7250edf4170a2">実装</h2>
+
+<p>Go言語で実装している．</p>
+
+<p>並列アップロードはgoroutineを使って以下のように書いている．</p>
+
+<pre><code class="language-go">var errorLock sync.Mutex
+var wg sync.WaitGroup
+errors := make([]string, 0)
+
+for _, path := range files {
+    wg.Add(1)
+    go func(path string) {
+        defer wg.Done()
+
+        fmt.Printf(&quot;--&gt; Uploading: %15s\n&quot;, path)
+        if err := UploadAsset(info, path); err != nil {
+            errorLock.Lock()
+            defer errorLock.Unlock()
+            errors = append(errors,
+            fmt.Sprintf(&quot;%s error: %s&quot;, path, err))
+        }
+    }(path)
+}
+wg.Wait()
+
+</code></pre>
+
+<h2 id="今後:01596050dc09dbf47cc7250edf4170a2">今後</h2>
+
+<p>シンプルなインターフェースを保ちつつ，オプションを追加していく予定．</p>
+
+<h2 id="まとめ:01596050dc09dbf47cc7250edf4170a2">まとめ</h2>
+
+<p>名前が<a href="https://github.com/motemen/ghq">motemen/ghq</a>みたいになってしまったのすいません（Github用のツール，かつCLIで使うことを考慮して短い名前にすると自然と&hellip;）．</p>
+
+<p>バグや意見は，GitHubの<a href="https://github.com/tcnksm/ghr/issues">Issue</a>もしくは，<a href="https://twitter.com/deeeet">@deeeet</a>までお願いします．</p>
+
+<h3 id="参考:01596050dc09dbf47cc7250edf4170a2">参考</h3>
+
+<ul>
+<li><a href="http://jxck.hatenablog.com/entry/20130414/1365960707">Go の並行処理 - Block Rockin’ Codes</a></li>
+<li><a href="http://deeeet.com/writing/2014/07/23/github-release/">Go言語のツールをクロスコンパイルしてGithubにリリースする</a></li>
+<li><a href="http://deeeet.com/writing/2014/05/20/brew-tap/">HomeBrewで自作ツールを配布する</a></li>
+</ul>
+
+      <div class="social">
+  
+  
+  <a href="https://twitter.com/share" class="twitter-share-button" data-via="deeeet" data-count="none">Tweet</a>
+  
+  
+</div>
+
+    </section>
+
+    <footer>
+      <address>
+        
+        <img src="/images/bio.jpeg"/>
+        
+        <p>Written by <strong><a rel="author" href="https://twitter.com/deeeet" title="Taichi Nakashima" target="_blank">Taichi Nakashima</a></strong><br>
+          <span class="muted">A Tokyo based PaaS engineer. Please contact me via twitter.</span>
+        </p>
+      </address>
+
+    </footer>
+
+  </div>
+</article>
+
+<script type="text/javascript" src="//ajax.googleapis.com/ajax/libs/jquery/1.7.2/jquery.min.js"></script>
+<script type="text/javascript" src="/js/main.js"></script>
+
+<script>!function(d,s,id){var js,fjs=d.getElementsByTagName(s)[0],p=/^http:/.test(d.location)?'http':'https';if(!d.getElementById(id)){js=d.createElement(s);js.id=id;js.src=p+'://platform.twitter.com/widgets.js';fjs.parentNode.insertBefore(js,fjs);}}(document, 'script', 'twitter-wjs');</script>
+
+
+<script type="text/javascript">var HN=[];HN.factory=function(e){return function(){HN.push([e].concat(Array.prototype.slice.call(arguments,0)))};},HN.on=HN.factory("on"),HN.once=HN.factory("once"),HN.off=HN.factory("off"),HN.emit=HN.factory("emit"),HN.load=function(){var e="hn-button.js";if(document.getElementById(e))return;var t=document.createElement("script");t.id=e,t.src="//hn-button.herokuapp.com/hn-button.js";var n=document.getElementsByTagName("script")[0];n.parentNode.insertBefore(t,n)},HN.load();</script>
+
+
+  <script>
+  (function(i,s,o,g,r,a,m){i['GoogleAnalyticsObject']=r;i[r]=i[r]||function(){
+  (i[r].q=i[r].q||[]).push(arguments)},i[r].l=1*new Date();a=s.createElement(o),
+  m=s.getElementsByTagName(o)[0];a.async=1;a.src=g;m.parentNode.insertBefore(a,m)
+  })(window,document,'script','//www.google-analytics.com/analytics.js','ga');
+
+  ga('create', 'UA-45390253-1', 'auto');
+  ga('send', 'pageview');
+
+</script>
+
+
+
+<script>
+  $(document).ready(function() {
+  
+  $('p:has(img)').css('text-align', 'center');
+  $('iframe').css('style', 'display: block; margin: 0px auto;');
+  });
+</script>
+

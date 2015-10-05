@@ -1,0 +1,253 @@
+<!doctype html>
+<html>
+  <head>
+    <meta http-equiv="content-type" content="text/html; charset=utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    
+    <title>etcd/consulに認証情報を安全に保存する | SOTA</title>
+    
+    <link href="https://fonts.googleapis.com/css?family=Lato%3a900" rel="stylesheet" type="text/css">
+    <link rel="stylesheet" href="/css/main.css">
+    <link rel="shortcut icon" href="/favicon.png" type="image/x-icon" />
+    <link href="http://deeeet.com//index.xml" rel="alternate" type="application/rss+xml" title="" />
+    <meta name="title" content="http://deeeet.com/writing/2015/02/03/crypt/">
+    <link rel="canonical" href="http://deeeet.com/writing/2015/02/03/crypt/">
+    
+    <meta property="og:title" content="etcd/consulに認証情報を安全に保存する"/>
+    <meta property="og:url" content="http://deeeet.com/writing/2015/02/03/crypt/"/>
+  </head>
+  
+  <body>
+    <section class="site-nav">
+      <header>
+        <nav id="navigation">
+          <ul class="menu">
+            <li><a href="https://github.com/tcnksm/talks">Talks</a></li>
+            <li><a href="https://tcnksm.exposure.co/">Photos</a></li>
+          </ul>
+
+          <a class="name" href="/">SOTA</a>
+        </nav>        
+      </header>
+    </section>
+    
+
+
+<article>
+  <div class="container">
+    <header>
+      <div class="meta">
+        <time pubdate datetime="2015-02-03" title="2015-02-03">February 03, 2015</time>
+      </div>
+      <h1 class="title">etcd/consulに認証情報を安全に保存する</h1>
+    </header>
+    
+    <section>
+      
+
+<p>分散Key-Valueストアとして<a href="https://github.com/coreos/etcd">etcd</a>や<a href="https://hashicorp.com/blog/consul.html">consul</a>の利用が増えている．ここにアプリケーションの設定値などを保存し，各ホストからそれらを購読して利用する．</p>
+
+<p>また，X-as-a-Serviceといった外部サービスの利用も多くなってきた．その場合API Tokenやパスワードといった認証情報が必要になる．PaaSや<a href="http://12factor.net/">Twelve-factor</a>的なアーキテクチャを採用する場合は，それらの値を環境変数に保存して利用することが多い（危険であるという意見はある．cf. <a href="http://techlife.cookpad.com/entry/envchain">http://techlife.cookpad.com/entry/envchain</a>）．etcdやconsulといった分散Key-Valueストアの利用を前提としたアーキテクチャでは，そこに外部に漏らしたくない設定値も一緒に保存してしまうのがシンプルになる．</p>
+
+<p>しかし，そういった設定値をプレインテキストのまま保存するのは望ましい状態ではない．暗号化して保存できるとよい．</p>
+
+<p><a href="https://github.com/xordataexchange/crypt">xordataexchange/crypt</a>を使うとetcdやconsulに暗号化して値を保存できるようになる．具体的にはGNU Privacy Guard（GnuPG）で秘密鍵と公開鍵をつくり，それらを使った値のやりとりを行う．本記事ではその使い方とCoreOSでの実例を簡単に紹介する．</p>
+
+<h2 id="インストール:1926ab49e020d4aea67b489639332ea5">インストール</h2>
+
+<p>cryptはGoで書かれている．<a href="https://github.com/xordataexchange/crypt/releases">バイナリ</a>をダウンロードすることもできるが，<code>go get</code>でも良い．</p>
+
+<pre><code class="language-bash">$ go install github.com/xordataexchange/crypt/bin/crypt
+</code></pre>
+
+<h2 id="鍵の準備:1926ab49e020d4aea67b489639332ea5">鍵の準備</h2>
+
+<p><code>gpg2</code>を使って秘密鍵と公開鍵のペアを生成する．以下のファイル<code>app.batch</code>を作り，バッチとして生成する．</p>
+
+<pre><code>%echo Generating a configuration OpenPGP key
+Key-Type: default
+Subkey-Type: default
+Name-Real: app
+Name-Comment: app configuration key
+Name-Email: app@example.com
+Expire-Date: 0
+%pubring .pubring.gpg
+%secring .secring.gpg
+%commit
+%echo done
+</code></pre>
+
+<pre><code class="language-bash">$ gpg2 --batch --armor --gen-key app.batch
+</code></pre>
+
+<p>これで秘密鍵<code>.secring.gpg</code>と公開鍵<code>.pubring.gpg</code>が生成される．</p>
+
+<h2 id="値の保存-取得:1926ab49e020d4aea67b489639332ea5">値の保存/取得</h2>
+
+<p>ここでは例としてetcdを利用する．使い方は簡単で<code>etcdctl</code>と同じ感覚で使える．例えば，以下のようなパスワード情報<code>config.json</code>をetcdの<code>/app/config</code>に保存する．保存には，上記で生成した公開鍵<code>.pubring.gpg</code>を利用する．</p>
+
+<pre><code class="language-bash">$ cat &lt;&lt;EOF &gt; config.json
+{&quot;password&quot;: &quot;passw0rd&quot;}
+EOF
+$ crypt set -endpoint=${ETCD_PEERS} -keyring .pubring.gpg /app/config config.json
+</code></pre>
+
+<p>まず，<code>etcdctl</code>でこの値を取得してみる．</p>
+
+<pre><code class="language-bash">$ etcdctl get /app/config
+wcBMA0OL+oKDi4zdAQgAh7iKVASBZvvX6WiiLPYSZgAbhYDhZyVGqX+uK2Bc1plC/mYkqw/n3FXyL+ZC0ISdK9Hdqv6HpCthnMHmBCfhPAjV4DsrXKWO7TP0AY/TxUPMxX9sIiTzrLTJGb73134Z6l0z0Ocj2dEuhyAt5u3cucKkQb3CWGyuhM7C02aTeJoPjIkqi3agAizQn0uwcurSONpmCkArq33/Q3579iHZv42Xnr+1Dq4Ck
+</code></pre>
+
+<p>暗号化されており，何が保存されていたかはわからない．</p>
+
+<p>次に，cryptを使って値を取得する．値の取得には上記で生成した秘密鍵<code>.secring.gpg</code>を利用する．</p>
+
+<pre><code class="language-bash">$ crypt get -secret-keyring deeeet-com-secring.gpg /app/config
+{&quot;password&quot;:&quot;passw0rd&quot;}
+</code></pre>
+
+<p><code>-backend</code>を変えればconsulでも利用できる．</p>
+
+<h2 id="coreosの場合:1926ab49e020d4aea67b489639332ea5">CoreOSの場合</h2>
+
+<p>CoreOSにおいても認証情報をetcdに保存し，Dockerコンテナのアプリケーションからその値を利用したいことはある．例えば，Dockerイメージに認証情報を保存してビルドするのではなく，コンテナを起動する際に<code>-e</code>オプションなどで動的に値を取得/設定したい場合など（以下は，模索してやっていることなので，もしより良い方法があれば教えて欲しいです）．</p>
+
+<p>CoreOS内からetcdにcryptで保存した暗号化情報を購読するには，以下の2つが必要である．</p>
+
+<ul>
+<li>Cryptのインストール</li>
+<li>秘密鍵<code>.secring.gpg</code>の保存</li>
+</ul>
+
+<p>これらを<code>cloud-config</code>に既述する（抜粋）．</p>
+
+<pre><code>#cloud-config
+coreos:
+...
+  units:
+    - name: etcd.service
+      command: start
+    - name: fleet.service
+      command: start
+    - name: download-crypt.service
+      command: start
+      content: |
+        [Unit]
+        Description=Install crypt
+        Documentation=https://github.com/xordataexchange/crypt
+        Requires=network-online.target
+        After=network-online.target
+
+        [Service]
+        Type=oneshot
+        ExecStartPre=-/usr/bin/mkdir -p /opt/bin
+        ExecStart=/usr/bin/sh -c '/usr/bin/wget -N -O /opt/bin/crypt https://github.com/xordataexchange/crypt/releases/download/v0.0.1/crypt-0.0.1-linux-amd64; /usr/bin/chmod +x /opt/bin/crypt'
+
+write_files:
+  - path: /etc/secring.gpg
+    content: |
+    -----BEGIN PGP PRIVATE KEY BLOCK-----
+    Version: GnuPG v2
+
+    lQOYBFTHh9YBC4vhuBYfvsgdCj0BhndU82up4s+MCA3F....
+</code></pre>
+
+<p>新しく<code>units.download-crypt.service</code>を定義して，cryptをインストールし，<code>write-files</code>で秘密鍵を書き出す．これで，あらかじめ認証情報をcryptを使ってectdに保存しておけば，Unitファイルからcryptでそれを取り出すことができる．</p>
+
+<p>例えば，<a href="https://www.datadoghq.com/">DataDog</a>でCoreOS内のDockerコンテナのメトリクスを収集したい場合，Agentの利用にはAPI Keyが必要である．これを実現するには，以下のようにあらかじめcryptでetcdにKeyを保存しておき，Unitファイルにその値を購読するように既述すればよい．</p>
+
+<pre><code class="language-bash">$ crypt set -endpoint=$ETCDCTL_PEERS -keyring .pubring.gpg /ddapikey .ddapikey
+</code></pre>
+
+<pre><code>[Unit]
+Description=Datadog agent service
+Documentation=https://www.datadoghq.com/2014/08/monitor-coreos-scale-datadog/
+After=docker.service
+Requires=docker.service
+
+[Service]
+TimeoutStartSec=0
+KillMode=none
+Restart=always
+ExecStartPre=-/usr/bin/docker kill dd-agent
+ExecStartPre=-/usr/bin/docker rm dd-agent
+ExecStartPre=/usr/bin/docker pull datadog/docker-dd-agent
+ExecStart=/usr/bin/bash -c \
+&quot;/usr/bin/docker run --privileged --name dd-agent -h `hostname` \
+-v /var/run/docker.sock:/var/run/docker.sock \
+-v /proc/mounts:/host/proc/mounts:ro \
+-v /sys/fs/cgroup/:/host/sys/fs/cgroup:ro \
+-e API_KEY=`/opt/bin/crypt get -secret-keyring /etc/secring.gpg /ddapikey` \
+datadog/docker-dd-agent&quot;
+
+[X-Fleet]
+Global=true
+</code></pre>
+
+<p><code>-e API_KEY=</code>を動的に設定する．</p>
+
+<h2 id="まとめ:1926ab49e020d4aea67b489639332ea5">まとめ</h2>
+
+<p>cryptを使い，etcd/consulといった分散Key-Valueストアに安全に値を保存する方法について解説した．分散Key-Valueストアは気軽に使えるのが良いが，安全にするべきところはなるべく安全にしておきたい．</p>
+
+<h3 id="参考:1926ab49e020d4aea67b489639332ea5">参考</h3>
+
+<ul>
+<li><a href="http://youtu.be/zYpqqfuGwW8">Managing encrypted configs in etcd and consul with crypt</a></li>
+</ul>
+
+      <div class="social">
+  
+  
+  <a href="https://twitter.com/share" class="twitter-share-button" data-via="deeeet" data-count="none">Tweet</a>
+  
+  
+</div>
+
+    </section>
+
+    <footer>
+      <address>
+        
+        <img src="/images/bio.jpeg"/>
+        
+        <p>Written by <strong><a rel="author" href="https://twitter.com/deeeet" title="Taichi Nakashima" target="_blank">Taichi Nakashima</a></strong><br>
+          <span class="muted">A Tokyo based PaaS engineer. Please contact me via twitter.</span>
+        </p>
+      </address>
+
+    </footer>
+
+  </div>
+</article>
+
+<script type="text/javascript" src="//ajax.googleapis.com/ajax/libs/jquery/1.7.2/jquery.min.js"></script>
+<script type="text/javascript" src="/js/main.js"></script>
+
+<script>!function(d,s,id){var js,fjs=d.getElementsByTagName(s)[0],p=/^http:/.test(d.location)?'http':'https';if(!d.getElementById(id)){js=d.createElement(s);js.id=id;js.src=p+'://platform.twitter.com/widgets.js';fjs.parentNode.insertBefore(js,fjs);}}(document, 'script', 'twitter-wjs');</script>
+
+
+<script type="text/javascript">var HN=[];HN.factory=function(e){return function(){HN.push([e].concat(Array.prototype.slice.call(arguments,0)))};},HN.on=HN.factory("on"),HN.once=HN.factory("once"),HN.off=HN.factory("off"),HN.emit=HN.factory("emit"),HN.load=function(){var e="hn-button.js";if(document.getElementById(e))return;var t=document.createElement("script");t.id=e,t.src="//hn-button.herokuapp.com/hn-button.js";var n=document.getElementsByTagName("script")[0];n.parentNode.insertBefore(t,n)},HN.load();</script>
+
+
+  <script>
+  (function(i,s,o,g,r,a,m){i['GoogleAnalyticsObject']=r;i[r]=i[r]||function(){
+  (i[r].q=i[r].q||[]).push(arguments)},i[r].l=1*new Date();a=s.createElement(o),
+  m=s.getElementsByTagName(o)[0];a.async=1;a.src=g;m.parentNode.insertBefore(a,m)
+  })(window,document,'script','//www.google-analytics.com/analytics.js','ga');
+
+  ga('create', 'UA-45390253-1', 'auto');
+  ga('send', 'pageview');
+
+</script>
+
+
+
+<script>
+  $(document).ready(function() {
+  
+  $('p:has(img)').css('text-align', 'center');
+  $('iframe').css('style', 'display: block; margin: 0px auto;');
+  });
+</script>
+

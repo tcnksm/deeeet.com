@@ -1,0 +1,205 @@
+<!doctype html>
+<html>
+  <head>
+    <meta http-equiv="content-type" content="text/html; charset=utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    
+    <title>Go言語のツールが最新バージョンであるかをユーザに伝えるためのgo-latestというパッケージをつくった | SOTA</title>
+    
+    <link href="https://fonts.googleapis.com/css?family=Lato%3a900" rel="stylesheet" type="text/css">
+    <link rel="stylesheet" href="/css/main.css">
+    <link rel="shortcut icon" href="/favicon.png" type="image/x-icon" />
+    <link href="http://deeeet.com//index.xml" rel="alternate" type="application/rss+xml" title="" />
+    <meta name="title" content="http://deeeet.com/writing/2015/04/07/go-latest/">
+    <link rel="canonical" href="http://deeeet.com/writing/2015/04/07/go-latest/">
+    
+    <meta property="og:title" content="Go言語のツールが最新バージョンであるかをユーザに伝えるためのgo-latestというパッケージをつくった"/>
+    <meta property="og:url" content="http://deeeet.com/writing/2015/04/07/go-latest/"/>
+  </head>
+  
+  <body>
+    <section class="site-nav">
+      <header>
+        <nav id="navigation">
+          <ul class="menu">
+            <li><a href="https://github.com/tcnksm/talks">Talks</a></li>
+            <li><a href="https://tcnksm.exposure.co/">Photos</a></li>
+          </ul>
+
+          <a class="name" href="/">SOTA</a>
+        </nav>        
+      </header>
+    </section>
+    
+
+
+<article>
+  <div class="container">
+    <header>
+      <div class="meta">
+        <time pubdate datetime="2015-04-07" title="2015-04-07">April 07, 2015</time>
+      </div>
+      <h1 class="title">Go言語のツールが最新バージョンであるかをユーザに伝えるためのgo-latestというパッケージをつくった</h1>
+    </header>
+    
+    <section>
+      
+
+<p><a href="https://github.com/tcnksm/go-latest">tcnksm/go-latest</a></p>
+
+<p>Webアプリケーションとは異なり，コマンドラインツールやモバイルアプリはバージョンアップがユーザに委ねられる．そのため一度リリースしてしまうとバージョンアップをしてもらうのが難しくなる（バグを含めてしまった場合にロールバックもできない cf. <a href="https://speakerdeck.com/gfx/mobile-first-development-at-cookpad-number-deploygate">&ldquo;Mobile First Development at COOKPAD #deploygate&rdquo;</a>）．とにかくしっかりテストをしてそもそもバクを含めないというのも大切だが，完璧なソフトウェアは存在しないので，アップデートは常に必要になる．</p>
+
+<p>モバイルアプリとは異なり，Go言語でツールを書いきバイナリとして配布した場合は，最新のバージョンがすでに存在していることをユーザに伝える仕組みはそもそもない．ので，最新のバージョンをリリースしたことをユーザに伝えることが難しくなる．<a href="https://github.com/tcnksm/go-latest">go-latest</a>を使うと，ユーザが使っているツールが最新バージョンであるかをチェックし，古い場合にそれを伝えバージョンアップを促すということが可能になる．</p>
+
+<h2 id="インストール:be2bf6bf52df2499cea841895b45c680">インストール</h2>
+
+<p><code>go get</code>でインストールできる．</p>
+
+<pre><code class="language-bash">$ go get -d github.com/tcnksm/go-latest
+</code></pre>
+
+<h2 id="使い方:be2bf6bf52df2499cea841895b45c680">使い方</h2>
+
+<p><code>go-latest</code>には<code>Source</code>という概念がある．<code>Source</code>は最新バージョンの問い合わせ先である．デフォルトではGitHub上のタグ，HTMLのmetaタグ（もしくはオリジナルのスクレイピング），JSONレスポンスを利用することができる（<code>Source</code>はただのインターフェースなので自分で実装することもできる）．</p>
+
+<p>これらの使い方を簡単に説明する．</p>
+
+<h3 id="githubtag:be2bf6bf52df2499cea841895b45c680">GithubTag</h3>
+
+<p>まず，GitHub上のタグを使う方法．例えば，<a href="https://github.com/tcnksm/ghr">https://github.com/tcnksm/ghr</a>というツールにおいて，バージョン<code>0.1.0</code>が最新であるかをチェックするには以下のようにする．</p>
+
+<pre><code class="language-golang">githubTag := &amp;latest.GithubTag{
+    Owner: &quot;tcnksm&quot;,
+    Repository: &quot;ghr&quot;,
+}
+
+res, _ := latest.Check(githubTag, &quot;0.1.0&quot;)
+if res.Outdated {
+    fmt.Printf(&quot;0.1.0 is not latest, you should upgrade to %s&quot;, res.Current)
+}
+</code></pre>
+
+<p>レポジトリのユーザ名とレポジトリ名を指定して<code>Check()</code>を呼ぶだけ．レスポンスの詳細は，<a href="https://godoc.org/github.com/tcnksm/go-latest">https://godoc.org/github.com/tcnksm/go-latest</a>を参照．</p>
+
+<h3 id="html-metaタグ:be2bf6bf52df2499cea841895b45c680">HTML metaタグ</h3>
+
+<p>次に，特定のmetaタグをHTMLに仕込む方法．例えば，<code>reduce-worker</code>というツールがあるとする．この場合は，まず，以下のようなバージョン情報を含んだmetaタグをHTMLに仕込んでおく，</p>
+
+<pre><code class="language-html">&lt;meta name=&quot;go-latest&quot; content=&quot;reduce-worker 0.1.2 New version include security update&quot;&gt;
+</code></pre>
+
+<p>バージョン<code>0.1.0</code>が最新のバージョンであるかをチェックするには以下のようにする．</p>
+
+<pre><code class="language-golang">html := &amp;latest.HTMLMeta{
+    URL: &quot;http://example.com/info&quot;,
+    Name: &quot;reduce-worker&quot;,
+}
+
+res, _ := latest.Check(html, &quot;0.1.0&quot;)
+if res.Outdated {
+    fmt.Printf(&quot;0.1.0 is not latest, %s, upgrade to %s&quot;, res.Meta.Message, res.Current)
+}
+</code></pre>
+
+<p><code>URL</code>にmetaタグを含んだHTMLのURLを，<code>Name</code>にツールの名前を指定してリクエストを投げるだけ．</p>
+
+<p>この方法は，GitHubが<a href="http://techcrunch.com/2015/03/30/github-continues-to-face-evolving-ddos-attack/">死んでいても</a>使えるし，レスポンスにメッセージを含めることもできる．metaタグの詳しい仕様は<a href="https://github.com/tcnksm/go-latest/blob/master/doc/html_meta.md">ここ</a>に定義してある．この仕様が気に食わないときは，自分でオリジナルのスクレイピング関数を定義することもできる．</p>
+
+<p>なお，この手法は，<a href="https://golang.org/cmd/go/#hdr-Remote_import_paths">Go言語のRemote import path</a>や<a href="http://deeeet.com/writing/2015/03/12/appc-discover/">ACIのディスカバリー</a>を参考にしている．</p>
+
+<h3 id="json:be2bf6bf52df2499cea841895b45c680">JSON</h3>
+
+<p>最後にJSON APIを使う方法．例えば，以下のようなJSONレスポンスを返すAPIがあるとする．</p>
+
+<pre><code class="language-json">{
+    &quot;version&quot;:&quot;1.2.3&quot;,
+    &quot;message&quot;:&quot;Fix crash bug when XXX&quot;,
+}
+</code></pre>
+
+<p>バージョン<code>0.1.0</code>が最新のバージョンであるかをチェックするには以下のようにする．</p>
+
+<pre><code class="language-golang">json := &amp;latest.JSON{
+    URL: &quot;http://example.com/version&quot;,
+}
+
+res, _ := latest.Check(json, &quot;0.1.0&quot;)
+if res.Outdated {
+    fmt.Printf(&quot;0.1.0 is not latest, %s, upgrade to %s&quot;, res.Meta.Message, res.Current)
+}
+</code></pre>
+
+<p><code>URL</code>はJSONのエンドポイントを指定してリクエストを投げるだけ．</p>
+
+<p>この方法は，APIクライアントを作成しているときに便利．自分でオリジナルの構造体を定義して好きなJSONレスポンスを受け取ることもできる．詳しくは，<a href="https://godoc.org/github.com/tcnksm/go-latest">https://godoc.org/github.com/tcnksm/go-latest</a>を参照．</p>
+
+<h2 id="使い所:be2bf6bf52df2499cea841895b45c680">使い所</h2>
+
+<p>例えば，自分が作っているコマンドラインツールの場合は，<code>--version</code>が呼ばれたときに<code>go-latest</code>を実行し，最新版かどうかを提示するようにしている．</p>
+
+<pre><code class="language-bash">$ my-tool --version
+my-tool version v0.3.1, build aded5ca
+Your version is out of date! The latest version is v0.4.0
+</code></pre>
+
+<p>ベータ版のリリースなどで開発のサイクルが早く，どんどんアップデートを促したい場合は，コマンドが実行される度に呼び出しても良いかもしれない（今回は社内向けのツールでこれをしたくてつくった）．またデーモンとして動くツールなどでは<code>SIGHUP</code>で実行しても良さそう．</p>
+
+<h2 id="まとめ:be2bf6bf52df2499cea841895b45c680">まとめ</h2>
+
+<p>バグや要望はGitHubの<a href="https://github.com/tcnksm/go-latest/issues">Issue</a>，もしくは<a href="https://twitter.com/deeeet">@deeeet</a>までお願いします．</p>
+
+      <div class="social">
+  
+  
+  <a href="https://twitter.com/share" class="twitter-share-button" data-via="deeeet" data-count="none">Tweet</a>
+  
+  
+</div>
+
+    </section>
+
+    <footer>
+      <address>
+        
+        <img src="/images/bio.jpeg"/>
+        
+        <p>Written by <strong><a rel="author" href="https://twitter.com/deeeet" title="Taichi Nakashima" target="_blank">Taichi Nakashima</a></strong><br>
+          <span class="muted">A Tokyo based PaaS engineer. Please contact me via twitter.</span>
+        </p>
+      </address>
+
+    </footer>
+
+  </div>
+</article>
+
+<script type="text/javascript" src="//ajax.googleapis.com/ajax/libs/jquery/1.7.2/jquery.min.js"></script>
+<script type="text/javascript" src="/js/main.js"></script>
+
+<script>!function(d,s,id){var js,fjs=d.getElementsByTagName(s)[0],p=/^http:/.test(d.location)?'http':'https';if(!d.getElementById(id)){js=d.createElement(s);js.id=id;js.src=p+'://platform.twitter.com/widgets.js';fjs.parentNode.insertBefore(js,fjs);}}(document, 'script', 'twitter-wjs');</script>
+
+
+<script type="text/javascript">var HN=[];HN.factory=function(e){return function(){HN.push([e].concat(Array.prototype.slice.call(arguments,0)))};},HN.on=HN.factory("on"),HN.once=HN.factory("once"),HN.off=HN.factory("off"),HN.emit=HN.factory("emit"),HN.load=function(){var e="hn-button.js";if(document.getElementById(e))return;var t=document.createElement("script");t.id=e,t.src="//hn-button.herokuapp.com/hn-button.js";var n=document.getElementsByTagName("script")[0];n.parentNode.insertBefore(t,n)},HN.load();</script>
+
+
+  <script>
+  (function(i,s,o,g,r,a,m){i['GoogleAnalyticsObject']=r;i[r]=i[r]||function(){
+  (i[r].q=i[r].q||[]).push(arguments)},i[r].l=1*new Date();a=s.createElement(o),
+  m=s.getElementsByTagName(o)[0];a.async=1;a.src=g;m.parentNode.insertBefore(a,m)
+  })(window,document,'script','//www.google-analytics.com/analytics.js','ga');
+
+  ga('create', 'UA-45390253-1', 'auto');
+  ga('send', 'pageview');
+
+</script>
+
+
+
+<script>
+  $(document).ready(function() {
+  
+  $('p:has(img)').css('text-align', 'center');
+  $('iframe').css('style', 'display: block; margin: 0px auto;');
+  });
+</script>
+

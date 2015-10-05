@@ -1,0 +1,160 @@
+<!doctype html>
+<html>
+  <head>
+    <meta http-equiv="content-type" content="text/html; charset=utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    
+    <title>Dockerコンテナのおもしろい名前 | SOTA</title>
+    
+    <link href="https://fonts.googleapis.com/css?family=Lato%3a900" rel="stylesheet" type="text/css">
+    <link rel="stylesheet" href="/css/main.css">
+    <link rel="shortcut icon" href="/favicon.png" type="image/x-icon" />
+    <link href="http://deeeet.com//index.xml" rel="alternate" type="application/rss+xml" title="" />
+    <meta name="title" content="http://deeeet.com/writing/2014/07/15/docker-container-name/">
+    <link rel="canonical" href="http://deeeet.com/writing/2014/07/15/docker-container-name/">
+    
+    <meta property="og:title" content="Dockerコンテナのおもしろい名前"/>
+    <meta property="og:url" content="http://deeeet.com/writing/2014/07/15/docker-container-name/"/>
+  </head>
+  
+  <body>
+    <section class="site-nav">
+      <header>
+        <nav id="navigation">
+          <ul class="menu">
+            <li><a href="https://github.com/tcnksm/talks">Talks</a></li>
+            <li><a href="https://tcnksm.exposure.co/">Photos</a></li>
+          </ul>
+
+          <a class="name" href="/">SOTA</a>
+        </nav>        
+      </header>
+    </section>
+    
+
+
+<article>
+  <div class="container">
+    <header>
+      <div class="meta">
+        <time pubdate datetime="2014-07-15" title="2014-07-15">July 15, 2014</time>
+      </div>
+      <h1 class="title">Dockerコンテナのおもしろい名前</h1>
+    </header>
+    
+    <section>
+      
+
+<p>Dockerコンテナを立ち上げるときに，<code>--name</code>オプションで名前を指定しないと勝手に名前がつけられる．</p>
+
+<pre><code class="language-bash">$ docker run -d dockerfile/nginx
+</code></pre>
+
+<pre><code class="language-bash">$ docker ps
+CONTAINER ID        IMAGE                     COMMAND             CREATED             STATUS              PORTS               NAMES
+1f29f753eaf6        dockerfile/nginx:latest   nginx               2 days ago          Up 11 hours         80/tcp, 443/tcp     elegant_feynma
+</code></pre>
+
+<p>例えば，上では<code>elegant_feynma</code>という名前がつけられている．</p>
+
+<p>で，これどうやってやってるのかなーと思ってソースを眺めていると，<a href="https://github.com/dotcloud/docker/tree/master/pkg/namesgenerator">docker/pkg/namesgenerator</a>というパッケージが名前を生成していた．</p>
+
+<p>名前の生成方法はとても単純で，49個の形容詞と68名の著名な科学者もしくはハッカーの名前をランダムに組み合せているだけ．ソースを見ると，科学者もしくはハッカーの名前と簡単な紹介文，wikipediaへのリンクがコメントに書かれている．</p>
+
+<p>以下が，生成部分の実装．注意深くみると，異変に気づく．</p>
+
+<pre><code class="language-go">func GetRandomName(retry int) string {
+    rand.Seed(time.Now().UnixNano())
+
+begin:
+    name := fmt.Sprintf(&quot;%s_%s&quot;, left[rand.Intn(len(left))], right[rand.Intn(len(right))])
+    if name == &quot;boring_wozniak&quot; /* Steve Wozniak is not boring */ {
+        goto begin
+    }
+
+    if retry &gt; 0 {
+        name = fmt.Sprintf(&quot;%s%d&quot;, name, rand.Intn(10))
+    }
+    return name
+}
+</code></pre>
+
+<p>この実装のIssueは<a href="https://github.com/dotcloud/docker/pull/4902">ここ</a>にある．まあ，LGTMである．</p>
+
+<p>このnamegeneratorパッケージはDocker以外でも使えるようになっている．例えば以下のように使う．</p>
+
+<pre><code class="language-go">package main
+
+import (
+    &quot;fmt&quot;
+    &quot;github.com/dotcloud/docker/pkg/namesgenerator&quot;
+)
+
+func main() {
+    fmt.Println(namesgenerator.GetRandomName(0))
+}    
+</code></pre>
+
+<p>便利ー．</p>
+
+<h3 id="参考:d6491249fbde0befdc7ea37ada76f757">参考</h3>
+
+<ul>
+<li><a href="http://stackoverflow.com/questions/184618/what-is-the-best-comment-in-source-code-you-have-ever-encountered">What is the best comment in source code you have ever encountered?</a></li>
+</ul>
+
+      <div class="social">
+  
+  
+  <a href="https://twitter.com/share" class="twitter-share-button" data-via="deeeet" data-count="none">Tweet</a>
+  
+  
+</div>
+
+    </section>
+
+    <footer>
+      <address>
+        
+        <img src="/images/bio.jpeg"/>
+        
+        <p>Written by <strong><a rel="author" href="https://twitter.com/deeeet" title="Taichi Nakashima" target="_blank">Taichi Nakashima</a></strong><br>
+          <span class="muted">A Tokyo based PaaS engineer. Please contact me via twitter.</span>
+        </p>
+      </address>
+
+    </footer>
+
+  </div>
+</article>
+
+<script type="text/javascript" src="//ajax.googleapis.com/ajax/libs/jquery/1.7.2/jquery.min.js"></script>
+<script type="text/javascript" src="/js/main.js"></script>
+
+<script>!function(d,s,id){var js,fjs=d.getElementsByTagName(s)[0],p=/^http:/.test(d.location)?'http':'https';if(!d.getElementById(id)){js=d.createElement(s);js.id=id;js.src=p+'://platform.twitter.com/widgets.js';fjs.parentNode.insertBefore(js,fjs);}}(document, 'script', 'twitter-wjs');</script>
+
+
+<script type="text/javascript">var HN=[];HN.factory=function(e){return function(){HN.push([e].concat(Array.prototype.slice.call(arguments,0)))};},HN.on=HN.factory("on"),HN.once=HN.factory("once"),HN.off=HN.factory("off"),HN.emit=HN.factory("emit"),HN.load=function(){var e="hn-button.js";if(document.getElementById(e))return;var t=document.createElement("script");t.id=e,t.src="//hn-button.herokuapp.com/hn-button.js";var n=document.getElementsByTagName("script")[0];n.parentNode.insertBefore(t,n)},HN.load();</script>
+
+
+  <script>
+  (function(i,s,o,g,r,a,m){i['GoogleAnalyticsObject']=r;i[r]=i[r]||function(){
+  (i[r].q=i[r].q||[]).push(arguments)},i[r].l=1*new Date();a=s.createElement(o),
+  m=s.getElementsByTagName(o)[0];a.async=1;a.src=g;m.parentNode.insertBefore(a,m)
+  })(window,document,'script','//www.google-analytics.com/analytics.js','ga');
+
+  ga('create', 'UA-45390253-1', 'auto');
+  ga('send', 'pageview');
+
+</script>
+
+
+
+<script>
+  $(document).ready(function() {
+  
+  $('p:has(img)').css('text-align', 'center');
+  $('iframe').css('style', 'display: block; margin: 0px auto;');
+  });
+</script>
+

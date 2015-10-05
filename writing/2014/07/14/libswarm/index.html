@@ -1,0 +1,274 @@
+<!doctype html>
+<html>
+  <head>
+    <meta http-equiv="content-type" content="text/html; charset=utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    
+    <title>libswarmの現状と将来 | SOTA</title>
+    
+    <link href="https://fonts.googleapis.com/css?family=Lato%3a900" rel="stylesheet" type="text/css">
+    <link rel="stylesheet" href="/css/main.css">
+    <link rel="shortcut icon" href="/favicon.png" type="image/x-icon" />
+    <link href="http://deeeet.com//index.xml" rel="alternate" type="application/rss+xml" title="" />
+    <meta name="title" content="http://deeeet.com/writing/2014/07/14/libswarm/">
+    <link rel="canonical" href="http://deeeet.com/writing/2014/07/14/libswarm/">
+    
+    <meta property="og:title" content="libswarmの現状と将来"/>
+    <meta property="og:url" content="http://deeeet.com/writing/2014/07/14/libswarm/"/>
+  </head>
+  
+  <body>
+    <section class="site-nav">
+      <header>
+        <nav id="navigation">
+          <ul class="menu">
+            <li><a href="https://github.com/tcnksm/talks">Talks</a></li>
+            <li><a href="https://tcnksm.exposure.co/">Photos</a></li>
+          </ul>
+
+          <a class="name" href="/">SOTA</a>
+        </nav>        
+      </header>
+    </section>
+    
+
+
+<article>
+  <div class="container">
+    <header>
+      <div class="meta">
+        <time pubdate datetime="2014-07-14" title="2014-07-14">July 14, 2014</time>
+      </div>
+      <h1 class="title">libswarmの現状と将来</h1>
+    </header>
+    
+    <section>
+      
+
+<p>DockerCon14で新たに発表されたDockerによる新しいOSSである<a href="https://github.com/docker/libswarm">libswarm</a>をざっと触ってみたので，現状何ができて，将来的にどういったことができそうになるかを簡単にまとめておく．</p>
+
+<h2 id="tl-dr:41cc6cd5853fa3d7d20008d6d7ded1fb">TL;DR</h2>
+
+<p>libswarmを使うと複数ホストやサービス（自社サーバー，DigitalOcean，Amazon EC2，Orchardなど）に存在するDockerコンテナを，１つのホストに存在しているかのように扱うことができるようになる．Dockerがホストを抽象化したのに対して，libswarmは複数ホストを抽象化する．</p>
+
+<p>libswarmを使ったswarmdコマンドを使って，UNIXのパイプのように複数ホストやサービスを連鎖的につなげる．</p>
+
+<h2 id="デモ:41cc6cd5853fa3d7d20008d6d7ded1fb">デモ</h2>
+
+<p>libswarmで何ができるのかは，DockerCon14でのデモ動画<a href="https://www.youtube.com/watch?v=a_YbxWbHgQA">&ldquo;Orchard + libswarm demo from DockerCon&rdquo;</a>を観るのが一番わかりやすい．</p>
+
+<p>ここでは，異なるホスト（ローカルホストとDigitalOcean，Orchard）に対して，swarmdを立ち上げるだけで，それらに個別にログインすることなく，同様のコマンドを発行してaanand/hello-worldコンテナを立ち上げ，かつそれら全てのコンテナの情報を一気に取得している様子が観られる．</p>
+
+<h2 id="libswarmの動作:41cc6cd5853fa3d7d20008d6d7ded1fb">libswarmの動作</h2>
+
+<p>libswarmのプロジェクトをみると，<a href="https://github.com/docker/libswarm/tree/master/backends">backends</a>というディレクトリがある．ここに，様々ななバックエンドサービス，例えば標準的なDocker server/clientやAmazon EC2，Orchardなど，が定義されており，libswarmはこれらのサービスの間の情報のやりとりを受け持つ．</p>
+
+<p>例えば，一番単純なコマンドは以下のようになる．</p>
+
+<pre><code class="language-bash">$ swarmd 'dockerserver unix:///var/run/docker.sock' 'dockerclient tcp://192.168.59.103:2375'
+</code></pre>
+
+<p>これを立ち上げたまま，ローカルでDockerコマンドを実行すると，</p>
+
+<ol>
+<li>クライアントによるHTTPリクエストを<code>dockerserver</code>が受ける</li>
+<li><code>dockerserver</code>はリクエストを<code>dockerclient</code>にフォワードする</li>
+<li><code>193.168.59.103</code>のDockerデーモンでコマンドが実行される</li>
+</ol>
+
+<p>この動作は以下の図がわかりやすい．</p>
+
+<p><img src="http://www.tech-d.net/wp-content/uploads/2014/07/548d351e8542debc543ca059d96859c9.png" alt="" />
+
+<a href="http://www.tech-d.net/2014/07/03/libswarm/">Libswarm (in a nutshell) | Tech&rsquo;d</a></p>
+
+<p>上の例は最小限で感動はない．libswarmがすごいのは，例えばdockerclientバックエンドをorchardバックエンドに変えればorchardにコマンドが発行されるし，EC2バックエンドに変えればEC2にコマンドが発行されるところ．さらに，複数のバックエンドサービスを束ねて同時にそれらを扱えるところ．</p>
+
+<h2 id="デモの再現:41cc6cd5853fa3d7d20008d6d7ded1fb">デモの再現</h2>
+
+<p>とりあえず，DockerCon14のデモをOSX上で再現してみる．まず，インストールは以下．Goがインストールされている必要がある．</p>
+
+<pre><code class="language-bash">$ go get github.com/docker/libswarm/...
+$ go install github.com/docker/libswarm/swarmd
+</code></pre>
+
+<h3 id="dockerclient:41cc6cd5853fa3d7d20008d6d7ded1fb">dockerclient</h3>
+
+<p>まず，dockerclientにboot2dockerを指定してみる．</p>
+
+<pre><code class="language-bash">$ swarmd 'dockerserver tcp://localhost:4567' 'debug' &quot;dockerclient tcp://:2375&quot;
+</code></pre>
+
+<p>別のウィンドウを立ち上げて，<code>DOCKER_HOST</code>を<code>dockerserver</code>で指定した値にして，コマンドを発行する．</p>
+
+<pre><code class="language-bash">$ export DOCKER_HOST=tcp://:4567
+$ docker run -d -p 80:80 dockerfile/nginx
+</code></pre>
+
+<p>すると，nginxコンテナが立ち上がる．</p>
+
+<pre><code class="language-bash">$ docker ps
+CONTAINER ID        IMAGE               COMMAND             CREATED             STATUS              PORTS                       NAMES
+3eac36e063d6        dockerfile/nginx    nginx               25 hours ago        Up                  0.0.0.0:80-&gt;80/tcp, 0/tcp   evil_leakey
+</code></pre>
+
+<p>現時点（2014.07.10）では，ポートフォーワードは効かない．これを再現するには，<a href="https://github.com/docker/libswarm/blob/master/backends/dockerclient.go">libswarm/backends/dockerclient.go</a>の<code>start()</code>関数のポストパラメータを無理矢理いじるしかない．</p>
+
+<h3 id="digitalocean:41cc6cd5853fa3d7d20008d6d7ded1fb">DigitalOcean</h3>
+
+<p>次に，dockerclientにDigitalOceanに立てたサーバを指定してみる．</p>
+
+<pre><code class="language-bash">$ swarmd 'dockerserver tcp://localhost:4243' 'debug' &quot;dockerclient $DIGITAL_OCEAN_HOST&quot;
+</code></pre>
+
+<p><code>DOCKER_HOST</code>を指定してあれば上記を同じコマンドでnginxコンテナを立ち上げることができる．</p>
+
+<pre><code class="language-bash">$ docker run -d -p 80:80 dockerfile/nginx
+</code></pre>
+
+<pre><code class="language-bash">$ docker ps
+CONTAINER ID        IMAGE               COMMAND             CREATED              STATUS              PORTS                       NAMES
+5d84aaca9fbc        dockerfile/nginx    nginx               About a minute ago   Up                  0.0.0.0:80-&gt;80/tcp, 0/tcp   happy_mayer
+</code></pre>
+
+<h3 id="orchard:41cc6cd5853fa3d7d20008d6d7ded1fb">Orchard</h3>
+
+<p>次にOrchardバックエンドを使ってみる．これを使うには，OrchardのAPI tokenを事前に取得しておく必要がある．</p>
+
+<p>まず，Orchardでホストを立ち上げる．</p>
+
+<pre><code class="language-bash">$ orchard hosts create
+</code></pre>
+
+<p>次に，Orchardバックエンドを指定して，swarmdを立ち上げる．</p>
+
+<pre><code class="language-bash">$ swarmd 'dockerserver tcp://localhost:4567' 'debug' &quot;orchard $ORCHARD_API_TOKEN default&quot;
+</code></pre>
+
+<p>あとは，同じコマンドでnginxコンテナを立ち上げることができる．</p>
+
+<pre><code class="language-bash">$ docker run -d -p 80:80 dockerfile/nginx
+</code></pre>
+
+<pre><code class="language-bash">$ docker ps
+CONTAINER ID        IMAGE               COMMAND             CREATED             STATUS              PORTS                       NAMES
+6e26732ecc14        dockerfile/nginx    nginx               15 seconds ago      Up                  0.0.0.0:80-&gt;80/tcp, 0/tcp   nostalgic_pike
+</code></pre>
+
+<h3 id="aggregate:41cc6cd5853fa3d7d20008d6d7ded1fb">aggregate</h3>
+
+<p>これまでのバックエンドサービスを全て指定する．これには，aggregateバックエンドを利用する．</p>
+
+<pre><code class="language-bash">$ swarmd 'dockerserver tcp://localhost:4567' \
+    &quot;aggregate 'dockerclient tcp://localhost:2375' \
+               'dockerclient $DIGITAL_OCEAN_HOST' \
+               'orchard $ORCHARD_API_TOKEN default'&quot;
+</code></pre>
+
+<p>コンテナの情報を取得してみる．</p>
+
+<pre><code class="language-bash">$ docker ps
+CONTAINER ID        IMAGE               COMMAND             CREATED             STATUS              PORTS                       NAMES
+3eac36e063d6        dockerfile/nginx    nginx               25 hours ago        Up                  0.0.0.0:80-&gt;80/tcp, 0/tcp   evil_leakey
+5d84aaca9fbc        dockerfile/nginx    nginx               About a minute ago   Up                  0.0.0.0:80-&gt;80/tcp, 0/tcp   happy_mayer
+6e26732ecc14        dockerfile/nginx    nginx               15 seconds ago      Up                  0.0.0.0:80-&gt;80/tcp, 0/tcp   nostalgic_pike
+</code></pre>
+
+<p>上は期待する動作で，boot2docker，DigitalOcean，Orchardに立てたコンテナの情報が取得できるはず．現状は，<code>not implemented</code>エラーになる．</p>
+
+<h2 id="将来できそうなこと:41cc6cd5853fa3d7d20008d6d7ded1fb">将来できそうなこと</h2>
+
+<p>最後に，<a href="http://www.tech-d.net/2014/07/03/libswarm">この記事</a>を参考に将来こんなことできるようになるのでは？をざっと書いておく．</p>
+
+<p>例えば，複数のdockerclientを指定する．</p>
+
+<pre><code class="language-bash">$ swarmd 'dockerserver tcp://:4567' \
+    'aggregate &quot;dockerclient tcp://172.20.20.10:2375&quot; \
+               &quot;dockerclient tcp://172.20.20.11:2375&quot; \
+               &quot;dockerclient tcp://172.20.20.12:2375&quot;'
+</code></pre>
+
+<p>これに対して，<code>docker run</code>を実行すると，dockerclientで指定したホストのどれか1つでコンテナを実行する．<code>docker ps</code>をすると，すべてのホストからコンテナの情報を取得できる．また，コンテナ間のlink機能を複数ホストにまたがりそのまま使える．</p>
+
+<p>例えば，Mesosバックエンド（実装されてない）を指定する．</p>
+
+<pre><code class="language-bash">$ swarmd 'dockerserver tcp://:4567' \
+    'mesos &quot;dockerclient tcp://172.20.20.10:2375&quot; \
+           &quot;dockerclient tcp://172.20.20.11:2375&quot; \
+           &quot;dockerclient tcp://172.20.20.12:2375&quot;'
+</code></pre>
+
+<p>これに対して，<code>docker run</code>を実行すると，Mesosがサーバのリソースの状況に合わせて，コンテナを実行する．</p>
+
+<p>などなど．</p>
+
+<h2 id="まとめ:41cc6cd5853fa3d7d20008d6d7ded1fb">まとめ</h2>
+
+<p>期待は多いが，実装やコードを見てるとプロトタイプ感は半端ない．みんなでlibswarmにコミットしてコンテナオーケストレーションツールの乱立を阻止する必要がある．</p>
+
+<h2 id="参考:41cc6cd5853fa3d7d20008d6d7ded1fb">参考</h2>
+
+<ul>
+<li><a href="http://www.slideshare.net/shykes/docker-the-road-ahead">Docker: the road ahead</a></li>
+<li><a href="http://www.centurylinklabs.com/analyzing-dockers-new-oss-libchan-and-libswarm/">Analyzing Docker’s New OSS: libchan and libswarm | CenturyLink Labs</a></li>
+<li><a href="http://www.activestate.com/blog/2014/06/libswarm-docker-orchestration-announced">libswarm - Docker Orchestration Announced | ActiveBlog: Insights on Code, the Cloud and More</a></li>
+<li><a href="http://yugui.jp/articles/880">Dockerで何が変わるのか - 世界線航跡蔵</a></li>
+<li><a href="http://www.tech-d.net/2014/07/03/libswarm/">Libswarm (in a nutshell) | Tech&rsquo;d</a></li>
+<li><a href="http://www.slideshare.net/YutakaMatsubara/out-36624126">How to impl libswarm backend</a></li>
+</ul>
+
+      <div class="social">
+  
+  
+  <a href="https://twitter.com/share" class="twitter-share-button" data-via="deeeet" data-count="none">Tweet</a>
+  
+  
+</div>
+
+    </section>
+
+    <footer>
+      <address>
+        
+        <img src="/images/bio.jpeg"/>
+        
+        <p>Written by <strong><a rel="author" href="https://twitter.com/deeeet" title="Taichi Nakashima" target="_blank">Taichi Nakashima</a></strong><br>
+          <span class="muted">A Tokyo based PaaS engineer. Please contact me via twitter.</span>
+        </p>
+      </address>
+
+    </footer>
+
+  </div>
+</article>
+
+<script type="text/javascript" src="//ajax.googleapis.com/ajax/libs/jquery/1.7.2/jquery.min.js"></script>
+<script type="text/javascript" src="/js/main.js"></script>
+
+<script>!function(d,s,id){var js,fjs=d.getElementsByTagName(s)[0],p=/^http:/.test(d.location)?'http':'https';if(!d.getElementById(id)){js=d.createElement(s);js.id=id;js.src=p+'://platform.twitter.com/widgets.js';fjs.parentNode.insertBefore(js,fjs);}}(document, 'script', 'twitter-wjs');</script>
+
+
+<script type="text/javascript">var HN=[];HN.factory=function(e){return function(){HN.push([e].concat(Array.prototype.slice.call(arguments,0)))};},HN.on=HN.factory("on"),HN.once=HN.factory("once"),HN.off=HN.factory("off"),HN.emit=HN.factory("emit"),HN.load=function(){var e="hn-button.js";if(document.getElementById(e))return;var t=document.createElement("script");t.id=e,t.src="//hn-button.herokuapp.com/hn-button.js";var n=document.getElementsByTagName("script")[0];n.parentNode.insertBefore(t,n)},HN.load();</script>
+
+
+  <script>
+  (function(i,s,o,g,r,a,m){i['GoogleAnalyticsObject']=r;i[r]=i[r]||function(){
+  (i[r].q=i[r].q||[]).push(arguments)},i[r].l=1*new Date();a=s.createElement(o),
+  m=s.getElementsByTagName(o)[0];a.async=1;a.src=g;m.parentNode.insertBefore(a,m)
+  })(window,document,'script','//www.google-analytics.com/analytics.js','ga');
+
+  ga('create', 'UA-45390253-1', 'auto');
+  ga('send', 'pageview');
+
+</script>
+
+
+
+<script>
+  $(document).ready(function() {
+  
+  $('p:has(img)').css('text-align', 'center');
+  $('iframe').css('style', 'display: block; margin: 0px auto;');
+  });
+</script>
+

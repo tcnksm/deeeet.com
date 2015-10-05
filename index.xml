@@ -1,0 +1,1834 @@
+<?xml version="1.0" encoding="utf-8" standalone="yes" ?>
+<rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom">
+  <channel>
+    <title>SOTA</title>
+    <link>http://deeeet.com/</link>
+    <description>Recent content on SOTA</description>
+    <generator>Hugo -- gohugo.io</generator>
+    <language>ja-jp</language>
+    <copyright>Copyright (C) 2013-2015 Taichi Nakashima All Right Reserved.</copyright>
+    <lastBuildDate>Sun, 04 Oct 2015 22:07:21 +0900</lastBuildDate>
+    <atom:link href="http://deeeet.com/index.xml" rel="self" type="application/rss+xml" />
+    
+    <item>
+      <title>Hashicorp Ottoを読む</title>
+      <link>http://deeeet.com/writing/2015/10/04/otto/</link>
+      <pubDate>Sun, 04 Oct 2015 22:07:21 +0900</pubDate>
+      
+      <guid>http://deeeet.com/writing/2015/10/04/otto/</guid>
+      <description>
+
+&lt;p&gt;Hashicorpから2015年秋の新作が2つ登場した．&lt;/p&gt;
+
+&lt;ul&gt;
+&lt;li&gt;&lt;a href=&#34;https://hashicorp.com/blog/otto.html&#34;&gt;Otto - HashiCorp&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a href=&#34;https://hashicorp.com/blog/nomad.html&#34;&gt;Nomad - HashiCorp&lt;/a&gt;&lt;/li&gt;
+&lt;/ul&gt;
+
+&lt;p&gt;Ottoがなかなか面白そうなのでコードを追いつつ，Ottoとは何か? なぜ必要になったのか? どのように動作するのか? を簡単にまとめてみる．&lt;/p&gt;
+
+&lt;p&gt;バージョンは &lt;em&gt;0.1.0&lt;/em&gt; を対象にしている（イニシャルインプレッションである）&lt;/p&gt;
+
+&lt;h2 id=&#34;ottoとは何か:2c2a263eaafeca2332734dbece1fe9cd&#34;&gt;Ottoとは何か?&lt;/h2&gt;
+
+&lt;p&gt;公式はVagrantの後継と表現されている．が，それはローカル開発環境の構築&lt;strong&gt;も&lt;/strong&gt;担っているという意味で後継であり，自分なりの言葉で表現してみると「OttoはHashicorpの各ツールを抽象化し開発環境の構築からインフラの整備，デプロイまでを一手に担うツール」である．ちなみにOttoという名前の由来は&lt;a href=&#34;https://twitter.com/zembutsu/status/648956697034096641&#34;&gt;Automationと語感が似ているからかつ元々そういう名前のbotがいた&lt;/a&gt;からとのこと．&lt;/p&gt;
+
+&lt;h2 id=&#34;なぜottoか:2c2a263eaafeca2332734dbece1fe9cd&#34;&gt;なぜOttoか?&lt;/h2&gt;
+
+&lt;p&gt;なぜVagrantでは不十分であったのか? なぜOttoが必要だったのか? 理由をまとめると以下の5つである．&lt;/p&gt;
+
+&lt;ul&gt;
+&lt;li&gt;設定ファイルは似通ったものになる&lt;/li&gt;
+&lt;li&gt;設定ファイルは化石化する&lt;/li&gt;
+&lt;li&gt;ローカル開発環境と同じものをデプロイしたい&lt;/li&gt;
+&lt;li&gt;microservicesしたい&lt;/li&gt;
+&lt;li&gt;パフォーマンスを改善したい &lt;/li&gt;
+&lt;/ul&gt;
+
+&lt;p&gt;まず各言語/フレームワークの&lt;code&gt;Vagrantfile&lt;/code&gt;は似通ったものになる．&lt;code&gt;Vagrantfile&lt;/code&gt;は毎回似たようなものを書く，もしくはコピペしていると思う．それならツール側が最も適したものを生成したほうがよい．Ottoは各言語のベストプラクティスな設定ファイルを持っておりそれを生成する．&lt;/p&gt;
+
+&lt;p&gt;そして&lt;code&gt;Vagrantfile&lt;/code&gt;は時代とともに古くなる，つまり化石化する．秘伝のソースとして残る．Ottoは生成する設定ファイルを常に最新のものに保つ．つまり今Ottoが生成する設定ファイルは5年後に生成される設定ファイルとは異なるものになる（cf. &lt;a href=&#34;http://blog.bennycornelissen.nl/otto-a-modern-developers-new-best-friend/&#34;&gt;&amp;ldquo;Otto: a modern developer&amp;rsquo;s new best friend&amp;rdquo;&lt;/a&gt;）&lt;/p&gt;
+
+&lt;p&gt;そしてローカル開発環境と同じものを本番に構築したい（Environmental parityを担保したい）．現在のVagrantでも&lt;code&gt;provider&lt;/code&gt;の仕組みを使えばIaaSサービスに環境を構築することはできる．が本番に適した形でそれを構築できるとは言い難い．Ottoは開発環境の構築だけではなく，デプロイ環境の構築も担う．&lt;/p&gt;
+
+&lt;p&gt;時代はmicroservicesである．Vagrantは単一アプリ/サービスの構築には強いが複数には弱い．Ottoは依存サービスを記述する仕組みをもつ（&lt;code&gt;Appfile&lt;/code&gt;）．それによりmicroserviceな環境を簡単に構築することができる．&lt;/p&gt;
+
+&lt;p&gt;そしてパフォーマンス．最近のVagrantはどんどん遅くなっている．例えば立ち上げているVMの状態を確認するだけの&lt;code&gt;status&lt;/code&gt;コマンドは2秒もかかる．Ottoはパフォーマンスの改善も目的にしている．&lt;/p&gt;
+
+&lt;h2 id=&#34;ottoは何をするのか:2c2a263eaafeca2332734dbece1fe9cd&#34;&gt;Ottoは何をするのか?&lt;/h2&gt;
+
+&lt;p&gt;Ottoが行うことは以下の2つに集約できる．&lt;/p&gt;
+
+&lt;ul&gt;
+&lt;li&gt;Hashicorpツールの設定ファイルとスクリプトを生成する&lt;/li&gt;
+&lt;li&gt;Hashicorpツールのインストール/実行をする&lt;/li&gt;
+&lt;/ul&gt;
+
+&lt;p&gt;Ottoの各コマンドと合わせてみてみると以下のようになる．&lt;/p&gt;
+
+&lt;ul&gt;
+&lt;li&gt;&lt;code&gt;compile&lt;/code&gt; - アプリケーションのコンテキスト（e.g., 言語やフレームワーク）の判定と専用の設定ファイルである&lt;code&gt;Appfile&lt;/code&gt;をもとにHashicorpツールの設定ファイル（&lt;code&gt;Vagrantfile&lt;/code&gt;やTerraformの&lt;code&gt;.tf&lt;/code&gt;ファイル，Packerのマシンテンプレート&lt;code&gt;.json&lt;/code&gt;）と各種インストールのためのシェルスクリプトを生成する&lt;/li&gt;
+&lt;li&gt;&lt;code&gt;dev&lt;/code&gt; - 開発環境を構築する．Vagrantを実行する&lt;/li&gt;
+&lt;li&gt;&lt;code&gt;infra&lt;/code&gt; - アプリをデプロイするためのインフラを整備する．例えばAWSならVPCやサブネット，ゲートウェイなどを設定する．&lt;a href=&#34;https://terraform.io/&#34;&gt;Terraform&lt;/a&gt;を実行する&lt;/li&gt;
+&lt;li&gt;&lt;code&gt;build&lt;/code&gt; - アプリをデプロイ可能なイメージに固める．例えばAMIやDocker Imageなど．&lt;a href=&#34;https://www.packer.io/&#34;&gt;Packer&lt;/a&gt;を実行する&lt;/li&gt;
+&lt;li&gt;&lt;code&gt;deploy&lt;/code&gt; - 作成したイメージを事前に構築したインフラにデプロイする．Terraformを実行する（OttoのデプロイはImmutable Infrastructureを嗜好する）&lt;/li&gt;
+&lt;/ul&gt;
+
+&lt;h2 id=&#34;ottoがつくるインフラの基礎:2c2a263eaafeca2332734dbece1fe9cd&#34;&gt;Ottoがつくるインフラの基礎&lt;/h2&gt;
+
+&lt;p&gt;Ottoには&lt;a href=&#34;https://ottoproject.io/docs/concepts/foundations.html&#34;&gt;Foundation&lt;/a&gt;という概念がある（&lt;code&gt;foundation&lt;/code&gt;という言葉は生成される設定ファイルやディレクトリ名に登場する）．これはOttoが構築するインフラの基礎，本番環境にアプリケーションをデプロイするために重要となるレイヤーを示す．このFoundationの例としては，以下のようなものが挙げられる．&lt;/p&gt;
+
+&lt;ul&gt;
+&lt;li&gt;&lt;a href=&#34;https://www.consul.io/&#34;&gt;Consul&lt;/a&gt;によるサービスディスカバリー&lt;/li&gt;
+&lt;li&gt;&lt;a href=&#34;https://vaultproject.io/&#34;&gt;Vault&lt;/a&gt;によるパスワード管理 (Future)&lt;/li&gt;
+&lt;li&gt;&lt;a href=&#34;https://nomadproject.io/&#34;&gt;Nomad&lt;/a&gt;によるスケジューリング (Future)&lt;/li&gt;
+&lt;/ul&gt;
+
+&lt;p&gt;このレイヤーはモダンなアーキテクチャーではBest Practiceとされつつも構築はなかなか難しい．OttoはVagrantでローカル開発環境を構築するとき，本番環境のインフラを整備するときにこのレイヤーの整備も一緒に行う．&lt;/p&gt;
+
+&lt;h2 id=&#34;ottoの設定ファイル:2c2a263eaafeca2332734dbece1fe9cd&#34;&gt;Ottoの設定ファイル&lt;/h2&gt;
+
+&lt;p&gt;単純なことをするならばOttoには設定ファイルは&lt;strong&gt;必要ない&lt;/strong&gt;．プロジェクトのルートディレクトリで&lt;code&gt;compile&lt;/code&gt;を実行すれば言語/フレームワークを判定し，それにあった&lt;code&gt;Vagrantfile&lt;/code&gt;とインフラを整備するためのTerraformの&lt;code&gt;.tf&lt;/code&gt;ファイルなどを生成してくれる．&lt;/p&gt;
+
+&lt;p&gt;より複雑なことをしたければ不十分である．Ottoは専用の&lt;code&gt;Appfile&lt;/code&gt;という設定ファイルでカスタマイズを行うことができる．&lt;code&gt;Appfile&lt;/code&gt;は&lt;a href=&#34;https://github.com/hashicorp/hcl&#34;&gt;HCL&lt;/a&gt;で記述する．例えば，以下のように依存するサービスを記述することができる&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-ruby&#34;&gt;application {
+    dependency {
+        source = &amp;quot;github.com/tcnksm-sample/golang-web&amp;quot;
+    }
+}
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;他にも，言語のバージョンを指定したり，デプロイするIaaSサービスやその&lt;code&gt;flavar&lt;/code&gt;（e.g., AWSだと現在&lt;code&gt;simple&lt;/code&gt;と&lt;code&gt;vpc-public-private&lt;/code&gt;がある．&lt;code&gt;simple&lt;/code&gt;は最小限のリソースを使うのみでScalabilityや耐障害性などは犠牲にする．&lt;code&gt;vpc-public-private&lt;/code&gt;だとprivateネットワークやNATなども準備する）を設定することができる．&lt;/p&gt;
+
+&lt;p&gt;基本は適切なデフォルト値と自動で判別される値が存在する．&lt;code&gt;Appfile&lt;/code&gt;はそれを上書きするものである．公式の説明の仕方を借りると&lt;code&gt;Appfile&lt;/code&gt;は「どのようにマシンを設定するのかを記述するのではなく，アプリケーションが何であるかを記述する」ものである．&lt;/p&gt;
+
+&lt;h2 id=&#34;ottoを読む:2c2a263eaafeca2332734dbece1fe9cd&#34;&gt;Ottoを読む&lt;/h2&gt;
+
+&lt;p&gt;自分が気になった部分のソースコードを軽く読んでみる．&lt;/p&gt;
+
+&lt;h3 id=&#34;概要:2c2a263eaafeca2332734dbece1fe9cd&#34;&gt;概要&lt;/h3&gt;
+
+&lt;p&gt;上述したように，Ottoは各Hashicorpツールのバイナリを実行しているだけある．大まかには以下のようになる．&lt;/p&gt;
+
+&lt;ul&gt;
+&lt;li&gt;&lt;code&gt;compile&lt;/code&gt;
+
+&lt;ul&gt;
+&lt;li&gt;依存サービスがある場合はそれらを全て&lt;code&gt;.otto&lt;/code&gt;以下のディレクトリにfetchする（依存先も&lt;code&gt;Appfile&lt;/code&gt;と&lt;code&gt;.ottoid&lt;/code&gt;を持っている必要がある）&lt;/li&gt;
+&lt;li&gt;各&lt;code&gt;Appfile&lt;/code&gt;と言語/フレームワークを判別結果をマージして&lt;code&gt;.otto&lt;/code&gt;ディレクトリ以下に各種設定ファイルを生成する&lt;/li&gt;
+&lt;/ul&gt;&lt;/li&gt;
+&lt;li&gt;コマンドごとに&lt;code&gt;otto/compiled&lt;/code&gt;以下の決められたディレクトリ内の設定ファイルをもとにバイナリを実行する
+
+&lt;ul&gt;
+&lt;li&gt;e.g., &lt;code&gt;build&lt;/code&gt;を実行するとPackerのマシンテンプレートである&lt;code&gt;.otto/compiled/app/build/template.json&lt;/code&gt;が使われる&lt;/li&gt;
+&lt;/ul&gt;&lt;/li&gt;
+&lt;/ul&gt;
+
+&lt;h3 id=&#34;コア:2c2a263eaafeca2332734dbece1fe9cd&#34;&gt;コア&lt;/h3&gt;
+
+&lt;p&gt;Ottoのコアは&lt;a href=&#34;https://github.com/hashicorp/otto/blob/v0.1.1/otto/core.go&#34;&gt;https://github.com/hashicorp/otto/blob/v0.1.1/otto/core.go&lt;/a&gt;にある．基本的にどのコマンドもここに到達する．やっていることは単純でコンテキストをもとに実行するべき設定ファイルを決めてそれを元にバイナリを実行するだけ．&lt;/p&gt;
+
+&lt;p&gt;以下をみると各バイナリをどのように実行しているかをみることができる．&lt;/p&gt;
+
+&lt;ul&gt;
+&lt;li&gt;&lt;a href=&#34;https://github.com/hashicorp/otto/tree/v0.1.1/helper/vagrant&#34;&gt;https://github.com/hashicorp/otto/tree/v0.1.1/helper/vagrant&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a href=&#34;https://github.com/hashicorp/otto/tree/v0.1.1/helper/terraform&#34;&gt;https://github.com/hashicorp/otto/tree/v0.1.1/helper/terraform&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a href=&#34;https://github.com/hashicorp/otto/tree/v0.1.1/helper/packer&#34;&gt;https://github.com/hashicorp/otto/tree/v0.1.1/helper/packer&lt;/a&gt;&lt;/li&gt;
+&lt;/ul&gt;
+
+&lt;h3 id=&#34;インストーラー:2c2a263eaafeca2332734dbece1fe9cd&#34;&gt;インストーラー&lt;/h3&gt;
+
+&lt;p&gt;バイナリがインストールされていなければコマンド実行直後にインストールが実行される．&lt;a href=&#34;https://github.com/hashicorp/otto/tree/v0.1.1/helper/hashitools&#34;&gt;https://github.com/hashicorp/otto/tree/v0.1.1/helper/hashitools&lt;/a&gt;にインストーラーが書かれている．以下の&lt;a href=&#34;bintray.com&#34;&gt;bintray.com&lt;/a&gt;のURLからzipをダウンロードして展開しているだけ．&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-golang&#34;&gt;url := fmt.Sprintf(
+    &amp;quot;https://dl.bintray.com/mitchellh/%s/%s_%s_%s_%s.zip&amp;quot;,
+    i.Name, i.Name, vsn, runtime.GOOS, runtime.GOARCH)
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;（なんでmitchellhアカウントなのだろう&amp;hellip;）&lt;/p&gt;
+
+&lt;h3 id=&#34;言語-フレームワークの判定:2c2a263eaafeca2332734dbece1fe9cd&#34;&gt;言語/フレームワークの判定&lt;/h3&gt;
+
+&lt;p&gt;まず&lt;code&gt;compile&lt;/code&gt;のときにアプリケーションの言語/フレームワークの判定する方法．これはHerokuのBuildpackに似たことをする．アプリケーションに特有なファイル，例えばRubyならば&lt;code&gt;Gemfile&lt;/code&gt;，が存在するかをチェックする．判定のルールは以下のような&lt;code&gt;struct&lt;/code&gt;で保持する．&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-golang&#34;&gt;detectors := []*detect.Detector{
+    &amp;amp;detect.Detector{
+        Type: &amp;quot;go&amp;quot;,
+        File: []string{&amp;quot;*.go&amp;quot;},
+    },
+    ....    
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;そして以下で判別する．単純．&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-golang&#34;&gt;func (d *Detector) Detect(dir string) (bool, error) {
+    for _, pattern := range d.File {
+        matches, err := filepath.Glob(filepath.Join(dir, pattern))
+        if err != nil {
+            return false, err
+        }
+        if len(matches) &amp;gt; 0 {
+            return true, nil
+        }
+    }
+}
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;&lt;code&gt;.hcl&lt;/code&gt;ファイルで&lt;code&gt;Detector&lt;/code&gt;を書いて&lt;code&gt;~/.otto.d/detect&lt;/code&gt;以下に置い読み込むというロジックを見かけたので自分で好きな判定ロジックを定義できるかもしれない．&lt;/p&gt;
+
+&lt;h3 id=&#34;設定ファイル-インストールスクリプトはどこにあるのか:2c2a263eaafeca2332734dbece1fe9cd&#34;&gt;設定ファイル/インストールスクリプトはどこにあるのか?&lt;/h3&gt;
+
+&lt;p&gt;&lt;a href=&#34;https://twitter.com/kenjiskywalker/status/648884208572600323&#34;&gt;&amp;ldquo;ハシコープは人類を含む全ての概念をバイナリにして配布した&amp;rdquo;&lt;/a&gt;&lt;/p&gt;
+
+&lt;p&gt;&lt;a href=&#34;https://github.com/hashicorp/otto/tree/v0.1.1/builtin/app&#34;&gt;https://github.com/hashicorp/otto/tree/v0.1.1/builtin/app&lt;/a&gt;以下に各言語の&lt;code&gt;Vagrantfile&lt;/code&gt;やpackerのマシンテンプレート，それらが呼び出すインストールスクリプトが存在する．そしてOttoはそれらを&lt;a href=&#34;https://github.com/jteeuwen/go-bindata&#34;&gt;go-bindata&lt;/a&gt;を使ってバイナリとして埋め込んでいる．&lt;code&gt;app.go&lt;/code&gt;の先頭をみるとそのための&lt;code&gt;go generate&lt;/code&gt;文が見える．&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-golang&#34;&gt;//go:generate go-bindata -pkg=goapp -nomemcopy -nometadata ./data/...
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;h3 id=&#34;時代はシェルスクリプト:2c2a263eaafeca2332734dbece1fe9cd&#34;&gt;時代はシェルスクリプト&lt;/h3&gt;
+
+&lt;p&gt;&lt;code&gt;Vagrantfile&lt;/code&gt;のインストールスクリプト，Packerのマシンテンプレートが呼び出す&lt;code&gt;provisioner&lt;/code&gt;のスクリプト，など全てがゴリゴリのシェルスクリプトで書かれている．&lt;code&gt;Dockerfile&lt;/code&gt;以後，時代はシェルスクリプトになっている気がする．大変そう．&lt;/p&gt;
+
+&lt;p&gt;ちなみにデーモンの管理は&lt;code&gt;upstart&lt;/code&gt;が使われている（cf. &lt;a href=&#34;https://github.com/hashicorp/otto/blob/v0.1.1/builtin/foundation/consul/data/common/app-build/upstart.conf.tpl&#34;&gt;https://github.com/hashicorp/otto/blob/v0.1.1/builtin/foundation/consul/data/common/app-build/upstart.conf.tpl&lt;/a&gt;）．&lt;/p&gt;
+
+&lt;h2 id=&#34;まとめ:2c2a263eaafeca2332734dbece1fe9cd&#34;&gt;まとめ&lt;/h2&gt;
+
+&lt;p&gt;とりあえず何か始めたいと思うときは便利であるし，期待感はある．が，最後にこれはどうなるんだろうと思ったことをまとめておく．&lt;/p&gt;
+
+&lt;p&gt;設定ファイルをバイナリに含めたら変更が辛くなるのではないか? もし設定ファイルに不備があったらそれを修正して新しくバイナリをリリースしないといけなくなる．利用者は開発者なので問題はなさそうだけど，一度ダウンロードしたものをすぐにアップグレードしてくれるだろうか（一応利用しているバイナリが最新であるかそうでないかを判定し，古い場合には警告を出す&lt;a href=&#34;https://github.com/hashicorp/go-checkpoint&#34;&gt;仕組み&lt;/a&gt;はある）．Atlasを使ってファイルをホストする方式ではだめだったのか? boxを使うのはダメだったのか?（重いかな..）．&lt;/p&gt;
+
+&lt;p&gt;今のところ&lt;code&gt;compile&lt;/code&gt;するたびに&lt;code&gt;.otto&lt;/code&gt;ディレクトリは作り直される．同じ環境であることは担保するのは&lt;code&gt;.ottoid&lt;/code&gt;ファイルしかない．これはどこまで非互換な変更を対処してくれるのか．ローカル開発環境は良いが，デプロイがぶっ壊れることはないだろうか.. （が，これはottoというよりはTerraformの問題な気もする）．&lt;/p&gt;
+
+&lt;h2 id=&#34;参考:2c2a263eaafeca2332734dbece1fe9cd&#34;&gt;参考&lt;/h2&gt;
+
+&lt;ul&gt;
+&lt;li&gt;&lt;a href=&#34;http://pocketstudio.jp/log3/2015/10/01/joined-hashiconf-2015-at-portland/&#34;&gt;HashiConf 2015 参加してきました＆KeyNoteまとめ&lt;/a&gt;&lt;/li&gt;
+&lt;/ul&gt;
+</description>
+    </item>
+    
+    <item>
+      <title>プレゼンするときに考えていること</title>
+      <link>http://deeeet.com/writing/2015/09/25/talking/</link>
+      <pubDate>Fri, 25 Sep 2015 08:48:30 +0900</pubDate>
+      
+      <guid>http://deeeet.com/writing/2015/09/25/talking/</guid>
+      <description>&lt;p&gt;僕はカンファレンスで喋るのが好きだ．好きだが決して得意ではない．むしろ喋るのは苦手なほうだと思う．&lt;/p&gt;
+
+&lt;p&gt;実際に自分でやるまではプレゼンは才能だと思っていた．大学の研究発表などで実際に自分でプレゼンをするようになり，大学の研究室で指導されまくった結果，プレゼンは技術だと認識した（もちろん才能もある）．技術であるということは学ぶことができる．それに気づいてからはたくさんプレゼンに関する本を読んだ．昔は発表前に必ず何か一冊プレゼンに関する本を読みそれを積極的に取り入れるようにした．&lt;/p&gt;
+
+&lt;p&gt;得意でないなりに学んで，発表を繰り返した結果なんとなく毎回考えること/意識することが固まってきた．今後のために簡単にまとめておく．&lt;/p&gt;
+
+&lt;ul&gt;
+&lt;li&gt;聴衆は貴重な時間を割いて会場に来る&lt;/li&gt;
+&lt;li&gt;オーガナイザーは貴重な時間を割いてカンファレンスを準備している&lt;/li&gt;
+&lt;li&gt;聴衆が誰かを妄想する&lt;/li&gt;
+&lt;li&gt;早めに準備する．早めに準備する．早めに準備する．早めに&amp;hellip;&lt;/li&gt;
+&lt;li&gt;Keynoteを開く前に概要とトークの流れを書く&lt;/li&gt;
+&lt;li&gt;Keynoteを先に開くと流れのない壊滅的な資料ができる&lt;/li&gt;
+&lt;li&gt;流れを書きつつここでx分/ここでy分という時間も想定する&lt;/li&gt;
+&lt;li&gt;時間超えるのはクソである&lt;/li&gt;
+&lt;li&gt;むしろ早く終わった方がよい&lt;/li&gt;
+&lt;li&gt;少しでも有意義なものを受け取ってもらいたいから言いたいことは絞る&lt;/li&gt;
+&lt;li&gt;言いたいことを絞れば早く終わる&lt;/li&gt;
+&lt;li&gt;概要から始まり徐々に詳細に向かう&lt;/li&gt;
+&lt;li&gt;&lt;a href=&#34;http://www.csg.ci.i.u-tokyo.ac.jp/~chiba/writing/sld012.htm&#34;&gt;逆茂木型&lt;/a&gt;に注意する&lt;/li&gt;
+&lt;li&gt;前のスライドから次のスライドが想定できるようにする&lt;/li&gt;
+&lt;li&gt;前のスライドから次のスライドが想定できるようなきっかけを書く&lt;/li&gt;
+&lt;li&gt;Itemizeは文末を揃える&lt;/li&gt;
+&lt;li&gt;例をなるべく使う&lt;/li&gt;
+&lt;li&gt;図をなるべく使う&lt;/li&gt;
+&lt;li&gt;文字を大きくする&lt;/li&gt;
+&lt;li&gt;文字の配置，大きさ，色を一貫させる&lt;/li&gt;
+&lt;li&gt;文字の配置，大きさ，色はそれだけで意味を持つ&lt;/li&gt;
+&lt;li&gt;作り終わったらちゃんと喋ってこの段階のスライドがゴミであることに気づく&lt;/li&gt;
+&lt;li&gt;喋って直す&lt;/li&gt;
+&lt;li&gt;喋って詰まるところを喋りやすいように直す&lt;/li&gt;
+&lt;li&gt;どうしても詰まるなら軽くメモを書く（書き過ぎない．あくまでメモ）&lt;/li&gt;
+&lt;li&gt;会場に向かう前に一度喋っておく&lt;/li&gt;
+&lt;li&gt;直前まで微調整する&lt;/li&gt;
+&lt;li&gt;プロジェクターの接続テストをする&lt;/li&gt;
+&lt;li&gt;アイスブレイクなんて普通は無理．ふざけるな&lt;/li&gt;
+&lt;li&gt;デモは何度も練習する&lt;/li&gt;
+&lt;li&gt;どんなすごい人でもデモは失敗する&lt;/li&gt;
+&lt;li&gt;質問は最後までちゃんと聞く．わからなければ聞き直す&lt;/li&gt;
+&lt;li&gt;本当にわけわからん質問はあとで話しましょうと言う．無理しない（昔わけわからんおっさんと戦ったことがあるが無駄だった）&lt;/li&gt;
+&lt;/ul&gt;
+
+&lt;p&gt;学術的な学会発表とは違って技術カンファレンスはとても好きだ．テーマは決まっているものの自由に話すことができる．
+学会はある程度決められたフォーマットに従っていた．それは聞く側からすればわかりやすさにつながるが，喋る側からすればちょっと堅苦しかった．今は自由な感じで喋れるのを楽しんでいる．&lt;/p&gt;
+
+&lt;p&gt;苦手だけど喋るのはなぜか? こんなん作ったとか，こんなんわかったとかシェアしたいという思いがあるから．ブログで書くのもよいけど，プレゼンはまた違ったフォーマットで伝わり方も変わるから楽しい．あと僕は若干コミュニケーションに問題がある．懇親会などで初対面のひとに喋りに行くとかはほぼ無理だ．が，プレゼンしてると，あれを喋った僕です的な感じで喋りに行くきっかけになる．カンファレンスで喋るモチベーションはここにもある．&lt;/p&gt;
+
+&lt;p&gt;最後にここで書いているのは表層的な話である．本当に大切なのは内容．とにかく自分が喋る内容に対して自分が一番のプロフェッショナルになるのが大切だと思う．&lt;/p&gt;
+</description>
+    </item>
+    
+    <item>
+      <title>Google Omegaとは何か? Kubernetesとの関連は? 論文著者とのQA（翻訳）</title>
+      <link>http://deeeet.com/writing/2015/09/17/qa-omega/</link>
+      <pubDate>Thu, 17 Sep 2015 18:47:11 +0900</pubDate>
+      
+      <guid>http://deeeet.com/writing/2015/09/17/qa-omega/</guid>
+      <description>
+
+&lt;p&gt;エンタープライズ向けのKubernetesサポートを行っている&lt;a href=&#34;[https://kismatic.com/&#34;&gt;kismatic Inc.&lt;/a&gt;による&lt;a href=&#34;https://blog.kismatic.com/qa-with-malte-schwarzkopf-on-distributed-systems-orchestration-in-the-modern-data-center/&#34;&gt;&amp;ldquo;Omega, and what it means for Kubernetes: a Q&amp;amp;A about cluster scheduling&amp;rdquo;&lt;/a&gt;が非常に良いインタビュー記事だった．Google Omegaとは何か? 今までのスケジューリングと何が違うのか? 何を解決しようとしているのか? 今後クラスタのスケジューリングにはどうなっていくのか? をとてもクリアに理解することができた．&lt;/p&gt;
+
+&lt;p&gt;自分にとってスケジューリングは今後大事になる分野であるし，勉強していきたい分野であるのでKismaticの&lt;a href=&#34;https://twitter.com/asynchio&#34;&gt;@asynchio&lt;/a&gt;氏と論文の共著者である&lt;a href=&#34;http://www.cl.cam.ac.uk/~ms705/&#34;&gt;Malte Schwarzkopf&lt;/a&gt;氏に許可をもらい翻訳させてもらった．&lt;/p&gt;
+
+&lt;h2 id=&#34;tl-dr:9e8c8bac5565c2c745e22ca4948c6327&#34;&gt;TL;DR&lt;/h2&gt;
+
+&lt;p&gt;2013年に発表された&lt;a href=&#34;http://www.cl.cam.ac.uk/research/srg/netos/papers/2013-omega.pdf&#34;&gt;Omega論文&lt;/a&gt;の共著者である&lt;a href=&#34;http://www.cl.cam.ac.uk/~ms705/&#34;&gt;Malte Schwarzkopf&lt;/a&gt;がGoogle OmegaのShared-stateモデルの主な目的がScalabilityよりもむしろソフトウェア開発における柔軟性であったことを説明する．Shared-stateモデルによるスケジューリングは優先度をもったプリエンプションや競合を意識したスケジューリングを可能にする．&lt;/p&gt;
+
+&lt;p&gt;今までのTwo-levelモデルのスケジューラー（例えば&lt;a href=&#34;http://hadoop.apache.org/docs/current/hadoop-yarn/hadoop-yarn-site/YARN.html&#34;&gt;YARN&lt;/a&gt;や&lt;a href=&#34;http://mesos.apache.org/&#34;&gt;Mesos&lt;/a&gt;）も同様の柔軟さを提供するが，Omega論文が発表された当時は，すべての状態がクラスタから観測できない問題（information hiding）や&lt;a href=&#34;https://en.wikipedia.org/wiki/Gang_scheduling&#34;&gt;Gang Scheduling&lt;/a&gt;におけるhoardingの問題に苦しんでいた．またなぜGoogleがShare-stateモデルを選択したのか，なぜGoogleは（Mesosのような）厳格な公平性をもったリソース配分を行わないのかについてもコメントする．&lt;/p&gt;
+
+&lt;p&gt;最後にMesosや&lt;a href=&#34;http://kubernetes.io/&#34;&gt;kubernetes&lt;/a&gt;のようにスケジューラーのモジュール化をサポートすることでいかにOSSのクラスター管理にOmegaの利点を持ち込むことができるのかを議論する．そしてより賢いスケジューリングを実現することでユーザはGoogleのインフラと同様の効率性を獲得できること提案する．&lt;/p&gt;
+
+&lt;p&gt;&lt;strong&gt;2013年の論文の発表時と比べて何が変わったか? 何が変わらないか?&lt;/strong&gt;&lt;/p&gt;
+
+&lt;p&gt;クラスタのオーケストレーションは動きの早い分野である．しかしOmegaの中心となる原則はむしろよりタイムリーでとても重要であると思う．&lt;/p&gt;
+
+&lt;p&gt;2013年以来の大きな変化として，とりわけKubernetesやMesosのおかげで，Omegaのようなクラスタでインフラを運用するのが一般的になってきたことが挙げられる．2011年や2012年に立ち返ってみるとOmegaのShared-stateモデルによるスケジューリングの基礎となる仮説をGoogle以外の環境で実証するのはなかなかトリッキーなことだとみなされていた．しかし今日では，既存のモジュラーなスケジューラーをハックして新しい手法を試したり，&lt;a href=&#34;https://github.com/google/cluster-data&#34;&gt;Google cluster trace&lt;/a&gt;の公開されたTrace結果を使うことでより簡単にそれができる．&lt;/p&gt;
+
+&lt;p&gt;さらにOmegaで挑んだ，いかにクラスタ内で異なるタイプのタスクを効率良くスケジューリングするのか，いかに異なるチームがクラスタの全ての状態にアクセスし彼ら自身のスケジューラーを実装するのか，といった問題は業界で広く認識されてきた．コンテナにより多くの異なるタイプのアプリケーションを共有クラスタ内にデプロイすることが可能になり，開発者たちは全てのタスクを同じようにスケジューリングすることはできない/するべきではないことを認識し始めた．そしてオーケストレーション（例えばZookeeperやetcd）は共有された分散状態を管理する問題であるであるとみなされるようになった．&lt;/p&gt;
+
+&lt;p&gt;Omegaのコアにある考え方，つまりジョブのスケジューリングのモデリングとShared-stateモデルに基づくより概括的なクラスタのオペレーションは，まだ適切であると信じている．実際Kubernetesの中心にある考え方，ユーザが望むべき状態を指定しKubernetesがクラスタをそのゴールの状態に移行させること，はまさにOmegaにおいてスケジューラーが次の望むべき状態にクラスタの状態の変更を提案するときに起こっていることと全く同じである．&lt;/p&gt;
+
+&lt;p&gt;&lt;strong&gt;なぜOmegaのShared-stateモデルは柔軟性があり様々な異なるタスクのリソース管理を効率的に行うことができるのか?&lt;/strong&gt;&lt;/p&gt;
+
+&lt;p&gt;数年前多くの組織が運用していたインフラ環境について考えてみる．例えば1つのHadoopクラスタで複数のユーザによるMapReduceジョブが走っていた．それは非常に簡単なスケジューリングである．全てのマシンにMapReduce worker用にn個のスロットがあり，スケジューラーはmapとreduceタスクを，その全てのスロットが埋まるまでもしくは全てのタスクがなくなるまで，ワーカーに割り当てる．&lt;/p&gt;
+
+&lt;p&gt;しかし，このスロットという単位は非常に荒いスケジューリングの単位である．全てのMapReduceジョブが同じ量のリソースが必要であるわけではなく，全てのジョブが与えられたリソースを使い切るわけではない．実際クラスタのいくつかのサーバーではMapReduce以外のプロセスが動いている場合もある．そのためスロットという単位で静的にマシンのリソースを区切るのではなく，タスクを&lt;a href=&#34;https://en.wikipedia.org/wiki/Bin_packing_problem&#34;&gt;Bin-pack&lt;/a&gt;してリソースを最適化させるのはより良い考え方である．現代のほとんどのスケジューラーはこれを実現している．&lt;/p&gt;
+
+&lt;p&gt;複数のリソース状況に基づく（複数次元の）Bin-packingは非常に難しい（NP完全問題である）．さらに異なるタイプのタスクはそれぞれ別のBin-packingの方法を好むため問題はより難しくなる．例えば，ネットワーク帯域が70%使われているマシンにMapReduceのジョブを割り当てるのは全く問題ないが，webサーバーのジョブをそのマシンに割り当てるのは好ましくない&amp;hellip;&lt;/p&gt;
+
+&lt;p&gt;Omegaではそれぞれのスケジューラーは全ての利用可能なリソース，すでに動いているタスク，クラスタの負荷状況を見ることができ，それに基づきスケジューリングを行うことができる（Shared-stateモデル）．言い方を変えると，それぞれのスケジューラーは好きなBin-packingアルゴリズムを使うことができ，かつ全て同様の情報を共有している．&lt;/p&gt;
+
+&lt;p&gt;&lt;strong&gt;BorgはScalabilityに制限があるのか? OmegaはBorgの置き換えなのか?&lt;/strong&gt;&lt;/p&gt;
+
+&lt;p&gt;違う．論文でそれをよりクリアにできたらと思う．多くのフォローアップで「中央集権型のスケジューラーは巨大なクラスタに対してスケールできないため分散スケジューラーに移行するべきである」と述べられてきた．しかしOmegaの開発の主な目的はScalabilityではなくより柔軟なエンジニアリングにある．Omegaのゴールは，様々なチームが独立してスケジューラーを実装できることにあり，これはScalabilityよりも重要な側面だった．スケジューラーの並列化がもたらすScalabilityは付属の利点にすぎない．実際のところちゃんと開発された中央集権型のスケジューラーは巨大なクラスタとタスクを扱えるまでにスケールできる．Borg論文は実際この点について書いている．&lt;/p&gt;
+
+&lt;p&gt;分散スケジューラーが必須になるニッチな状況もある．例えば，既存のワーカーに対して，レイテンシにセンシティブな短いリクエストを送るジョブを高速に配置する必要があるとき．これは&lt;a href=&#34;http://dl.acm.org/citation.cfm?id=2517349.2522716&#34;&gt;Sparrow scheduler&lt;/a&gt;のターゲットであり分散デザインが適切になる．しかしタスクがレイテンシにセンシティブ，もしくはタスクを秒間に数万回も配置する必要がなければ，中央集権型のスケジューラーであっても1万台のマシンを超えても問題ない．&lt;/p&gt;
+
+&lt;p&gt;&lt;strong&gt;Omega論文内で指摘しているMesosのTwo-levelモデルのスケジューリングの欠点は何か?&lt;/strong&gt;&lt;/p&gt;
+
+&lt;p&gt;まずOmega論文におけるMesosの説明は2012年当時のMesosに基づいている．それから数年が経っており，論文でのいくつかの指摘はすでに取組まれており，同じように語ることはできない．&lt;/p&gt;
+
+&lt;p&gt;オファーベースのモデル，もしくは別のスケジューラーに対してクラスタ状態のサブセットのみを公開するモデルには大きく2つの欠点がある．これは例えばYARNのようなリクエストベースのデザインにも同様のことが言える．&lt;/p&gt;
+
+&lt;p&gt;まず1つ目はスケジューラーが割り当てらてた/提供されたリソースのみを見ることができることに関連する．Mesosのオファーシステムにおいて，リソースマネージャーはアプケーションスケジューラーに対して「これだけのリソースがあるよ．どれが使いたい?」と尋ね，アプリケーションスケジューラーはその中から選択を行う．しかしそのときアプリケーションスケジューラーはに別の関連する情報を知ることができない．例えば，自分には提供されなかったリソースは誰が使っているのか，より好ましいリソースがあるのか（そのために提供されたリソースを拒否してより良いリソースを待ったほうがよいのか）という情報を知ることができない．これが&lt;strong&gt;information hiding&lt;/strong&gt;の問題である．information hidingによって問題になる他の例には優先度をもったプリエンプションがある．もし優先度の高いタスクが優先度の低いタスクを追い出すことができる必要があるとき，優先度の低いタスクが配置されるどの場所もまた効率的なリソースのオファーがある，がスケジューラーはそれをみることができない．&lt;/p&gt;
+
+&lt;p&gt;もちろんこれは解くことができる問題である．例えばMesosは優先度の低いタスクに利用されているリソースを優先度の高いタスクに提供することができる．もしくはスケジューラーのフィルターでプリエンプション可能なリソースを指定することもできる．しかしこれはリソースマネージャーのAPIとロジックが複雑になる．&lt;/p&gt;
+
+&lt;p&gt;2つ目は&lt;strong&gt;hoarding&lt;/strong&gt;の問題．これは特に&lt;a href=&#34;https://en.wikipedia.org/wiki/Gang_scheduling&#34;&gt;Gang Sheduling&lt;/a&gt;によりスケジューリングされたジョブに影響を与える．このようなジョブは他のジョブが起動する前にリクエストした全てのリソースを獲得しておかなければならない．例えばこのようなジョブにはMPIがあるが，他にもstatefulなストリーム処理は起動するためにパイプライン全体が確保されている必要がある．MesosのようなTwo-levelモデルではこれらのジョブには問題が生じる．アプリケーションスケジューラーは要求したリソースが全て揃うまで待つ（揃わないかもしれない）こともできるし，十分なリソースを蓄積するため少量のオファーを順番に受け入れることもできる．もし後者なら，しばらくの間他のジョブ（例えば優先度の低いMapReduceのジョブなど）に効率良く利用できる可能性があるのにも関わらず，十分な量のリクエストが受け入れられるまでリソースは使われることなく蓄積（hoarding）される．&lt;/p&gt;
+
+&lt;p&gt;最近MesosphereでMesosの開発をしているBen Hindmanとこの問題ついて話したが，彼らはこれらを解決する並列のリソースオファー/予約が可能になるようにコアのオファーモデルを変更する計画があると話していた．例えば，Mesosは複数のスケジューラーに対して同じリソースを&lt;a href=&#34;https://issues.apache.org/jira/browse/MESOS-1607&#34;&gt;Optimistic&lt;/a&gt;に提供し，消失したスケジューラーのオファーを「無効にする」ことが可能になる．これはOmegaと同じ競合の解決が必要になる．その時点で2つのモデルは同じところに到達する．もしMesosがクラスタの全てのリソースをスケジューラーに提供するならそのスケジューラーはOmegaと同じ視点をもつことになる（詳しくは&lt;a href=&#34;https://issues.apache.org/jira/secure/attachment/12656071/optimisitic-offers.pdf&#34;&gt;&amp;ldquo;proposal: Mesos is isomorphic to Omega if makes offers for everything available&amp;rdquo;&lt;/a&gt;）．しかしまだ実装は初期段階にある．&lt;/p&gt;
+
+&lt;p&gt;&lt;strong&gt;MesosのTwo-levelモデルのスケジューリングはGoogleには適していないのか? クラスタの全てのリソースを全てのスケジューラーに共有するのはなぜ良いのか?&lt;/strong&gt;&lt;/p&gt;
+
+&lt;p&gt;上で挙げた優先度をもったプリエンプションを例に考えてみる．Googleではより重要なタスクのために低い優先度のタスクが停止されるのは普通である．実際，巨大なMapReduceジョブを起動するといくつかのworkerがプリエンプションで失敗する．これは新しいより重要なジョブがあったか，もしくはそのジョブで利用されていた特定のリソースを他のタスクが必要とし（例えばGmailのようなサービスでスパイクがあり）Borgスケジューラーがそのタスクをプリエンプションの対象として選んだためである．しかしタスクを立ち退かせるためにはスケジューラーはそれらの状態を見る必要がある．例えばTwitterのHeronインスタンスは異なるフレームワークであってもHadoopやSparkのジョブを立ち退かせるということをしたい．&lt;/p&gt;
+
+&lt;p&gt;Omega論文で述べた別の例を挙げると，静的にMapReduceジョブを分割するのではなくてクラスタのロードが低いときに動的に割り当てるリソースを増やしたい．なぜそのジョブはしっかり100のworkerを使う必要があるのか? それは単に人間が指定した数にすぎない．スケジューラーはある時間にどれだけの数のworkerを起動するべきがより良く理解できる．実際他のシステムも同様のアイディアを実現してきた．例えばMicrosoftの&lt;a href=&#34;https://kismatic.com/company/qa-with-malte-schwarzkopf-on-distributed-systems-orchestration-in-the-modern-data-center/&#34;&gt;Apolloスケジューラー&lt;/a&gt;はOpportunisticなタスクをサポートしており，&lt;a href=&#34;http://dl.acm.org/citation.cfm?id=2168847&#34;&gt;Jockey&lt;/a&gt;や&lt;a href=&#34;http://dl.acm.org/citation.cfm?id=2541941&#34;&gt;Quasar&lt;/a&gt;のようなresearch systemはAuto-sacalingは非常に大きな違いを生じさせることを示した．しかしそのような決定ができるためには，スケジューラーはクラスタ全体の状態がどうなっているかが見える必要がある．そのためオファーベースでTwo-levelモデルのデザインはGoogleでの要件に合わなかった．&lt;/p&gt;
+
+&lt;p&gt;&lt;strong&gt;MesosのDominant Resource Fairness（DRF）アルゴリズムについてはどう思うか? なぜGoogleは異なるアプローチを選択したのか?&lt;/strong&gt;&lt;/p&gt;
+
+&lt;p&gt;(DRFアルゴリズムは非常に速くスケジューラーに対して1ms以下でリソースを提供することができMesosで使われている)&lt;/p&gt;
+
+&lt;p&gt;GoogleがDRFアルゴリズムを採用していないのはアルゴリズムの複雑さやパフォーマンスとは全く関係ない．単にしっかりとした公平なリソース配分がGoogleの環境には必要ないだけである．より多くのタスクを終わらせ全体の最適化を行うためにリソースの配分を一時的に不公平にできる柔軟性をGoogleは評価している．もちろん偶然（もしくは故意に）大量のリソースを使って他のタスクが不利になることがないようにはしている．&lt;/p&gt;
+
+&lt;p&gt;これは割り当てシステム（quota system）によって行われる．仮想的な通貨がリソースの購入と予算に使われる．もし高い優先度をもつ100のタスクをそれぞれ20GBのメモリを使って1時間稼働させたとすると，チームの口座から2000GB/hourが借りられることになる．もし貯金を使い果たすとチームは人に頼んで通貨を増やしてもらうか，タスクを終了させる方法を見つけなればならない．つまり1日で1月分の配分を使い果たすのは良い考えではなく，しんどくなる．Borg論文がこのquota systemについて詳しく解説している．&lt;/p&gt;
+
+&lt;p&gt;しかしこのやり方はリソース配分の公平性についてより根本的な疑問を呈した．厳格な公平性をもつが使われていないリソースを放置するのか，より良い最適化やタスクのよりスムーズな終了が持ち込まれたときに一時的な不公平を許容するのか．答えは組織やタスクの種類による．Googleでは効率が厳格な公平性に勝った．&lt;/p&gt;
+
+&lt;p&gt;&lt;strong&gt;Omegaのような実装がOSSとして公開されることはあるのか?&lt;/strong&gt;&lt;/p&gt;
+
+&lt;p&gt;今すぐにはない．上で述べたようにOmegaはいくつかのOSSのプロジェクトに影響を与えている．第一にそしてより重要なのはもちろんKubernetesであり，BorgとOmega両方の影響を受けている．Kubernetesにおける重要なアイディアは，ユーザが自分のクラスタの望むべき状態を指定してクラスタマネージャーにそれを託すこと．これはOmegaのアプローチに非常に似ている．その意味でKubernetesはOmegaスタイルのスケジューラーを載せるのには理想的なプラットフォームであると言える．実際Kubernetesのスケジューラーはpluggableなコンポーネントになっているので実現性は高い．&lt;a href=&#34;https://github.com/kubernetes/kubernetes/blob/master/docs/design/architecture.md&#34;&gt;ドキュメント&lt;/a&gt;には開発者は「将来的に複数のクラスタスケジューラーとユーザによるスケジューラーをサポートすることを期待している」とある．Kubernetesは完全にコンポーネント化されているので，複数のマスターコントローラーが複数のスケジューラーとやりとりする，もしくはアプリケーションに特化したReplication Controllerがアプリケーションに特化したスケジューラーにリクエストを投げるといった方法が想像できる．&lt;/p&gt;
+
+&lt;p&gt;Omegaの影響を受けたスケジューラーは他にも存在する．例えばMicrosoft Researchは&lt;a href=&#34;http://msr-waypoint.com/pubs/238833/mercury-tr.pdf&#34;&gt;Mercury&lt;/a&gt;を作った．これは，もしかすると古いかもしれない情報に基づき分散で決定をするのか，正確な情報をもとに中央集権的に決定をするのかをタスクが選べるというハイブリッドなスケジューラーである．そのコードはYARNのupstreamに統合されている．&lt;/p&gt;
+
+&lt;p&gt;&lt;strong&gt;OmegaのようなShared-stateモデルのスケジューラーはkubernetesクラスタにおいても柔軟性や効率を改善することができるのか?&lt;/strong&gt;&lt;/p&gt;
+
+&lt;p&gt;最近KubernetesとMesosをスケジューラーの観点から見てみたが，正直に言うと，GoogleがOmegaやBorgでやっているのと比較するととても単純である．しかしplugabbleなスケジューラーAPIにより最新かつより良いものに改良することができる．基礎はあるのでいろいろなことができる．&lt;/p&gt;
+
+&lt;p&gt;例えばCambridgeでは本格的なスケジューラーマネージャーである&lt;a href=&#34;http://www.cl.cam.ac.uk/research/srg/netos/camsas/firmament/&#34;&gt;Firmament&lt;/a&gt;を研究のために開発した．それによりとても良い結果を得ることができたが，Kubernetesに組み込むことでその研究の成果は他の人たちにも簡単に利用可能になる．&lt;/p&gt;
+
+&lt;p&gt;Share-stateなアプローチはKubernetesクラスタをさらに助けることになると思う．異なるタイプのアプリケーション異なるタイプのPodは異なった方法で配置する必要があり，それらを全てをkube-schdulerに統合するのは悪夢のようだ．そうではなく特別な目的をもった複数のスケジューラーを走らせることができればKubernetesにとって良いオプションになると思う．つまりより良い決定が可能になり，コードを綺麗にかつモジュール化することができる．&lt;/p&gt;
+
+&lt;p&gt;&lt;strong&gt;クラスタのスケジューラーにおける他の課題は何か? 次に解くべき困難な問題は何か?&lt;/strong&gt;&lt;/p&gt;
+
+&lt;p&gt;コンテナもまた異なるタイプのクラスタを作ってきた．Kubernetesや他のコンテナオーケストレーションプラットフォーム（例えばMesosや&lt;a href=&#34;https://tectonic.com/&#34;&gt;Tectonic&lt;/a&gt;，&lt;a href=&#34;https://github.com/docker/machine&#34;&gt;Docker Machine&lt;/a&gt;）によって，MapReduceでmapタスクからネイティブプロセスを起動したり，特定のAPIのためにアプリケーションを再ビルドするといったことを複雑ことをせずに，異なるアプリケーションを同じクラスタ上で動かすことができるようになった．この結果として人々がより賢いスケジューリングに集中し始めることを期待している．今のところOSSではほとんどのプロジェクトがとにかく動かすということをやってきた．これはスケールするのは難しい．より良いスケジューリングの実現が次のハードルであると思う．&lt;/p&gt;
+
+&lt;p&gt;いくつかの困難な課題を挙げる，&lt;/p&gt;
+
+&lt;ul&gt;
+&lt;li&gt;負荷の高いマシンで&lt;strong&gt;co-location interferenceを避ける&lt;/strong&gt;のはとても重要である．貧弱なスケジューリングで特定のマシンのリソース（例えばディスクやネットワーク，L3キャッシュなど）を圧迫するとバッチタスクのパフォーマンスは簡単に悪化する．user-facingのサービスはより被害を被る（例えばレイテンシが非常に大きくなる）．コンテナはCPUやメモリの隔離を可能にするが，基本的にはまだ多くのリソースをk共有している．そのため，どのタスクが同居してよいか，どのタスクか別々になるべきかをよりうまく予測できる必要がある．&lt;/li&gt;
+&lt;li&gt;Googleが&lt;strong&gt;&amp;ldquo;resource reclamation&amp;rdquo;&lt;/strong&gt;と呼んでいること，確保ししたが実際には使わなかった余剰のリソースを返還すること，をよりうまくできる必要がある．人間が慎重になりすぎること，アプリケーションに必要になるリソースを過度に見積もってしまうのはよく知られている．しかし良いスケジューラーであれば，あまり使われていないリソースを他の優先度の低いタスクに再配布することができる．&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;柔軟性を高める&lt;/strong&gt;ことができると良い．スケジューラーにコンテナを停止させる，移動させる，そして自動的にスケールさせる．例えば，CPUが必要な他のコンテナに場所を譲るためにコンテナをプリエンプションして破棄するのではなくて，効率よく停止させるために優先度の低いコンテナを抑制することもできるが，メモリが圧迫されてなければRAMに状態を保持することもできる．&lt;/li&gt;
+&lt;li&gt;スクラッチで自分用のスケジューラーを実装するのではなくて&lt;strong&gt;user-specifiedなスケジューリングポリシー&lt;/strong&gt;を簡単に持てると良い．現実的にはほとんどの組織，小さいもしくは伝統的な組織，にはpluggableのAPIが提供されていたとしてもスケジューラーを書くためのリソースはない．タスクやその組織のためのスケジューリングポリシーを考えることができるSREやDevOps的なエンジニアが必要である．そしてスケジューラーはリソース配分やContainer配置のAPIというよりも，そのポリシーを表現するためのプラットフォームにならなければならない．&lt;/li&gt;
+&lt;/ul&gt;
+
+&lt;p&gt;上述した&lt;a href=&#34;http://camsas.org/firmament&#34;&gt;Firmament&lt;/a&gt;においてこれらの課題のいくつかに挑んだ．例えばそのpluggableなコストモデルにより直感的な方法でスケジューリングのポリシーを簡単に指定することができる．そしてco-location interferenceが発生する前にそれをを避けるコストモデルも開発した．さらに巨大なスケール（数万台のマシン）でも特定のスケジューリングポリシーの最適な決定を非常に速く行うことができる可能性も示した．これらは非常に良いな結果であり，近い将来これについては詳しく述べる．しかし「Google&amp;rsquo;s infrastructure for everyone else」を実現するには多くのひとそして多くの素晴らしいアイディアが必要になる．&lt;/p&gt;
+</description>
+    </item>
+    
+    <item>
+      <title>Apache Kafkaに入門した</title>
+      <link>http://deeeet.com/writing/2015/09/01/apache-kafka/</link>
+      <pubDate>Tue, 01 Sep 2015 18:13:38 +0900</pubDate>
+      
+      <guid>http://deeeet.com/writing/2015/09/01/apache-kafka/</guid>
+      <description>
+
+&lt;p&gt;&lt;a href=&#34;http://kafka.apache.org/&#34;&gt;Apache kafka&lt;/a&gt;&lt;/p&gt;
+
+&lt;p&gt;最近仕事で&lt;a href=&#34;http://kafka.apache.org/&#34;&gt;Apache Kafka&lt;/a&gt;の導入を進めている．Kafkaとは何か? どこで使われているのか? どのような理由で作られたのか? どのように動作するのか（特にメッセージの読み出しについて）? を簡単にまとめておく（メッセージングはまだまだ勉強中なのでおかしなところがあればツッコミをいただければ幸いです）．&lt;/p&gt;
+
+&lt;p&gt;バージョンは &lt;em&gt;0.8.2&lt;/em&gt; を対象に書いている．&lt;/p&gt;
+
+&lt;h2 id=&#34;apache-kafkaとは:cfaa9629bd29de39c13ad426072a0386&#34;&gt;Apache Kafkaとは?&lt;/h2&gt;
+
+&lt;p&gt;2011年に&lt;a href=&#34;https://www.linkedin.com/&#34;&gt;LinkedIn&lt;/a&gt;から公開されたオープンソースの分散メッセージングシステムである．Kafkaはウェブサービスなどから発せられる大容量のデータ（e.g., ログやイベント）を高スループット/低レイテンシに収集/配信することを目的に開発されている．公式のトップページに掲載されているセールスポイントは以下の4つ．&lt;/p&gt;
+
+&lt;ul&gt;
+&lt;li&gt;&lt;strong&gt;Fast&lt;/strong&gt; とにかく大量のメッセージを扱うことができる&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;Scalable&lt;/strong&gt; Kafkaはシングルクラスタで大規模なメッセージを扱うことができダウンタイムなしでElasticかつ透過的にスケールすることができる&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;Durable&lt;/strong&gt; メッセージはディスクにファイルとして保存され，かつクラスタ内でレプリカが作成されるためデータの損失を防げる（パフォーマンスに影響なくTBのメッセージを扱うことができる）&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;Distributed by Design&lt;/strong&gt; クラスタは耐障害性のある設計になっている&lt;/li&gt;
+&lt;/ul&gt;
+
+&lt;h2 id=&#34;どこで使われているのか:cfaa9629bd29de39c13ad426072a0386&#34;&gt;どこで使われているのか?&lt;/h2&gt;
+
+&lt;p&gt;&lt;a href=&#34;http://kafka.apache.org/documentation.html#uses&#34;&gt;Use Cases&lt;/a&gt;をあげると，メッセージキューやウェブサイトのアクティビティのトラッキング（LinkedInのもともとのUse Case），メトリクスやログの収集，&lt;a href=&#34;https://storm.apache.org/&#34;&gt;Storm&lt;/a&gt;や&lt;a href=&#34;http://samza.apache.org/&#34;&gt;Samza&lt;/a&gt;を使ったストリーム処理などがあげられる．&lt;/p&gt;
+
+&lt;p&gt;利用している企業は例えばTwitterやNetflix，Square，Spotify，Uberなどがある（cf. &lt;a href=&#34;https://cwiki.apache.org/confluence/display/KAFKA/Powered+By&#34;&gt;Powered By&lt;/a&gt;）．&lt;/p&gt;
+
+&lt;h2 id=&#34;kafkaの初期衝動:cfaa9629bd29de39c13ad426072a0386&#34;&gt;Kafkaの初期衝動&lt;/h2&gt;
+
+&lt;p&gt;Kafkaのデザインを理解するにはLinkedInでなぜKafkaが必要になったのかを理解するのが早い．それについては2012年のIEEEの論文&lt;a href=&#34;http://sites.computer.org/debull/A12june/pipeline.pdf&#34;&gt;&amp;ldquo;Building LinkedIn&amp;rsquo;s Real-time Activity Data Pipeline&amp;rdquo;&lt;/a&gt;を読むのが良い．簡単にまとめると以下のようになる．&lt;/p&gt;
+
+&lt;p&gt;LinkedInでは大きく2つのデータを扱っている．1つはウェブサイトから集められる大量のユーザのアクティビティデータ．これらをHadoop（バッチ処理）を通して機械学習しレコメンド/ニュースフィードなどサービスの改善に用いている．それだけではなくこれらのデータはサービスの監視（セキュリティなど）にも用いている．2つ目はシステムのログ．これらをリアルタイムで処理してサービスのモニタリングを行っている．これらは近年のウェブサービスではよく見かける風景．&lt;/p&gt;
+
+&lt;p&gt;問題はそれぞれのデータの流れが1本道になっていたこと．アクティビティデータはバッチ処理に特化していたためリアルタイム処理ができない，つまりサービス監視には遅れが生じていた．同様にシステムのログは，リアルタイム処理のみに特化していたため長期間にわたるキャパシティプランニングやシステムのデバッグには使えなかった．サービスを改善するにはそれぞれタイプの異なるデータフィードを最小コストで統合できるようにする必要があった．またLinkedInのようにデータがビジネスのコアになる企業ではそのデータを様々なチームが簡単に利用できる必要があった．&lt;/p&gt;
+
+&lt;p&gt;これら問題を解決するために大ボリュームのあらゆるデータを収集し様々なタイプのシステム（バッチ/リアルタイム）からそれを読めるようにする統一的ななメッセージプラットフォームの構築が始まった．&lt;/p&gt;
+
+&lt;p&gt;最初は既存のメッセージシステム（論文にはActiveMQを試したとある）の上に構築しようとした．しかしプロダクションレベルのデータを流すと以下のような問題が生じた．&lt;/p&gt;
+
+&lt;ul&gt;
+&lt;li&gt;並列でキューのメッセージを読むにはメッセージごとに誰に読まれたかを記録する必要がある（mutex）．そのため大量のデータを扱うとメモリが足りなくなった．メモリが足りなくなると大量のRamdom IOが発生しパフォーマンスに深刻な影響がでた&lt;/li&gt;
+&lt;li&gt;バッチ処理/リアルタイム処理の両方でキューを読むには少なくとも2つのデータのコピーが必要になり非効率になった&lt;/li&gt;
+&lt;/ul&gt;
+
+&lt;p&gt;このような問題から新しいメッセージシステム，Kafkaの開発が必要になった．Kafkaが目指したのは以下．&lt;/p&gt;
+
+&lt;ul&gt;
+&lt;li&gt;あらゆる種類のデータ/大容量のデータを統一的に扱う&lt;/li&gt;
+&lt;li&gt;様々なタイプのシステム（バッチ/リアルタイム）が同じデータを読める&lt;/li&gt;
+&lt;li&gt;高スループットでデータを処理する（並列でデータを読める）&lt;/li&gt;
+&lt;/ul&gt;
+
+&lt;h2 id=&#34;どのように動作するのか-概要:cfaa9629bd29de39c13ad426072a0386&#34;&gt;どのように動作するのか?（概要）&lt;/h2&gt;
+
+&lt;p&gt;KafkaはBroker（クラスタ）とProducer，Consumerという3つのコンポーネントで構成される．Producerはメッセージの配信を行いConsumerはメッセージの購読を行う．そしてKafkaのコアであるBrokerはクラスタを構成しProducerとConsumerの間でメッセージの受け渡しを行うキューとして動作する．&lt;/p&gt;
+
+&lt;p&gt;&lt;img src=&#34;http://kafka.apache.org/images/producer_consumer.png&#34; /&gt;
+&lt;a href=&#34;http://kafka.apache.org/images/producer_consumer.png&#34;&gt;http://kafka.apache.org/images/producer_consumer.png&lt;/a&gt;&lt;/p&gt;
+
+&lt;p&gt;&lt;strong&gt;メッセージのやりとり&lt;/strong&gt;&lt;/p&gt;
+
+&lt;p&gt;KafkaはTopicを介してメッセージのやりとりを行う．Topicとはメッセージのフィードのようなものである．例えば，検索に関わるデータを&amp;rdquo;Search&amp;rdquo;というTopic名でBrokerに配信しておき，検索に関わるデータが欲しいConsumerは&amp;rdquo;Search&amp;rdquo;というTopic名を使ってそれをBrokerから購読する．&lt;/p&gt;
+
+&lt;p&gt;&lt;strong&gt;Pull vs Push&lt;/strong&gt;&lt;/p&gt;
+
+&lt;p&gt;BrokerがConsumerにデータをPushするのか（fluentd，logstash，flume），もしくはConsumerがBrokerからデータをPullするのかはメッセージシステムのデザインに大きな影響を与える．もちろんそれぞれにPros/Consはある．KafkaはPull型のConsumerを採用している．それは以下の理由による．&lt;/p&gt;
+
+&lt;ul&gt;
+&lt;li&gt;Pushだと様々なConsumerを扱うのが難しく，Brokerがデータの転送量などを意識しないといけない．Kafkaの目標は最大限のスピードでデータを消費することだが，（予期せぬアクセスなどで）転送量を見誤るとConsumerを圧倒してまう．PullだとConsumerが消費量を自らが管理できる．&lt;/li&gt;
+&lt;li&gt;Pullだとバッチ処理にも対応できる．Pushだと自らそれを溜め込んだ上でConsumerがそれを扱えるか否かに関わらずそれを送らないといけない&lt;/li&gt;
+&lt;li&gt;(PullでしんどいのはBrokerにデータがまだ届いてない場合のコストだがlong pollingなどでそれに対応している)&lt;/li&gt;
+&lt;/ul&gt;
+
+&lt;p&gt;&lt;strong&gt;メッセージのライフサイクル&lt;/strong&gt;&lt;/p&gt;
+
+&lt;p&gt;BrokerはConsumerがメッセージを購読したかに関わらず設定された期間のみ保持してその後削除する．これはKafkaの大きな特徴の1つである．例えば保存期間を2日間に設定すれば配信後2日間のみデータは保持されその後削除される．&lt;/p&gt;
+
+&lt;p&gt;このためConsumerサイドがメッセージをどこまで読んだがを自らが管理する（Brokerが管理する必要がない）．普通は順番にメッセージを読んでいくが，Consumerに問題があれば読む位置を巻き戻して復旧することもできる（最悪どれくらいでConsumerを復旧できるかによりデータの保存期間が決まり保持するデータのサイズが決まる）．&lt;/p&gt;
+
+&lt;p&gt;この2つの特徴のためConsumerはBrokerにも他のBrokerにも大きな影響を与えない．&lt;/p&gt;
+
+&lt;h2 id=&#34;高速にメッセージを消費する:cfaa9629bd29de39c13ad426072a0386&#34;&gt;高速にメッセージを消費する&lt;/h2&gt;
+
+&lt;p&gt;Kafkaで面白いのはConsumerがBrokerから高速にメッセージを読み込むための仕組みであると思う．これをどのように実現しているかを説明する．&lt;/p&gt;
+
+&lt;p&gt;&lt;strong&gt;並列でキューを読むのは大変&lt;/strong&gt;&lt;/p&gt;
+
+&lt;p&gt;高速にメッセージを消費するにはBrokerのデータを並列に読む必要がある．そもそも&amp;rdquo;初期衝動&amp;rdquo;のところで説明したように複数のConsumerが並列でキューを読むのは大変である．&lt;/p&gt;
+
+&lt;ul&gt;
+&lt;li&gt;重複なく送るためにはメッセージごとにどのConsumerに読まれたかを管理する必要がある&lt;/li&gt;
+&lt;li&gt;キューの書き込みまでは順序性が確保されるが並列で読むと複数のConsumerに消費された瞬間順序は失われる&lt;/li&gt;
+&lt;/ul&gt;
+
+&lt;p&gt;Kafkaのデザインはこれらを解決するようになっている．&lt;/p&gt;
+
+&lt;p&gt;&lt;strong&gt;Brokerにおけるメッセージの保存&lt;/strong&gt;&lt;/p&gt;
+
+&lt;p&gt;まずBrokerのメッセージの保存方法に特徴がある．KafkaはTopicごとに1つ以上のPartitionという単位でメッセージを保存する．メッセージはそれぞれのPartitionの末尾に追記される．これによりPartitionごとにメッセージの順序性が担保される．例えば以下の図はあるTopicの3つのPartitionにメッセージが追記されていることを示す．&lt;/p&gt;
+
+&lt;p&gt;&lt;img src=&#34;http://kafka.apache.org/images/log_anatomy.png&#34; /&gt;
+&lt;a href=&#34;http://kafka.apache.org/images/log_anatomy.png&#34;&gt;http://kafka.apache.org/images/log_anatomy.png&lt;/a&gt;&lt;/p&gt;
+
+&lt;p&gt;&lt;strong&gt;Partitionの使われ方&lt;/strong&gt;&lt;/p&gt;
+
+&lt;p&gt;Partitionには大きく以下の2つの目的がある．&lt;/p&gt;
+
+&lt;ul&gt;
+&lt;li&gt;複数のサーバーでメッセージを分散させるため（1つのサーバーのキャパを超えてメッセージを保存できる）&lt;/li&gt;
+&lt;li&gt;並列処理のため&lt;/li&gt;
+&lt;/ul&gt;
+
+&lt;p&gt;どのように並列処理するか? Consumerはグループ単位でメッセージを購読する．そして&amp;rdquo;1つのPartitionのデータは1つのConsumerグループ内の1つのConsumerにのみ消費される&amp;rdquo;という制限でこれを実現する（つまりConsumerの並列数はPartition数を超えられない）．以下の図は2つのConsumerグループAとBに属する複数のConsumerが並列にメッセージを購読している様子を示す．グループ内では並列処理だがグループ間で見ると伝統的なPub/Subモデル（1対1）のモデルに見える．&lt;/p&gt;
+
+&lt;p&gt;&lt;img src=&#34;http://kafka.apache.org/images/consumer-groups.png&#34;/&gt;
+&lt;a href=&#34;http://kafka.apache.org/images/consumer-groups.png&#34;&gt;http://kafka.apache.org/images/consumer-groups.png&lt;/a&gt;&lt;/p&gt;
+
+&lt;p&gt;この仕組みには以下のような利点がある．&lt;/p&gt;
+
+&lt;ul&gt;
+&lt;li&gt;あるPartitionを読むConsumerは特定の1つなので，メッセージが誰にどこまで読まれたかまで記録する必要はなくて，単純にどこまで読まれたかを通知しておけばよい&lt;/li&gt;
+&lt;li&gt;読んでるConsumerは1つなのでConsumerはlazyに読んだ場所を記録しておけばよくて処理に失敗したら再びよみにいけば良い（at-least-once）&lt;/li&gt;
+&lt;li&gt;どのメッセージが読まれたかをlazilyに記録できるためにパフォーマンスを保証できる（Partitionのオーナーを同じように決められ無い場合はスタティックにConsumerを割り当てるか/ランダムにConsumerをロードバランスするしか無い．ランダムにやると複数のプロセスが同時に同じPartitionを購読するのでmutexが必要になりBrokerの処理が重くなる）&lt;/li&gt;
+&lt;/ul&gt;
+
+&lt;p&gt;&lt;strong&gt;順序性の補足&lt;/strong&gt;&lt;/p&gt;
+
+&lt;p&gt;Partition内，つまりConsumer内では順序性が確保される．つまりBrokerに記録された順番で消費される．がPartition間では保証されない．&lt;/p&gt;
+
+&lt;p&gt;ProducerはBrokerにメッセージを配信するときにKeyを指定することができる．このKeyにより同じKeyが指定されたメッセージを同じPartitionに保存することができる．Partition内の順序性とKeyで大抵のアプリケーションには問題ない（とのこと）．完全な順序性を確保したければPartitionを1つにすれば良い（Consumerも一つになってしまうが）．&lt;/p&gt;
+
+&lt;h2 id=&#34;高スループットへの挑戦:cfaa9629bd29de39c13ad426072a0386&#34;&gt;高スループットへの挑戦&lt;/h2&gt;
+
+&lt;p&gt;Brokerへの書き込み/読み込みはとにかく速い．LinkedInのベンチマークでは200万 write/sec（&lt;a href=&#34;https://engineering.linkedin.com/kafka/benchmarking-apache-kafka-2-million-writes-second-three-cheap-machines&#34;&gt;Benchmarking Apache Kafka: 2 Million Writes Per Second (On Three Cheap Machines)&lt;/a&gt;）とある．なぜこれだけ速いのか．以下の2つを組み合わせることにより実現している．&lt;/p&gt;
+
+&lt;ul&gt;
+&lt;li&gt;&lt;strong&gt;write&lt;/strong&gt; バッファ書き込みを自分たちで実装するのではなくてカーネルのメモリキャシュ機構をがっつり使うようにした（Brokerが動いているサーバーのメモリ32GBのうち28-30GBがキャッシュに使われている）&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;read&lt;/strong&gt; ページキャッシュからネットワークのsocketへ効率よくデータを受け渡すために&lt;code&gt;sendfile()&lt;/code&gt;を使ってる&lt;/li&gt;
+&lt;/ul&gt;
+
+&lt;h2 id=&#34;まとめ:cfaa9629bd29de39c13ad426072a0386&#34;&gt;まとめ&lt;/h2&gt;
+
+&lt;p&gt;先に紹介した論文&lt;a href=&#34;http://sites.computer.org/debull/A12june/pipeline.pdf&#34;&gt;&amp;ldquo;Building LinkedIn&amp;rsquo;s Real-time Activity Data Pipeline&amp;rdquo;&lt;/a&gt;は他にも面白いことがたくさん書いてあるのでKafkaを使おうとしているひとはぜひ一度目を通してみるといいと思う．&lt;/p&gt;
+
+&lt;p&gt;次回はGo言語を使ってProducerとConsumerを実装する話を書く．&lt;/p&gt;
+
+&lt;h2 id=&#34;参考:cfaa9629bd29de39c13ad426072a0386&#34;&gt;参考&lt;/h2&gt;
+
+&lt;ul&gt;
+&lt;li&gt;&lt;a href=&#34;http://sites.computer.org/debull/A12june/pipeline.pdf&#34;&gt;Building LinkedIn&amp;rsquo;s Real-time Activity Data Pipeline&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a href=&#34;http://www.amazon.co.jp/Apache-Kafka%E5%85%A5%E9%96%80-%E4%BC%8A%E6%A9%8B-%E6%AD%A3%E7%BE%A9-ebook/dp/B00JU43ONW&#34;&gt;Apache Kafka入門&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;（&lt;a href=&#34;http://www.confluent.io/blog/apache-kafka-samza-and-the-unix-philosophy-of-distributed-data&#34;&gt;&amp;ldquo;Apache Kafka, Samza, and the Unix Philosophy of Distributed Data&amp;rdquo;&lt;/a&gt;はApache KafkaをUnix哲学/パイプという観点から説明していてわかりやすい）&lt;/li&gt;
+&lt;li&gt;&lt;a href=&#34;http://www.slideshare.net/miguno/apache-kafka-08-basic-training-verisign&#34;&gt;Apache Kafka 0.8 basic training - Verisign&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a href=&#34;https://engineering.linkedin.com/kafka/benchmarking-apache-kafka-2-million-writes-second-three-cheap-machines&#34;&gt;Benchmarking Apache Kafka: 2 Million Writes Per Second (On Three Cheap Machines)&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a href=&#34;http://kimutansk.hatenablog.com/entry/20130703/1372803004&#34;&gt;Apache Kafka 0.8.0の新機能／変更点 - 夢とガラクタの集積場&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a href=&#34;http://www.infoq.com/jp/news/2014/01/apache-afka-messaging-system&#34;&gt;Apache Kafka, 他とは異なるメッセージングシステム&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a href=&#34;http://techblog.yahoo.co.jp/programming/storm/&#34;&gt;StormとKafkaによるリアルタイムデータ処理 - Yahoo! JAPAN Tech Blog&lt;/a&gt;&lt;/li&gt;
+&lt;/ul&gt;
+</description>
+    </item>
+    
+    <item>
+      <title>1コマンドでkubernetesを立ち上げるboot2kubernetesというツールをつくった</title>
+      <link>http://deeeet.com/writing/2015/08/17/boot2kubernetes-jp/</link>
+      <pubDate>Mon, 17 Aug 2015 23:47:14 +0900</pubDate>
+      
+      <guid>http://deeeet.com/writing/2015/08/17/boot2kubernetes-jp/</guid>
+      <description>
+
+&lt;p&gt;&lt;a href=&#34;https://github.com/tcnksm/boot2kubernetes&#34;&gt;tcnksm/boot2kubernetes&lt;/a&gt;&lt;/p&gt;
+
+&lt;p&gt;&lt;a href=&#34;http://googlecloudplatform.blogspot.jp/2015/07/Kubernetes-V1-Released.html&#34;&gt;kubernetes 1.0がリリースされた&lt;/a&gt;．これから実際に試す機会も増えそうなのでDockerを使って簡単に（1コマンドで）kubernetesクラスタを立てるコマンドをつくった．&lt;/p&gt;
+
+&lt;h2 id=&#34;デモ:223bfc5a943aeb203f5eccff79a7281e&#34;&gt;デモ&lt;/h2&gt;
+
+&lt;p&gt;以下はOSX上でシングルNodeのkubernetesクラスタを立てて&lt;code&gt;kubectl&lt;/code&gt;でリクエストを投げるデモ．&lt;/p&gt;
+
+&lt;p&gt;&lt;img src=&#34;http://deeeet.com/images/boot2k8s.gif&#34; class=&#34;image&#34;&gt;&lt;/p&gt;
+
+&lt;h2 id=&#34;使い方:223bfc5a943aeb203f5eccff79a7281e&#34;&gt;使い方&lt;/h2&gt;
+
+&lt;p&gt;以下のコマンドでクラスタを立ち上げる．&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-bash&#34;&gt;$ boot2k8s up
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;このコマンドで必要なDockerイメージがPullされコンテナが起動する．boot2docker上でDockerを動かしている場合ローカルから&lt;code&gt;kubectl&lt;/code&gt;でクラスタにアクセスするにはport forwardが必要になる．その場合&lt;code&gt;boot2k8s&lt;/code&gt;はport forwardサーバーも同時に起動する．&lt;/p&gt;
+
+&lt;p&gt;終了する（コンテナを削除する）には以下を実行する．&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-bash&#34;&gt;$ boot2k8s destroy
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;&lt;code&gt;boot2k8s&lt;/code&gt;が立ち上げたkubernetesコンテナとkubernetesによって立ち上げられたpodを削除することができる．&lt;/p&gt;
+
+&lt;h2 id=&#34;インストール:223bfc5a943aeb203f5eccff79a7281e&#34;&gt;インストール&lt;/h2&gt;
+
+&lt;p&gt;OSXの場合はHomebrewでインストールできる．&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-bash&#34;&gt;$ brew tap tcnksm/boot2k8s
+$ brew install boot2k8s
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;他のプラットフォームの場合は&lt;a href=&#34;https://github.com/tcnksm/boot2kubernetes/releases&#34;&gt;リリースページ&lt;/a&gt;にバイナリがある．&lt;/p&gt;
+
+&lt;h2 id=&#34;内部の実装:223bfc5a943aeb203f5eccff79a7281e&#34;&gt;内部の実装&lt;/h2&gt;
+
+&lt;p&gt;Dockerを使ってシングルNodeのKubernetesクラスタをローカル開発環境に立てる方法はkubernetesの公式が提供している（cf. &lt;a href=&#34;https://github.com/kubernetes/kubernetes/blob/release-1.0/docs/getting-started-guides/docker.md&#34;&gt;Running Kubernetes locally via Docker&lt;/a&gt;）．基本はこのドキュメントとやっていることは同じで，面倒な部分を含めて全てを1つのコマンドにまとめている．&lt;/p&gt;
+
+&lt;p&gt;同じように1コマンドでKubernetesクラスタを立ち上げる試みとして&lt;a href=&#34;http://sebgoa.blogspot.jp/2015/04/1-command-to-kubernetes-with-docker.html&#34;&gt;&amp;ldquo;1 command to Kubernetes with Docker compose&amp;rdquo;&lt;/a&gt;がある．これは&lt;code&gt;docker-compose&lt;/code&gt;を使っている．同様に&lt;code&gt;boot2k8s&lt;/code&gt;は&lt;code&gt;docker-compose&lt;/code&gt;のGo言語実装である&lt;a href=&#34;https://github.com/docker/libcompose&#34;&gt;libcompose&lt;/a&gt;をライブラリとして利用して複数コンテナを立ち上げている（&lt;code&gt;boot2k8s&lt;/code&gt;のcomposeファイルは&lt;a href=&#34;https://github.com/tcnksm/boot2kubernetes/blob/0.1.0/config/k8s.yml&#34;&gt;k8s.yml&lt;/a&gt;にあるので&lt;code&gt;docker-compose&lt;/code&gt;のみを使いたい人はこれをそのまま利用できる）．&lt;/p&gt;
+
+&lt;p&gt;&lt;code&gt;boot2k8s&lt;/code&gt;は&lt;a href=&#34;https://github.com/jteeuwen/go-bindata&#34;&gt;go-bindata&lt;/a&gt;でcomposeファイルをbyteとして埋め込み&lt;code&gt;libcompose&lt;/code&gt;で起動する．コードで示すと以下のようになる．&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-golang&#34;&gt;// Read .yml file as bytes by go-bindata
+compose, _ := config.Asset(&amp;quot;k8s.yml&amp;quot;)
+
+// Setup new docker-compose project
+context := &amp;amp;docker.Context{
+    Context: project.Context{
+        ComposeBytes: compose,
+        ProjectName:  &amp;quot;boot2k8s&amp;quot;,
+    },
+}
+
+project, _ := docker.NewProject(context)
+
+project.Up()
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;&lt;code&gt;boot2k8s&lt;/code&gt;の利点はport forwardingやコンテナの削除機能を持っていることが挙げられる．さらに今後はDocker machineと連携して様々な環境でkubernetesを簡単に立ち上げられるようにする予定．&lt;/p&gt;
+
+&lt;h2 id=&#34;最後に:223bfc5a943aeb203f5eccff79a7281e&#34;&gt;最後に&lt;/h2&gt;
+
+&lt;p&gt;バグや意見はGitHubの&lt;a href=&#34;https://github.com/tcnksm/boot2kubernetes/issues&#34;&gt;Issue&lt;/a&gt;，もしくは&lt;a href=&#34;https://twitter.com/deeeet&#34;&gt;@deeeet&lt;/a&gt;までお願いします．&lt;/p&gt;
+
+&lt;p&gt;&lt;a href=&#34;https://twitter.com/rrreeeyyy&#34;&gt;@rrreeeyyy&lt;/a&gt;くんに事前に意見をもらいました．ありがとう．&lt;/p&gt;
+
+&lt;h3 id=&#34;参考:223bfc5a943aeb203f5eccff79a7281e&#34;&gt;参考&lt;/h3&gt;
+
+&lt;ul&gt;
+&lt;li&gt;&lt;a href=&#34;http://sebgoa.blogspot.jp/2015/04/1-command-to-kubernetes-with-docker.html&#34;&gt;&amp;ldquo;1 command to Kubernetes with Docker compose&amp;rdquo;&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a href=&#34;http://rancher.com/our-journey-with-docker-compose-and-the-introduction-of-libcompose/&#34;&gt;&amp;ldquo;Libcompose and our journey with Docker Compose&amp;rdquo;&lt;/a&gt;&lt;/li&gt;
+&lt;/ul&gt;
+</description>
+    </item>
+    
+    <item>
+      <title>Go1.5はクロスコンパイルがより簡単</title>
+      <link>http://deeeet.com/writing/2015/07/22/go1_5-cross-compile/</link>
+      <pubDate>Wed, 22 Jul 2015 09:54:57 +0900</pubDate>
+      
+      <guid>http://deeeet.com/writing/2015/07/22/go1_5-cross-compile/</guid>
+      <description>
+
+&lt;ul&gt;
+&lt;li&gt;&lt;a href=&#34;http://dave.cheney.net/2015/03/03/cross-compilation-just-got-a-whole-lot-better-in-go-1-5&#34;&gt;Cross compilation just got a whole lot better in Go 1.5 | Dave Cheney&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a href=&#34;https://medium.com/@rakyll/go-1-5-cross-compilation-488092ba44ec&#34;&gt;Go 1.5: Cross compilation — Medium&lt;/a&gt;&lt;/li&gt;
+&lt;/ul&gt;
+
+&lt;p&gt;Go言語の良さの一つにあらゆるOS/Archに対するクロスコンパイルがとても簡単に行えることが挙げられる．今まで（Go1.4以前）も十分に便利だったが&lt;a href=&#34;http://tip.golang.org/doc/go1.5&#34;&gt;Go 1.5&lt;/a&gt;ではさらに良くなる．&lt;/p&gt;
+
+&lt;p&gt;今までの問題を敢えて挙げるとターゲットとするプラットフォーム向けのビルドtool-chain準備する必要があるのが煩雑であった（cf. &lt;a href=&#34;http://qiita.com/Jxck_/items/02185f51162e92759ebe&#34;&gt;Go のクロスコンパイル環境構築 - Qiita&lt;/a&gt;）&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-bash&#34;&gt;$ cd $(go env GOROOT)/src
+$ GOOS=${TARGET_OS} GOARCH=${TARGET_ARCH} ./make.bash --no-clean 
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-bash&#34;&gt;$ gox -build-toolchain 
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;この作業は1つの環境で一度だけ行えばよいのでそれほど煩雑ではない．しかし，例えばDockerなどでクロスコンパイル環境を提供すると（e.g., &lt;a href=&#34;https://github.com/tcnksm/dockerfile-gox&#34;&gt;tcnksm/dockerfile-gox&lt;/a&gt;），ビルドに時間がかかったりイメージが無駄に重くなったりという問題がおこる．初めてクロスコンパイルをしようとするひとにとってもつまづいてしまうポイントだったと思う．&lt;/p&gt;
+
+&lt;p&gt;Go1.5ではコンパイラがGoで書き直された（cf. &lt;a href=&#34;http://talks.golang.org/2015/gogo.slide#1&#34;&gt;Go in Go&lt;/a&gt;）ため，この準備作業が不要になる．&lt;code&gt;go&lt;/code&gt;はコンパイル前に必要な標準パッケージを検出しそれらをターゲットのプラットフォーム向けにビルドしてくれる．&lt;/p&gt;
+
+&lt;h2 id=&#34;使ってみる:dcb6fe83a3ea3825d24f294d3c92e899&#34;&gt;使ってみる&lt;/h2&gt;
+
+&lt;p&gt;Go1.5を準備する．Go1.5のビルドにはGo1.4が必要．&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-bash&#34;&gt;$ git clone https://go.googlesource.com/go $HOME/go1.5
+$ cd $HOME/go1.5 &amp;amp;&amp;amp; git checkout -b 1.5 refs/tags/go1.5beta2
+$ cd $HOME/go1.5/src &amp;amp;&amp;amp; GOROOT_BOOTSTRAP=$HOME/go1.4/ ./make.bash
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-bash&#34;&gt;$ export PATH=$HOME/go1.5/bin:$PATH
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;&lt;a href=&#34;https://github.com/mitchellh/gox&#34;&gt;mitchellh/gox&lt;/a&gt;を使ってみる．toolchainの準備なしにすぐに使える．&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-bash&#34;&gt;$ go get github.com/mitchellh/gox
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-bash&#34;&gt;$ cd $GOPATH/src/github.com/tcnksm/hello
+$ gox
+Number of parallel builds: 4
+
+--&amp;gt;       linux/arm: github.com/tcnksm/hello
+--&amp;gt;      darwin/386: github.com/tcnksm/hello
+--&amp;gt;       linux/386: github.com/tcnksm/hello
+--&amp;gt;       plan9/386: github.com/tcnksm/hello
+--&amp;gt;     freebsd/386: github.com/tcnksm/hello
+--&amp;gt;   freebsd/amd64: github.com/tcnksm/hello
+--&amp;gt;     openbsd/386: github.com/tcnksm/hello
+--&amp;gt;   openbsd/amd64: github.com/tcnksm/hello
+--&amp;gt;     windows/386: github.com/tcnksm/hello
+--&amp;gt;   windows/amd64: github.com/tcnksm/hello
+--&amp;gt;     freebsd/arm: github.com/tcnksm/hello
+--&amp;gt;      netbsd/386: github.com/tcnksm/hello
+--&amp;gt;    netbsd/amd64: github.com/tcnksm/hello
+--&amp;gt;      netbsd/arm: github.com/tcnksm/hello
+--&amp;gt;     linux/amd64: github.com/tcnksm/hello
+--&amp;gt;    darwin/amd64: github.com/tcnksm/hello
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;ちなみに上の例はcgoが必要ない場合，cgoが必要な場合は&lt;code&gt;CC&lt;/code&gt;と&lt;code&gt;CXX&lt;/code&gt;環境変数でCとC++のコンパイラを指定することができる（cf. &lt;a href=&#34;https://medium.com/@rakyll/go-1-5-cross-compilation-488092ba44ec&#34;&gt;Go 1.5: Cross compilation&lt;/a&gt;）．&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-bash&#34;&gt;$ CGO_ENABLED=1 CC=android-armeabi-gcc CXX=android-armeabi-g++ GOOS=android GOARCH=arm GOARM=7 go build .
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;h2 id=&#34;留意事項:dcb6fe83a3ea3825d24f294d3c92e899&#34;&gt;留意事項&lt;/h2&gt;
+
+&lt;p&gt;(2015年8月7日追記)&lt;/p&gt;
+
+&lt;p&gt;&lt;code&gt;-v&lt;/code&gt; オプションをつけてクロスコンパイルをするとわかるが毎回ターゲットプラットホーム向けに標準ライブラリをビルドするためコンパイル時間は長くなる（cf &lt;a href=&#34;https://twitter.com/upthecyberpunks/status/629092265391095809&#34;&gt;&amp;ldquo;https://twitter.com/upthecyberpunks/status/629092265391095809&amp;rdquo;&lt;/a&gt;）．同じ環境で使い回すならば今まで通り標準パッケージを事前にビルドしておくと良い．&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-bash&#34;&gt;$ env GOOS=linux GOARCH=amd64 go install std
+&lt;/code&gt;&lt;/pre&gt;
+</description>
+    </item>
+    
+    <item>
+      <title>Go言語のDependency/Vendoringの問題と今後．gbあるいはGo1.5</title>
+      <link>http://deeeet.com/writing/2015/06/26/golang-dependency-vendoring/</link>
+      <pubDate>Fri, 26 Jun 2015 12:15:03 +0900</pubDate>
+      
+      <guid>http://deeeet.com/writing/2015/06/26/golang-dependency-vendoring/</guid>
+      <description>
+
+&lt;p&gt;Go言語のDependency/Vendoringは長く批判の的になってきた（cf. &lt;a href=&#34;http://0x74696d.com/posts/go-get-considered-harmful/&#34;&gt;&amp;ldquo;0x74696d | go get considered harmful&amp;rdquo;&lt;/a&gt;, &lt;a href=&#34;https://news.ycombinator.com/item?id=9508022&#34;&gt;HN&lt;/a&gt;）．Go1.5からは実験的にVendoringの機能が入り，サードパーティからは&lt;a href=&#34;https://twitter.com/davecheney&#34;&gt;Dave Chaney&lt;/a&gt;氏を中心として&lt;a href=&#34;http://getgb.io/&#34;&gt;gb&lt;/a&gt;というプロジェクベースのビルドツールが登場している．なぜこれらのリリースやツールが登場したのか?それらはどのように問題を解決しようとしているのか?をつらつらと書いてみる．&lt;/p&gt;
+
+&lt;h2 id=&#34;dependencyの問題:c291a143fe15f6359ac59e461ca480d7&#34;&gt;Dependencyの問題&lt;/h2&gt;
+
+&lt;p&gt;最初にGo言語におけるDependecy（依存解決）の問題についてまとめる．Go言語のDependencyで問題なのはビルドの再現性が保証できないこと．この原因は&lt;code&gt;import&lt;/code&gt;文にある．&lt;/p&gt;
+
+&lt;p&gt;Go言語で外部パッケージを利用したいときは&lt;code&gt;import&lt;/code&gt;文を使ってソースコード内にそれを記述する．この&lt;code&gt;import&lt;/code&gt;文は2通りの解釈のされ方をする．&lt;code&gt;go get&lt;/code&gt;はリモートレポジトリのfetch URLとして解釈し，コンパイラはローカルディスク上のソースのPathとして解釈する．例えばコマンドラインツールを作るときに外部パッケージとして&lt;a href=&#34;https://github.com/mitchellh/cli&#34;&gt;mitchellh/cli&lt;/a&gt;を使いたい場合は以下のように記述する．&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-go&#34;&gt;import &amp;quot;github.com/mitchellh/cli&amp;quot;
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;これが書かれたコードを&lt;code&gt;go get&lt;/code&gt;すると，ローカルディスクに&lt;a href=&#34;https://github.com/mitchellh/cli&#34;&gt;mitchellh/cli&lt;/a&gt;がなければ&lt;code&gt;$GOPATH/src&lt;/code&gt;以下にそれがfetchされる．ビルド時はそのPathに存在するコードが利用される．&lt;/p&gt;
+
+&lt;p&gt;&lt;code&gt;import&lt;/code&gt;で問題になるのは，そこにバージョン（もしくはタグ，Revision）を指定できないこと．そのため独立した2つの&lt;code&gt;go get&lt;/code&gt;が異なるコードをfetchしてしまう可能性がある．そのコードが互換をぶっ壊していたらビルドは失敗するかもしれない．つまり現状何もしないとビルドの再現性は保証できない．&lt;/p&gt;
+
+&lt;p&gt;では以下のようにタグやバージョンを書けるようにすれば?となる．が，これは言語の互換を壊すことになる．&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-go&#34;&gt;import &amp;quot;github.com/pkg/term&amp;quot; &amp;quot;{hash,tag,version}&amp;quot;
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;以下のようにディレクトリ名にバージョン番号を埋め込むという方法もよく見る．が，これも結局異なるRevisionのコードをFetchしてまうことに変わりはなくビルドに再現性があるとは言えない．&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-go&#34;&gt;import &amp;quot;github.com/project/v7/library&amp;quot;
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;h2 id=&#34;vendoring:c291a143fe15f6359ac59e461ca480d7&#34;&gt;Vendoring&lt;/h2&gt;
+
+&lt;p&gt;再現性の問題を解決する方法として，依存するレポジトリを自分のレポジトリにそのまま含めてしまう（vendoringと呼ばれる）方法がある．こうしておくと依存レポジトリのupstreamの変更に影響を受けず，いつでもどのマシンでもビルドを再現できる．&lt;/p&gt;
+
+&lt;p&gt;しかし何もしないとコンパイラがそのレポジトリのPathを探せなくなりビルドができなくなる．ビルドするには以下のどちらかを行う必要がある．&lt;/p&gt;
+
+&lt;ul&gt;
+&lt;li&gt;&lt;code&gt;$GOPATH&lt;/code&gt;の書き換え&lt;/li&gt;
+&lt;li&gt;&lt;code&gt;import&lt;/code&gt;の書き換え&lt;/li&gt;
+&lt;/ul&gt;
+
+&lt;h3 id=&#34;gopath-の書き換え:c291a143fe15f6359ac59e461ca480d7&#34;&gt;&lt;code&gt;$GOPATH&lt;/code&gt;の書き換え&lt;/h3&gt;
+
+&lt;p&gt;まずは&lt;code&gt;$GOPATH&lt;/code&gt;を書き換える方法．この場合はそもそもコードをvendoringするときに&lt;code&gt;$GOPATH/src/github.com...&lt;/code&gt;と同じディレクトリ構成を作らなければならない．その上でそのディレクトリを&lt;code&gt;$GOPATH&lt;/code&gt;に追加してビルドを実行する．&lt;/p&gt;
+
+&lt;p&gt;例えば外部パッケージ&lt;a href=&#34;https://github.com/mitchellh/cli&#34;&gt;mitchellh/cli&lt;/a&gt;をレポジトリ内の&lt;code&gt;ext&lt;/code&gt;ディレクトリにvendoringしたい場合は，まず以下のようなディレクトリ構成でそれをvendoringをする．&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-go&#34;&gt;$ tree ext
+ext
+└── src
+    └── github.com
+        └── mitchellh
+            └── cli
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;そしてビルド時は以下のように&lt;code&gt;$GOPATH&lt;/code&gt;に&lt;code&gt;ext&lt;/code&gt;ディレクトリを含めるようにする．&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-bash&#34;&gt;$ GOPATH=$(pwd)/ext:$GOPATH go build 
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;このやり方が微妙なのは毎回自分で&lt;code&gt;$GOPATH&lt;/code&gt;の変更を意識しないといけないこと（Fork先でも意識してもらわないといけない）．&lt;/p&gt;
+
+&lt;h3 id=&#34;importの書き換え:c291a143fe15f6359ac59e461ca480d7&#34;&gt;importの書き換え&lt;/h3&gt;
+
+&lt;p&gt;次に&lt;code&gt;import&lt;/code&gt;を書き換える方法．レポジトリ内のvendoringしたディレクトリへと書き換えてしまう．例えば&lt;code&gt;github.com/tcnksm/r&lt;/code&gt;というレポジトリの&lt;code&gt;ext&lt;/code&gt;ディレクトリに外部パッケージ&lt;a href=&#34;https://github.com/mitchellh/cli&#34;&gt;mitchellh/cli&lt;/a&gt;をvendoringしたとする．この場合は以下のように&lt;code&gt;import&lt;/code&gt;を書き換える．&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-go&#34;&gt;import &amp;quot;github.com/mitchellh/cli&amp;quot; // Before
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-go&#34;&gt;import &amp;quot;github.com/tcnksm/r/ext/cli&amp;quot; // After
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;これはあまり見ない．そもそもソースを書き換えるのが好まれないし，upstreamを見失うかもしれない．また多くの場合&lt;code&gt;import&lt;/code&gt;文が異常に長く複雑になる．&lt;/p&gt;
+
+&lt;h3 id=&#34;godep:c291a143fe15f6359ac59e461ca480d7&#34;&gt;Godep&lt;/h3&gt;
+
+&lt;p&gt;&lt;code&gt;$GOPATH&lt;/code&gt;の書き換えやそれに合ったディレクトリの作成，&lt;code&gt;import&lt;/code&gt;の書き換えを自分で管理するのは煩雑なのでこれらを簡単にするツールは多く登場している．その中で多く使われているのが&lt;a href=&#34;https://github.com/tools/godep&#34;&gt;godep&lt;/a&gt;というツール．&lt;/p&gt;
+
+&lt;p&gt;&lt;code&gt;godep&lt;/code&gt;は使い始めるのも簡単で，例えば現在のレポジトリの依存をすべてvendoringするには以下を実行するだけで良い．&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-bash&#34;&gt;$ godep save
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;&lt;code&gt;godep&lt;/code&gt;はレポジトリ内に&lt;code&gt;Godep/_workspace&lt;/code&gt;を作成しその中に&lt;code&gt;$GOPATH&lt;/code&gt;の流儀に従い依存をvendoringする．そして同時に&lt;code&gt;Godep.json&lt;/code&gt;ファイルを作成し依存のバージョンも管理してくれる．&lt;/p&gt;
+
+&lt;p&gt;&lt;code&gt;go&lt;/code&gt;コマンドを実行する場合は，以下のようにそれを&lt;code&gt;godep&lt;/code&gt;でラップすれば&lt;code&gt;$GOAPTH&lt;/code&gt;の書き換えもしてくれる．&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-bash&#34;&gt;$ godep go build
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;&lt;code&gt;godep save -r&lt;/code&gt;とすると&lt;code&gt;import&lt;/code&gt;を書き換えになる．そうすると以後&lt;code&gt;$GOPATH&lt;/code&gt;の書き換えは不要になり&lt;code&gt;godep&lt;/code&gt;コマンドは不要になる．&lt;/p&gt;
+
+&lt;h3 id=&#34;godep-1:c291a143fe15f6359ac59e461ca480d7&#34;&gt;Godep?&lt;/h3&gt;
+
+&lt;p&gt;&lt;code&gt;Godep&lt;/code&gt;は多く使われているが以下のような問題がある&lt;/p&gt;
+
+&lt;ul&gt;
+&lt;li&gt;&lt;code&gt;Godep.json&lt;/code&gt;は決定版の依存管理ファイルではない&lt;/li&gt;
+&lt;li&gt;そもそも依存管理ファイル（&lt;code&gt;Godep.json&lt;/code&gt;）を持つのが鬱陶しい&lt;/li&gt;
+&lt;li&gt;&lt;code&gt;$GOAPATH&lt;/code&gt;書き換え方式だと&lt;code&gt;go get&lt;/code&gt;が使えない&lt;/li&gt;
+&lt;/ul&gt;
+
+&lt;p&gt;&lt;code&gt;import&lt;/code&gt;の書き換え（&lt;code&gt;godep save -r&lt;/code&gt;）をすると&lt;code&gt;go get&lt;/code&gt;は使えるが問題が起こる．例えば&lt;code&gt;r&lt;/code&gt;というレポジトリがあり，mainパッケージ&lt;code&gt;r/c&lt;/code&gt;とmainパッケージではない&lt;code&gt;r/p&lt;/code&gt;があるとする．&lt;code&gt;r/c&lt;/code&gt;は&lt;code&gt;r/p&lt;/code&gt;をimportしており，&lt;code&gt;r/p&lt;/code&gt;は外部パッケージの&lt;code&gt;d&lt;/code&gt;に依存しているとする．このとき&lt;code&gt;d&lt;/code&gt;を&lt;code&gt;r/Godeps/_workspace&lt;/code&gt;にvendoringして&lt;code&gt;import&lt;/code&gt;を&lt;code&gt;d&lt;/code&gt;から&lt;code&gt;r/Godeps/_workspace/.../d&lt;/code&gt;に書き換えるとする．&lt;/p&gt;
+
+&lt;p&gt;これだけなら問題ないが，別のパッケージ&lt;code&gt;u&lt;/code&gt;が登場して&lt;code&gt;r/p&lt;/code&gt;と&lt;code&gt;d&lt;/code&gt;に依存していると問題が起こる．&lt;code&gt;r/p&lt;/code&gt;はもはや&lt;code&gt;d&lt;/code&gt;に依存しておらず&lt;code&gt;r/Godeps/_workspace/.../d&lt;/code&gt;をimportする．&lt;code&gt;d&lt;/code&gt;と&lt;code&gt;r/Godeps/_workspace/.../d&lt;/code&gt;は異なるパッケージなのでtype assertionなどで死ぬ&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-bash&#34;&gt;cannot use d (type &amp;quot;github.com/tcnksm/r/Godeps/_workspace/src/github.com/dep/d&amp;quot;.D) as type &amp;quot;github.com/tcnksm/d&amp;quot;.D in argument to ...
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;こういうわけでvendoringはまだ最高の解が存在するとは言えない．&lt;/p&gt;
+
+&lt;h2 id=&#34;gb:c291a143fe15f6359ac59e461ca480d7&#34;&gt;gb&lt;/h2&gt;
+
+&lt;ul&gt;
+&lt;li&gt;&lt;a href=&#34;http://dave.cheney.net/2015/06/09/gb-a-project-based-build-tool-for-the-go-programming-language&#34;&gt;gb, a project based build tool for the Go programming language&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a href=&#34;http://getgb.io/rationale/&#34;&gt;gb · Design rationale&lt;/a&gt;&lt;/li&gt;
+&lt;/ul&gt;
+
+&lt;p&gt;そんな中&lt;code&gt;gb&lt;/code&gt;というツールも登場している．&lt;code&gt;gb&lt;/code&gt;はプロジェクトベースのビルドツール．プロジェクトごとに必要なコード/その依存をすべてvendoringし同じビルドを再現する．なぜプロジェクトベースが良いのか．&lt;/p&gt;
+
+&lt;ul&gt;
+&lt;li&gt;自分で書いたコードとそれが依存する他人が書いたコードを明確に分けて（ディレクトリを分けて）管理することができる&lt;/li&gt;
+&lt;li&gt;ビルドのたびに外部にfetchする必要がなくいつでもビルドができる．外的要因（e.g., GitHubがダウンしている）の影響を受けない&lt;/li&gt;
+&lt;li&gt;逆に依存はすべてプロジェクトに含まれているので依存ライブラリのアップデートはatomicになり，チームメンバーすべてに影響する（&lt;code&gt;go get -u&lt;/code&gt;は不要になる）&lt;/li&gt;
+&lt;/ul&gt;
+
+&lt;p&gt;そして&lt;code&gt;gb&lt;/code&gt;には以下の特徴がある．&lt;/p&gt;
+
+&lt;ul&gt;
+&lt;li&gt;&lt;code&gt;go&lt;/code&gt; toolのWrapperではない（すべて書き直されている）&lt;/li&gt;
+&lt;li&gt;&lt;code&gt;$GOPATH&lt;/code&gt;の書き換えをしない&lt;/li&gt;
+&lt;li&gt;&lt;code&gt;import&lt;/code&gt;の書き換えをしない&lt;/li&gt;
+&lt;li&gt;依存管理ファイルが必要ない（&lt;code&gt;gb-vendor&lt;/code&gt;プラグインを使うと必要）&lt;/li&gt;
+&lt;/ul&gt;
+
+&lt;p&gt;使い心地は&lt;a href=&#34;http://dave.cheney.net/2015/06/09/gb-a-project-based-build-tool-for-the-go-programming-language&#34;&gt;本人による記事&lt;/a&gt;を見るのが良い．プロジェクトとしてすべてのコードを管理することになるのでシンプルかつ明確になるなと思う．vendoringと自分のソースの境界も明確なので，vendoringしたパッケージのアップデートもそこまで苦ではない（&lt;code&gt;gb-vendor&lt;/code&gt;を使う，もしくは&lt;code&gt;git&lt;/code&gt;や&lt;code&gt;hg&lt;/code&gt;を使う）．&lt;/p&gt;
+
+&lt;p&gt;&lt;code&gt;Godep&lt;/code&gt;のようなハックではないのも良い．特に複数人のチームで大規模な開発をしていくときに便利なのではと思う（そういう場合がちゃんと考えられてる）．「&lt;code&gt;go&lt;/code&gt;toolの書き直し」て！と思うかもしれないがDave Chaney氏なので信頼できる．&lt;/p&gt;
+
+&lt;h2 id=&#34;go1-5:c291a143fe15f6359ac59e461ca480d7&#34;&gt;Go1.5&lt;/h2&gt;
+
+&lt;ul&gt;
+&lt;li&gt;&lt;a href=&#34;https://docs.google.com/document/d/1CJnU6ZKvsp21B0lQwbJlKFt8Zz4EWscaCRy_EwK8ja8&#34;&gt;Go 1.5+ &amp;ldquo;External&amp;rdquo; Packages&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a href=&#34;https://groups.google.com/forum/#!msg/golang-dev/74zjMON9glU/4lWCRDCRZg0J&#34;&gt;proposal: external packages&lt;/a&gt;&lt;/li&gt;
+&lt;/ul&gt;
+
+&lt;p&gt;Go本家もちゃんとこの問題には取り組んでいて2015年8月にリリースされる予定になっているGo1.5にvendoringの機能が実験的に入りそう．まだちゃんとしたProposalではなさそうだが以下のようになりそう．&lt;/p&gt;
+
+&lt;ul&gt;
+&lt;li&gt;&lt;code&gt;r&lt;/code&gt;というレポジトリのパッケージ&lt;code&gt;r/p&lt;/code&gt;がパッケージ&lt;code&gt;d&lt;/code&gt;に依存しているとする&lt;/li&gt;
+&lt;li&gt;パッケージ&lt;code&gt;d&lt;/code&gt;を&lt;code&gt;r/vendor/d&lt;/code&gt;にvendoringし&lt;code&gt;r&lt;/code&gt;内でビルドすると&lt;code&gt;d&lt;/code&gt;は&lt;code&gt;r/vendor/d&lt;/code&gt;と解釈される&lt;/li&gt;
+&lt;li&gt;&lt;code&gt;r/vendor/p&lt;/code&gt;が存在しない（vendoringしていない）場合は&lt;code&gt;p&lt;/code&gt;と解釈する&lt;/li&gt;
+&lt;li&gt;複数の解釈がありえる場合はもっとも長いspecificなものを選択する&lt;/li&gt;
+&lt;/ul&gt;
+
+&lt;p&gt;例えば&lt;code&gt;github.com/tcnksm/r&lt;/code&gt;というレポジトリに&lt;a href=&#34;https://github.com/mitchellh/cli&#34;&gt;mitchellh/cli&lt;/a&gt;をvendoringしたい場合は，&lt;code&gt;vendor&lt;/code&gt;ディレクトリに以下のようにvendoringする．&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-go&#34;&gt;$ tree vendor
+vendor
+└── github.com
+    └── mitchellh
+        └── cli
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;この時vendoring機能を有効にしてビルドすると&lt;code&gt;vendor&lt;/code&gt;が存在するので&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-go&#34;&gt;import &amp;quot;github.com/mitchellh/cli&amp;quot;
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;は，以下のように解釈される．&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-go&#34;&gt;import &amp;quot;github.com/tcnksm/r/vendor/github.com/mitchellh/cli&amp;quot;
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;この機能はすでに試すことができる．Go1.5をビルドして以下の環境変数を有効にすればよい．&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-bash&#34;&gt;$ export GO15VENDOREXPERIMENT=1
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;これは&lt;code&gt;import&lt;/code&gt;文のResolution（解像度）を考慮しないといけなくなるが，普通に良さそう．&lt;code&gt;import&lt;/code&gt;を書き換える必要もないし&lt;code&gt;vendor&lt;/code&gt;を使うか使わないかをプロジェクトごとにわけることができる．まだ確定ではないので静観するが&lt;code&gt;go&lt;/code&gt; toolだけでなんとかできるならそれに越したことはない．&lt;/p&gt;
+
+&lt;h2 id=&#34;まとめ:c291a143fe15f6359ac59e461ca480d7&#34;&gt;まとめ&lt;/h2&gt;
+
+&lt;p&gt;とりあえず社内でチーム開発するもの，かつ大規模になりそう（外部の依存が多そう）なものには&lt;code&gt;gb&lt;/code&gt;を考えてみても良いのではと思っている．個人的に開発してるものはそこまで外部パッケージに依存してないので困ってない．もし必要になればGo本家が確定するまでは&lt;code&gt;Makefile&lt;/code&gt;と&lt;code&gt;Godep&lt;/code&gt;で頑張る．&lt;/p&gt;
+
+&lt;h3 id=&#34;参考:c291a143fe15f6359ac59e461ca480d7&#34;&gt;参考&lt;/h3&gt;
+
+&lt;ul&gt;
+&lt;li&gt;&lt;a href=&#34;http://go-talks.appspot.com/github.com/davecheney/presentations/reproducible-builds.slide#1&#34;&gt;Reproducible Builds&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a href=&#34;https://walledcity.com/supermighty/building-go-projects-with-gb&#34;&gt;Building Go projects with gb - Supermighty&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a href=&#34;https://github.com/tools/godep/issues/127&#34;&gt;how to rewrite import paths #127&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a href=&#34;http://talks.golang.org/2015/state-of-go-may.slide#1&#34;&gt;The State of Go&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a href=&#34;http://talks.golang.org/2015/gogo.slide#1&#34;&gt;Go in Go&lt;/a&gt;&lt;/li&gt;
+&lt;/ul&gt;
+</description>
+    </item>
+    
+    <item>
+      <title>サンフランシスコでたくさんコーヒー飲んだ</title>
+      <link>http://deeeet.com/writing/2015/06/07/sf-coffee/</link>
+      <pubDate>Sun, 07 Jun 2015 23:03:03 -0700</pubDate>
+      
+      <guid>http://deeeet.com/writing/2015/06/07/sf-coffee/</guid>
+      <description>
+
+&lt;p&gt;&lt;a href=&#34;https://events.google.com/io2015/&#34;&gt;Google I/O 2015&lt;/a&gt;のためにサンフランシスコを訪れた．サンフランシスコといえば対岸のオークランドにサードウェーブの代表格となったBlue Bottle Coffeeの焙煎所があり，サードウェーブコーヒーの流れを受けた様々な有名ロースターが存在している．コーヒー狂としてはロースター巡りをせずにはいられず滞在中は時間があればロースターに行っていた．以下は行ったところまとめ．&lt;/p&gt;
+
+&lt;p&gt;&lt;img src=&#34;http://deeeet.com/images/four-barrel.jpg&#34; class=&#34;image&#34;&gt;&lt;/p&gt;
+
+&lt;p&gt;&lt;a href=&#34;http://fourbarrelcoffee.com/&#34;&gt;Four Barrel Coffee&lt;/a&gt;．Valencia St.にある．Drip Coffee（Pour-over）のために別途スタンドが準備されていて店員が豆の説明をしながら丁寧にドリップをしてくれる．COLOMBIAのla CABANA農場のものを飲んだがこれが圧倒的に美味かった（今回一番美味しかったと思う）．衝撃を受けた．ここは&lt;a href=&#34;http://www.huffingtonpost.com/2012/08/27/four-barrel-coffee-shop-instagram-ban_n_1832998.html&#34;&gt;&amp;ldquo;Four Barrel, San Francisco Coffee Shop, Bans Instagram Photos, &amp;lsquo;Hipster Topics&amp;rsquo;&amp;rdquo;&lt;/a&gt;が有名で，厳しい感じなのかなと思ったが，今はこの張り紙は見当たらなかった．店内はエイジングされた木材と鉄のインテリアを基調とした男臭い感じでかっこ良かった．&lt;/p&gt;
+
+&lt;p&gt;&lt;img src=&#34;http://deeeet.com/images/ritual.jpg&#34; class=&#34;image&#34;&gt;&lt;/p&gt;
+
+&lt;p&gt;&lt;a href=&#34;http://www.ritualroasters.com/&#34;&gt;Ritual Coffee&lt;/a&gt;．これもValencia St.にある（Mission Dolores Parkの近く）．赤色のロゴマークが特徴．ここでは&lt;a href=&#34;http://www.ritualroasters.com/original-coffee-club/sweet-tooth-espresso/&#34;&gt;&amp;ldquo;Sweet Tooth Espresso&amp;rdquo;&lt;/a&gt;を飲んだ．Sweet toothという豆は農園に対して金銭的/知的投資をし長年かけて丁寧に作られたことで有名．これも衝撃的だった．最初に少し強目の酸味を感じるが後味はすっきりしていて体験したことのない味だった（玄人向けらしい&amp;hellip;）．店内も白を基調としていても良い雰囲気だった（Flickrの社員とかが昔ミーティングをここでやっていたとか）&lt;/p&gt;
+
+&lt;p&gt;&lt;img src=&#34;http://deeeet.com/images/sight.jpg&#34; class=&#34;image&#34;&gt;&lt;/p&gt;
+
+&lt;p&gt;&lt;img src=&#34;http://deeeet.com/images/sight2.jpg&#34; class=&#34;image&#34;&gt;&lt;/p&gt;
+
+&lt;p&gt;&lt;a href=&#34;https://www.sightglasscoffee.com/&#34;&gt;Sightglass Coffee&lt;/a&gt;．SOMA地区にある（夕方になるとちょっと怖い）．SquareのJack Dorseyが投資していることで有名．ここは2回訪れてそれぞれDripとAffogato（Espresso+Ice cream）を飲んだ．Affogatoは初めて飲んだがSingle Origin豆の独特の酸味と苦味+アイスの甘さ（アイスは試食して好きなの選べる）を合わせて不思議な味がした．Sightglassは2階まで席があり，自然光を取り込んだ店内はいい感じに明るくて過ごしやすい．PCを開いて作業をしているひとや最近作ったアプリについてアツく議論している人などがいて良い雰囲気だった．ここで書くGo言語は最高だった．通いたい．&lt;/p&gt;
+
+&lt;p&gt;&lt;img src=&#34;http://deeeet.com/images/beacon.jpg&#34; class=&#34;image&#34;&gt;&lt;/p&gt;
+
+&lt;p&gt;&lt;a href=&#34;http://www.beacon-sf.com/&#34;&gt;Beacon Coffee &amp;amp; Pantry&lt;/a&gt;．Fisherman&amp;rsquo;s wharfの帰りに偶然発見した．Washington Square付近にある．Sightglassの豆を使っている．丁寧にDripをしてくれてとても美味しかった．自分も家で使っている&lt;a href=&#34;http://www.aoyoshi.co.jp/&#34;&gt;青芳製作所&lt;/a&gt;のヤカンを使ってドリップをしていた（他の店でも日本製のドリッパーなどをたくさん見かけた．特にHARIO）．ふらっと歩いていても美味いコーヒー屋にぶつかるなんて最高だなと思った．Take outしてWashington Squareで謎の遊戯にいそしむ若者たちを眺めつつ飲んだ．&lt;/p&gt;
+
+&lt;p&gt;&lt;img src=&#34;http://deeeet.com/images/blue.jpg&#34; class=&#34;image&#34;&gt;&lt;/p&gt;
+
+&lt;p&gt;&lt;a href=&#34;https://bluebottlecoffee.com/&#34;&gt;Blue Bottle Coffee&lt;/a&gt;．Mint Plaza．サードウェーブの代表格として有名．Tech系の企業からもたくさん投資を受けている（cf. &lt;a href=&#34;http://wired.jp/special/2015/bluebottle/&#34;&gt;ブルーボトルの夢：「コーヒー界のアップル」はいかに4,500万ドルを調達したか« WIRED.jp&lt;/a&gt;）．最近東京にも進出したので特に行く必要ないと思ってたけど，東京とは違った雰囲気があるかなと思い行ってみた．Dripを頼んだが，店内ではSiphonを多く見かけた．元々なのか今はそちらを推しているのか．何れにせよ次行くときはSiphonを試したい．店内は洗練されていて素敵だった．&lt;/p&gt;
+
+&lt;p&gt;&lt;a href=&#34;http://www.coffeebarsf.com/&#34;&gt;Coffee Bar&lt;/a&gt;．Bryant St.にある（Four Barrelの近く）．&lt;a href=&#34;http://mrespresso.com/&#34;&gt;Mr. Espresso&lt;/a&gt;のプロデュースとして有名．時間がなくて店内で飲むことはできなかったがいくつか豆を購入した．後日スペイン料理を食べに行ったときにちょうど食後の飲み物としてMr. Espressoの豆を使ったEspressoが提供されていて飲むことができた．こんなに飲みやすいEspressoは初めてだ！と思うくらいすっきりした味わいで美味しかった．&lt;/p&gt;
+
+&lt;p&gt;他にも&lt;a href=&#34;https://plus.google.com/105646394886961700159/about&#34;&gt;Haus Coffee&lt;/a&gt;や&lt;a href=&#34;https://plus.google.com/105218901398707131415/about&#34;&gt;cento&lt;/a&gt;にも行った．&lt;/p&gt;
+
+&lt;p&gt;行きたくていけなかったのは&lt;a href=&#34;http://www.wreckingballcoffee.com/&#34;&gt;Wrecking Ball Coffee&lt;/a&gt;とか&lt;a href=&#34;http://www.equatorcoffees.com/&#34;&gt;Equator Coffee&lt;/a&gt;とかCafe 3016とか．次回来るときは絶対挑戦したい．&lt;/p&gt;
+
+&lt;h2 id=&#34;日本:ca16367880a872ea584be17243585363&#34;&gt;日本&lt;/h2&gt;
+
+&lt;p&gt;日本にもサードウェーブに影響を受けたロースターがいくつかある．以下で軽くまとめた．&lt;/p&gt;
+
+&lt;ul&gt;
+&lt;li&gt;&lt;a href=&#34;http://deeeet.com/writing/2014/01/21/third-wave-tokyo/&#34;&gt;東京サードウェーブコーヒー&lt;/a&gt;&lt;/li&gt;
+&lt;/ul&gt;
+
+&lt;h2 id=&#34;参考:ca16367880a872ea584be17243585363&#34;&gt;参考&lt;/h2&gt;
+
+&lt;p&gt;サードウェーブのコーヒー文化は&lt;a href=&#34;http://www.chataromameoh.com/&#34;&gt;茶太郎豆央&lt;/a&gt;さんの一連の書籍から学んだ（1冊目はkindleで出版されていてさらっと読めるので興味のあるひとは是非）．&lt;/p&gt;
+
+&lt;ul&gt;
+&lt;li&gt;&lt;a href=&#34;http://www.amazon.co.jp/%E3%82%B5%E3%83%BC%E3%83%89%E3%82%A6%E3%82%A7%E3%83%BC%E3%83%96%EF%BC%81-%EF%BC%9A-%E3%82%B5%E3%83%B3%E3%83%95%E3%83%A9%E3%83%B3%E3%82%B7%E3%82%B9%E3%82%B3%E5%91%A8%E8%BE%BA%E3%81%A7%E4%BD%93%E9%A8%93%E3%81%97%E3%81%9F%E6%9C%80%E6%96%B0%E3%82%B3%E3%83%BC%E3%83%92%E3%83%BC%E3%82%AB%E3%83%AB%E3%83%81%E3%83%A3%E3%83%BC-%E8%8C%B6%E5%A4%AA%E9%83%8E%E8%B1%86%E5%A4%AE-ebook/dp/B00CQW6XLK/ref=sr_1_2?s=books&amp;amp;ie=UTF8&amp;amp;qid=1409561101&amp;amp;sr=1-2&amp;amp;keywords=%E3%82%B5%E3%83%BC%E3%83%89%E3%82%A6%E3%82%A7%E3%83%BC%E3%83%96&#34;&gt;サードウェーブ！：サンフランシスコ周辺で体験した最新コーヒーカルチャー&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a href=&#34;http://www.amazon.co.jp/%E3%82%B5%E3%83%BC%E3%83%89%E3%82%A6%E3%82%A7%E3%83%BC%E3%83%96%E3%83%BB%E3%82%B3%E3%83%BC%E3%83%92%E3%83%BC%E8%AA%AD%E6%9C%AC-%E8%8C%B6%E5%A4%AA%E9%83%8E-%E8%B1%86%E5%A4%AE/dp/4777930289&#34;&gt;サードウェーブ・コーヒー読本&lt;/a&gt;&lt;/li&gt;
+&lt;/ul&gt;
+
+&lt;p&gt;以下の書籍はコーヒーの味について科学的な視点から知れて良い．自分でコーヒー入れるひとは読んでみてもいいかもしれない（例えば酸味成分と苦味成分がどのように抽出されるのか，それはなぜかを知れたりする）．&lt;/p&gt;
+
+&lt;ul&gt;
+&lt;li&gt;&lt;a href=&#34;http://www.amazon.co.jp/%E3%82%B3%E3%83%BC%E3%83%92%E3%83%BC%E3%80%8C%E3%81%93%E3%81%A4%E3%80%8D%E3%81%AE%E7%A7%91%E5%AD%A6%E2%80%95%E3%82%B3%E3%83%BC%E3%83%92%E3%83%BC%E3%82%92%E6%AD%A3%E3%81%97%E3%81%8F%E7%9F%A5%E3%82%8B%E3%81%9F%E3%82%81%E3%81%AB-%E7%9F%B3%E8%84%87-%E6%99%BA%E5%BA%83/dp/4388251143&#34;&gt;コーヒー「こつ」の科学コヒを正しく知るために&lt;/a&gt;&lt;/li&gt;
+&lt;/ul&gt;
+</description>
+    </item>
+    
+    <item>
+      <title>Docker社を訪問した</title>
+      <link>http://deeeet.com/writing/2015/06/03/visit-docker-inc/</link>
+      <pubDate>Wed, 03 Jun 2015 16:56:34 -0700</pubDate>
+      
+      <guid>http://deeeet.com/writing/2015/06/03/visit-docker-inc/</guid>
+      <description>
+
+&lt;p&gt;&lt;a href=&#34;https://events.google.com/io2015/&#34;&gt;Google I/O 2015&lt;/a&gt;のためにサンフランシスコを訪れたついでに&lt;a href=&#34;https://www.docker.com/company/aboutus/&#34;&gt;Docker社&lt;/a&gt;に遊びに行った．Docker社はサンフランシスコのダウンタウンを南に下った&lt;a href=&#34;https://www.google.com/maps/d/viewer?mid=zgJryUbRGlCk.klK5KLv_blEU&#34;&gt;475 Brannan St.&lt;/a&gt;にある（ちなみに275にはGitHub社がある）．&lt;/p&gt;
+
+&lt;p&gt;迎えてくれたのは&lt;a href=&#34;https://twitter.com/upthecyberpunks&#34;&gt;Nathan&lt;/a&gt;．Nathanとは昨年東京で開催された&lt;a href=&#34;http://eventregist.com/e/ChefDockerOpenStack&#34;&gt;Communities meetup Chef, Docker, Openstack, Puppet&lt;/a&gt;で出会った．その後もtwitterで絡んでおり今回訪問させてもらうことになった．&lt;/p&gt;
+
+&lt;p&gt;&lt;img src=&#34;http://deeeet.com/images/docker-cafe.JPG&#34; class=&#34;image&#34;&gt;&lt;/p&gt;
+
+&lt;p&gt;まず，近くにカフェ（Blue Bottleで焙煎された豆を使っていた）がありコーヒーを片手に近況などをゆっくり話した．Nathanは&lt;a href=&#34;https://github.com/docker/machine&#34;&gt;Docker Machine&lt;/a&gt;をメインに担当していて，最近追加した機能や今後の予定などについて語ってくれた．今はv0.3.0に向けてRCを出して絶賛テスト中とのこと．Docker Machineは他社のサービスに依存するのでテストはなかなか大変らしい．&lt;/p&gt;
+
+&lt;p&gt;Docker Machineは今後Dockerデーモンの煩雑な設定を楽にする方向に向かうとのこと（詳しくはどこまで言っていいのかわからないので書きません）．Docker Machineでデーモン層をDocker Composeでコンテナ層をと担当を分けるてDockerを使った開発・運用を楽にしていく．Dockerを使った開発環境の構築を楽にしたいという思いがめちゃ伝わって良かった．&lt;/p&gt;
+
+&lt;p&gt;もともとWebエンジニアでPHPとかを書いてたけどGo言語に興味もって書いててGo言語ならDockerっしょとなりDockerに就職できたという夢のある話も聞いた．Go言語書くぞ！&lt;/p&gt;
+
+&lt;p&gt;その後はオフィスの様子を見せてもらった．&lt;/p&gt;
+
+&lt;h2 id=&#34;オフィスの様子:7bf1adf36c6519efd55d7353dd1d6672&#34;&gt;オフィスの様子&lt;/h2&gt;
+
+&lt;p&gt;建物の入り口（他にもいくつかの企業が入っていた）&lt;/p&gt;
+
+&lt;p&gt;&lt;img src=&#34;http://deeeet.com/images/docker-1entrance.JPG&#34; class=&#34;image&#34;&gt;&lt;/p&gt;
+
+&lt;p&gt;受付&lt;/p&gt;
+
+&lt;p&gt;&lt;img src=&#34;http://deeeet.com/images/docker-entrance.JPG&#34; class=&#34;image&#34;&gt;&lt;/p&gt;
+
+&lt;p&gt;オフィス&lt;/p&gt;
+
+&lt;p&gt;&lt;img src=&#34;http://deeeet.com/images/docker-office1.JPG&#34; class=&#34;image&#34;&gt;&lt;/p&gt;
+
+&lt;p&gt;&lt;img src=&#34;http://deeeet.com/images/docker-office2.JPG&#34; class=&#34;image&#34;&gt;&lt;/p&gt;
+
+&lt;p&gt;&lt;img src=&#34;http://deeeet.com/images/docker-office3.JPG&#34; class=&#34;image&#34;&gt;&lt;/p&gt;
+
+&lt;p&gt;Nathanの（自作）スタンディングデスク&lt;/p&gt;
+
+&lt;p&gt;&lt;img src=&#34;http://deeeet.com/images/docker-stand.JPG&#34; class=&#34;image&#34;&gt;&lt;/p&gt;
+
+&lt;p&gt;キッチン&lt;/p&gt;
+
+&lt;p&gt;&lt;img src=&#34;http://deeeet.com/images/docker-kit1.JPG&#34; class=&#34;image&#34;&gt;&lt;/p&gt;
+
+&lt;p&gt;非公式キャラクター（クジラは飼えない）&lt;/p&gt;
+
+&lt;p&gt;&lt;img src=&#34;http://deeeet.com/images/docker-tur2.JPG&#34; class=&#34;image&#34;&gt;&lt;/p&gt;
+
+&lt;p&gt;任天堂との繋がり&lt;/p&gt;
+
+&lt;p&gt;&lt;img src=&#34;http://deeeet.com/images/docker-game.JPG&#34; class=&#34;image&#34;&gt;&lt;/p&gt;
+
+&lt;p&gt;コンテナ&lt;/p&gt;
+
+&lt;p&gt;&lt;img src=&#34;http://deeeet.com/images/container.JPG&#34; class=&#34;image&#34;&gt;&lt;/p&gt;
+
+&lt;h2 id=&#34;まとめ:7bf1adf36c6519efd55d7353dd1d6672&#34;&gt;まとめ&lt;/h2&gt;
+
+&lt;p&gt;Nathanは今年のYAPC::2015で発表する予定になっているので絶対聞きに行きましょう！（&lt;a href=&#34;http://yapcasia.org/2015/talk/show/21cb8176-065b-11e5-9492-79c97d574c3a&#34;&gt;&amp;ldquo;Docker For Polyglots : Where We&amp;rsquo;ve Come From, and Where We Can Go&amp;rdquo;&lt;/a&gt;）．日本でDockerのエンジニアの話を聞けるのはめちゃめちゃ貴重だと思います．&lt;/p&gt;
+
+&lt;p&gt;Thanks, Nathan :)&lt;/p&gt;
+</description>
+    </item>
+    
+    <item>
+      <title>Golang Cross Compiler on Heroku (with Docker)</title>
+      <link>http://deeeet.com/writing/2015/05/11/gox-server/</link>
+      <pubDate>Mon, 11 May 2015 22:35:55 +0900</pubDate>
+      
+      <guid>http://deeeet.com/writing/2015/05/11/gox-server/</guid>
+      <description>
+
+&lt;p&gt;Heroku unveils new CLI functionality &lt;code&gt;heroku docker:release&lt;/code&gt; (cf. &lt;a href=&#34;https://blog.heroku.com/archives/2015/5/5/introducing_heroku_docker_release_build_deploy_heroku_apps_with_docker&#34;&gt;&amp;ldquo;Heroku | Introducing &amp;lsquo;heroku docker:release&amp;rsquo;: Build &amp;amp; Deploy Heroku Apps with Docker&amp;rdquo;&lt;/a&gt;). You can run Heroku&amp;rsquo;s &lt;a href=&#34;https://devcenter.heroku.com/articles/cedar&#34;&gt;Cedar&lt;/a&gt; environment on Docker container and test your application in local environment (Environment parity). In addition to that, you can create &lt;a href=&#34;https://devcenter.heroku.com/articles/platform-api-deploying-slugs&#34;&gt;Slug&lt;/a&gt; from that docker image and deploy it directly to Heroku.&lt;/p&gt;
+
+&lt;p&gt;Before this release, Heroku provided the way to create Slug by &lt;a href=&#34;https://devcenter.heroku.com/articles/buildpacks&#34;&gt;Buildpack&lt;/a&gt;. Buildpack is powerful but for me it&amp;rsquo;s a little bit complex and hard to write from scratch. From this release you can create Slug from &lt;code&gt;Dockerfile&lt;/code&gt;. It&amp;rsquo;s more clearly and easy to understand.&lt;/p&gt;
+
+&lt;p&gt;So I played it and wrote a simple service, &lt;a href=&#34;https://github.com/tcnksm/gox-server&#34;&gt;tcnksm/gox-server&lt;/a&gt;. This is a golang cross compile service and you can run it on Heroku (Sample application is on &lt;a href=&#34;https://gox-server.herokuapp.com/&#34;&gt;https://gox-server.herokuapp.com/&lt;/a&gt;). You don&amp;rsquo;t need to prepare golang runtime on your local PC. You can get a binary from it (Currently support platform is Darwin/Linux/Windows, 386/amd64 and repository must be on Github).&lt;/p&gt;
+
+&lt;p&gt;Usage is simple. Just provide github repository and user name. For example, if you want to get &lt;a href=&#34;https://github.com/Soulou/curl-unix-socket&#34;&gt;github.com/Soulou/curl-unix-socket&lt;/a&gt; compiled binary,&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-bash&#34;&gt;$ curl -A &amp;quot;`uname -sp`&amp;quot; https://gox-server.herokuapp.com/Soulou/curl-unix-socket &amp;gt; curl-unix-socket
+$ chmod a+x curl-unix-socket
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;(This is just POC and playing with Heroku with Docker. Don&amp;rsquo;t depend on this service for production tooling, you should prepare your own build environment. And if repository owner provides binary as release, you should use it.)&lt;/p&gt;
+
+&lt;h2 id=&#34;tips-of-writing-dockefile-for-heroku:ae3429f92570d09ac34dd4270d8a59f5&#34;&gt;Tips of writing Dockefile for Heroku&lt;/h2&gt;
+
+&lt;p&gt;&lt;code&gt;Dockerfile&lt;/code&gt; for this project is &lt;a href=&#34;https://github.com/tcnksm/gox-server/blob/master/Dockerfile&#34;&gt;https://github.com/tcnksm/gox-server/blob/master/Dockerfile&lt;/a&gt;.&lt;/p&gt;
+
+&lt;p&gt;I&amp;rsquo;ve started from minimal template,&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-bash&#34;&gt;$ heroku docker:init --template minimal
+Wrote Dockerfile (minimal)
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;Miminal requirement we must follow is below,&lt;/p&gt;
+
+&lt;ul&gt;
+&lt;li&gt;Start &lt;code&gt;FROM heroku:cedar:14&lt;/code&gt;&lt;/li&gt;
+&lt;li&gt;Changes localized to the &lt;code&gt;/app&lt;/code&gt; directory&lt;/li&gt;
+&lt;/ul&gt;
+
+&lt;p&gt;While I was writing &lt;code&gt;Dockefile&lt;/code&gt; for Heroku Slug, I got some tips. So I&amp;rsquo;ll share them.&lt;/p&gt;
+
+&lt;h3 id=&#34;debugging:ae3429f92570d09ac34dd4270d8a59f5&#34;&gt;Debugging&lt;/h3&gt;
+
+&lt;p&gt;You can run application by &lt;code&gt;heroku docker:start&lt;/code&gt; command. Actually this is just docker container, so you can enter it like you do &lt;code&gt;heroku run bash&lt;/code&gt; for debug. Docker image name is &lt;code&gt;heroku-docker-${hash}-start&lt;/code&gt;,&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-bash&#34;&gt;$ docker run -it heroku-docker-${hash}-start /bin/bash
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;Or using &lt;code&gt;exec&lt;/code&gt; to running container.&lt;/p&gt;
+
+&lt;h3 id=&#34;slug-size:ae3429f92570d09ac34dd4270d8a59f5&#34;&gt;Slug size&lt;/h3&gt;
+
+&lt;p&gt;Slug size must be under &lt;code&gt;300MB&lt;/code&gt; (&lt;a href=&#34;https://devcenter.heroku.com/articles/slug-compiler#slug-size&#34;&gt;https://devcenter.heroku.com/articles/slug-compiler#slug-size&lt;/a&gt;). Check it by below commands,&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-bash&#34;&gt;$ docker run -it heroku-docker-${hash}-start /bin/bash
+$ tar cfvz /tmp/slug.tgz -C / --exclude=.git --exclude=.heroku ./app
+$ ls -lh /tmp/slug.tgz
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;(&lt;code&gt;tar&lt;/code&gt; command is same as &lt;code&gt;heroku docker:release&lt;/code&gt; command does)&lt;/p&gt;
+
+&lt;h3 id=&#34;procfile:ae3429f92570d09ac34dd4270d8a59f5&#34;&gt;Procfile&lt;/h3&gt;
+
+&lt;p&gt;You need to prepare &lt;code&gt;Procfile&lt;/code&gt; to run the application.&lt;/p&gt;
+
+&lt;p&gt;In &lt;code&gt;Procfile&lt;/code&gt;, you should not include environmental variable like &lt;code&gt;$PORT&lt;/code&gt;. It works on Heroku, but doesn&amp;rsquo;t work on local environment with &lt;code&gt;heroku docekr:start&lt;/code&gt;. Because &lt;code&gt;Procfile&lt;/code&gt; is  directly used for &lt;code&gt;docker run&lt;/code&gt; command and environmental variable in &lt;code&gt;Procfile&lt;/code&gt; would extract from your host machine, not docker container. So your need to read environment variable from your source code.&lt;/p&gt;
+
+&lt;h3 id=&#34;workdir:ae3429f92570d09ac34dd4270d8a59f5&#34;&gt;WORKDIR&lt;/h3&gt;
+
+&lt;p&gt;You may set &lt;code&gt;WORKDIR&lt;/code&gt; on &lt;code&gt;Dockerfile&lt;/code&gt;, root directory of &lt;code&gt;docker run&lt;/code&gt;. To enable it on Heroku environment, you need to write &lt;code&gt;.procfile.d&lt;/code&gt;, so that directory is changed when starting application.&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-bash&#34;&gt;ONBUILD RUN echo &amp;quot;cd /app/src/root&amp;quot;  &amp;gt;&amp;gt; /app/.profile.d/init.sh
+&lt;/code&gt;&lt;/pre&gt;
+</description>
+    </item>
+    
+    <item>
+      <title>Herokuの&#39;docker:release&#39;の動き</title>
+      <link>http://deeeet.com/writing/2015/05/07/heroku-docker/</link>
+      <pubDate>Thu, 07 May 2015 09:08:55 +0900</pubDate>
+      
+      <guid>http://deeeet.com/writing/2015/05/07/heroku-docker/</guid>
+      <description>
+
+&lt;p&gt;&lt;a href=&#34;https://blog.heroku.com/archives/2015/5/5/introducing_heroku_docker_release_build_deploy_heroku_apps_with_docker&#34;&gt;Introducing &amp;lsquo;heroku docker:release&amp;rsquo;: Build &amp;amp; Deploy Heroku Apps with Docker&lt;/a&gt;&lt;/p&gt;
+
+&lt;p&gt;HerokuがDockerを使ったツールを提供し始めた．一通り触ってコードもちょっと読んでみたので現時点でできること，内部の動きについてまとめる．&lt;/p&gt;
+
+&lt;h2 id=&#34;tl-dr:0491c64fbb9580a039fc1e6c54efd333&#34;&gt;TL;DR&lt;/h2&gt;
+
+&lt;ul&gt;
+&lt;li&gt;&lt;a href=&#34;https://twitter.com/miyagawa/status/596020653540528128&#34;&gt;Herokuのデプロイ環境とおなじものをDockerでつくれる&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;Buildpackを使わないで&lt;code&gt;Dockerfile&lt;/code&gt;からSlugを作れる&lt;/li&gt;
+&lt;/ul&gt;
+
+&lt;p&gt;自分の好きなDockerイメージをHeroku上で動かせるようになるわけではない．&lt;/p&gt;
+
+&lt;h2 id=&#34;何ができるのか:0491c64fbb9580a039fc1e6c54efd333&#34;&gt;何ができるのか&lt;/h2&gt;
+
+&lt;p&gt;まず何ができるようになったのかについて簡単に書く．プラグインをインストールするとDockerコマンドが使えるようになる．&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-bash&#34;&gt;$ heroku plugins:install heroku-docker
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;カレントディレクトリの言語/フレームワークに応じた専用の&lt;code&gt;Dockerfile&lt;/code&gt;を生成する（これはなんでも好きに書ける&lt;code&gt;Dockerfile&lt;/code&gt;ではないことに注意）．&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-bash&#34;&gt;$ heroku docker:init
+Wrote Dockerfile (ruby)
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;上記で作成した&lt;code&gt;Dockerfile&lt;/code&gt;をもとにDockerコンテナを起動してコンテナ内でアプリケーションを起動する．&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-bash&#34;&gt;$ heroku docker:start
+...
+web process will be available at http://192.168.59.103:3000/
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;起動したコンテナ内でOne-offコマンドを実行する．&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-bash&#34;&gt;$ heroku docker:exec bundle exec rake db:migrate
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;開発が終わったら上記のDockerイメージから&lt;a href=&#34;https://devcenter.heroku.com/articles/slug-compiler&#34;&gt;Slug&lt;/a&gt;（アプリケーションのソースとその依存関係を全て含めた&lt;code&gt;.tgz&lt;/code&gt;）を作成してそれをそのままHeroku上にデプロイすることができる．デプロイされるとそれは通常通りに&lt;a href=&#34;https://devcenter.heroku.com/articles/dynos#the-dyno-manager&#34;&gt;Dyno&lt;/a&gt;になりアクセスできるようになる．&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-bash&#34;&gt;$ heroku docker:release
+$ heroku open
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;以下の制約を満たせば生成された&lt;code&gt;Dockerfile&lt;/code&gt;を自分なりに編集することもできる．&lt;/p&gt;
+
+&lt;ul&gt;
+&lt;li&gt;&lt;code&gt;heroku:cedar&lt;/code&gt;イメージをベースにする&lt;/li&gt;
+&lt;li&gt;&lt;code&gt;/app&lt;/code&gt;ディレクトリ以下に変更が入るようにする&lt;/li&gt;
+&lt;/ul&gt;
+
+&lt;p&gt;詳しくは以下で説明する．&lt;/p&gt;
+
+&lt;h2 id=&#34;内部の仕組み:0491c64fbb9580a039fc1e6c54efd333&#34;&gt;内部の仕組み&lt;/h2&gt;
+
+&lt;p&gt;上記のワークフローで実際に何が行われているのかをコード/コマンドレベルで追ってみる．プラグインのソースは&lt;a href=&#34;https://github.com/heroku/heroku-docker&#34;&gt;https://github.com/heroku/heroku-docker&lt;/a&gt;にある．&lt;/p&gt;
+
+&lt;h3 id=&#34;init:0491c64fbb9580a039fc1e6c54efd333&#34;&gt;init&lt;/h3&gt;
+
+&lt;p&gt;まず&lt;code&gt;docker:init&lt;/code&gt;による&lt;code&gt;Dockerfile&lt;/code&gt;の生成．これはカレントディレクトリのソースコードからプラットフォームを判別し，プラットフォーム専用のテンプレートから生成する．テンプレートは&lt;a href=&#34;https://github.com/heroku/heroku-docker/tree/master/platforms&#34;&gt;heroku/heroku-docker/platforms&lt;/a&gt;以下にある．現在はRuby，Node，Scalaがサポートされている．&lt;/p&gt;
+
+&lt;p&gt;プラットフォーム判別はBuildpackと同じ仕組み．例えばRubyの場合は以下のように&lt;code&gt;Gemfile&lt;/code&gt;の有無により判別する．&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-js&#34;&gt;detect: function(dir) {
+      if (exists.sync(path.resolve(dir, &#39;Gemfile&#39;))) return true;
+      if (exists.sync(path.resolve(dir, &#39;Gemfile.lock&#39;))) return true;
+}
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;生成される&lt;code&gt;Dockerfile&lt;/code&gt;を見ると大体以下のことをしている．&lt;/p&gt;
+
+&lt;ul&gt;
+&lt;li&gt;ベースイメージとして&lt;code&gt;heroku/cedar:14&lt;/code&gt;を利用する&lt;/li&gt;
+&lt;li&gt;&lt;code&gt;/app&lt;/code&gt;以下に各種言語のRuntimeや依存パッケージをインストールする&lt;/li&gt;
+&lt;li&gt;&lt;code&gt;ONBUILD&lt;/code&gt;でカレントディレクトリのソースを&lt;code&gt;/app&lt;/code&gt;に取り込む&lt;/li&gt;
+&lt;/ul&gt;
+
+&lt;p&gt;&lt;a href=&#34;https://devcenter.heroku.com/articles/cedar&#34;&gt;Cedar&lt;/a&gt;というのはHeroku上でDynoを動かすプラットフォーム．ベースはUbunutで&lt;a href=&#34;https://github.com/heroku/stack-images/blob/master/bin/cedar-14.sh&#34;&gt;cedar-14.sh&lt;/a&gt;スクリプトで作られる（つまり，DockerでローカルにHerokuプラットフォームを再現してその上にアプリケーションを載せている感じになる）．&lt;/p&gt;
+
+&lt;p&gt;自分でスクラッチで&lt;code&gt;Dockerfile&lt;/code&gt;を書くこともできる．以下で最小限の&lt;code&gt;Dockerfile&lt;/code&gt;を生成できる．&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-bash&#34;&gt;$ heroku docker:init --template minimal
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;h3 id=&#34;start:0491c64fbb9580a039fc1e6c54efd333&#34;&gt;start&lt;/h3&gt;
+
+&lt;p&gt;次に&lt;code&gt;docker:start&lt;/code&gt;コマンドによるアプリケーションコンテナの起動．このコマンドでは以下の3つのことを行う．&lt;/p&gt;
+
+&lt;ul&gt;
+&lt;li&gt;ベースイメージのビルド&lt;/li&gt;
+&lt;li&gt;アプリケーションを含めたイメージのビルド（&lt;code&gt;ONBUILD&lt;/code&gt;）&lt;/li&gt;
+&lt;li&gt;作成したイメージをもとにコンテナの起動&lt;/li&gt;
+&lt;/ul&gt;
+
+&lt;p&gt;まずベースイメージのビルドは以下のコマンドを叩いている．&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-bash&#34;&gt;$ docker build --force-rm --file=&amp;quot;${dockerfile}&amp;quot; --tag=&amp;quot;${id}&amp;quot; &amp;quot;${dir}&amp;quot;
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;タグ名は&lt;code&gt;heroku-docker-${hash}&lt;/code&gt;でHash値はDockerfileの内容から生成される（ので&lt;code&gt;Dockerfile&lt;/code&gt;を更新していなければビルドは走らない）．&lt;/p&gt;
+
+&lt;p&gt;次にアプリケーションを含めたイメージのビルド．これは以下のように新しく一時的な&lt;code&gt;Dockerfile&lt;/code&gt;を生成してビルドする（&lt;code&gt;execImageId&lt;/code&gt;はタグ名）．&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-js&#34;&gt;var contents = `FROM ${execImageId}`;
+var imageId = `${execImageId}-start`;
+var filename = `.Dockerfile-${uuid.v1()}`;
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;上で見たように生成された&lt;code&gt;Dockerfile&lt;/code&gt;においてアプリケーションのコードをイメージに含める部分は&lt;code&gt;ONBUILD&lt;/code&gt;が使われていた．このステップは&lt;code&gt;ONBUILD&lt;/code&gt;を実行するために行われる．この仕組みにより，同じ&lt;code&gt;Dockerfile&lt;/code&gt;＋同じ言語のアプリケーションである場合にベースイメージの再度ビルドが不要になる（つまりアプリケーションコードの追加と依存関係の解決のみが走る）．このステップが&lt;code&gt;git push&lt;/code&gt;したことと同じになる．&lt;/p&gt;
+
+&lt;p&gt;最後にコンテナの起動は以下のコマンドが実行される．&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-bash&#34;&gt;docker run -w /app/src -p 3000:3000 --rm -it ${mountComponent} ${envArgComponent} ${imageId} sh -c &amp;quot;${command}&amp;quot;
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;&lt;code&gt;&amp;quot;${command}&amp;quot;&lt;/code&gt;には&lt;code&gt;Procfile&lt;/code&gt;の内容が使われる．DBのURLなどは&lt;code&gt;.env&lt;/code&gt;ファイルに環境変数を書いておけばよい．このファイルはここで読み込まれて&lt;code&gt;-e KEY=VALUME&lt;/code&gt;形式で&lt;code&gt;${envArgComponent}&lt;/code&gt;に展開される．&lt;/p&gt;
+
+&lt;p&gt;以上の仕組みでローカル環境でアプリケーションが起動する．&lt;/p&gt;
+
+&lt;h3 id=&#34;release:0491c64fbb9580a039fc1e6c54efd333&#34;&gt;release&lt;/h3&gt;
+
+&lt;p&gt;最後に&lt;code&gt;docker:release&lt;/code&gt;コマンドでSlugがHerokuにデプロイされる仕組み．このコマンドでは以下の3つのことを行う．&lt;/p&gt;
+
+&lt;ul&gt;
+&lt;li&gt;Slug（&lt;code&gt;slug.tgz&lt;/code&gt;）の作成&lt;/li&gt;
+&lt;li&gt;起動コマンド（&lt;code&gt;process_types&lt;/code&gt;）の設定&lt;/li&gt;
+&lt;li&gt;Slugのアップロード&lt;/li&gt;
+&lt;/ul&gt;
+
+&lt;p&gt;Slugの作成は&lt;code&gt;docker:start&lt;/code&gt;コマンドでDockerコンテナを起動し，そのコンテナに対して以下のコマンドを実行する．&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-bash&#34;&gt;$ docker run -d ${imageId} tar cfvz /tmp/slug.tgz -C / --exclude=.git --exclude=.heroku ./app
+$ docker wait ${containerId}
+$ docker cp ${containerId}:/tmp/slug.tgz ${slugPath}
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;&lt;code&gt;/app&lt;/code&gt;以下を&lt;code&gt;tgz&lt;/code&gt;で固めて&lt;code&gt;cp&lt;/code&gt;コマンドでそれを取り出している．なので&lt;code&gt;Dockerfile&lt;/code&gt;に独自の変更を加えるときは注意が必要で&lt;code&gt;/app&lt;/code&gt;以下に依存をちゃんと含めるように書く必要がある．&lt;/p&gt;
+
+&lt;p&gt;例えば&lt;a href=&#34;http://www.graphicsmagick.org/&#34;&gt;GraphicsMagick&lt;/a&gt;を依存に含めたいときは以下のように&lt;code&gt;Dockerfile&lt;/code&gt;を書いて&lt;code&gt;/app&lt;/code&gt;以下に変更が加わるように意識しなければならない．&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-bash&#34;&gt;RUN curl -s http://78.108.103.11/MIRROR/ftp/GraphicsMagick/1.3/GraphicsMagick-1.3.21.tar.gz | tar xvz -C /tmp
+WORKDIR /tmp/GraphicsMagick-1.3.21
+RUN ./configure --disable-shared --disable-installed
+RUN make DESTDIR=/app install
+RUN echo &amp;quot;export PATH=\&amp;quot;/app/usr/local/bin:\$PATH\&amp;quot;&amp;quot; &amp;gt;&amp;gt; /app/.profile.d/nodejs.sh
+ENV PATH /app/usr/local/bin:$PATH
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;（Go言語で書かれた静的リンクされたバイナリを使うのは楽そう）&lt;/p&gt;
+
+&lt;p&gt;起動コマンド（&lt;code&gt;process_types&lt;/code&gt;）の設定とSlugのアップロードはPlatform APIを叩いているだけ，詳しくは&lt;a href=&#34;https://devcenter.heroku.com/articles/platform-api-deploying-slugs&#34;&gt;&amp;ldquo;Creating Slugs from Scratch&amp;rdquo;&lt;/a&gt;を参考．&lt;/p&gt;
+
+&lt;h2 id=&#34;まとめ:0491c64fbb9580a039fc1e6c54efd333&#34;&gt;まとめ&lt;/h2&gt;
+
+&lt;p&gt;Dockerを使うことでHerokuアプリの開発をやりやすくしたという印象．Buildpackとの連携も進むのではないか（Buildpack+Dockerだと&lt;a href=&#34;http://www.centurylinklabs.com/heroku-on-docker/&#34;&gt;building&lt;/a&gt;かなあ）．ローカル開発環境にDocker（boot2docker）はあるっしょという前提でツールを提供する流れだ．Dockerコマンドをラップしたり&lt;code&gt;Dockerfile&lt;/code&gt;を自動生成したりね．&lt;/p&gt;
+
+&lt;h2 id=&#34;参考:0491c64fbb9580a039fc1e6c54efd333&#34;&gt;参考&lt;/h2&gt;
+
+&lt;ul&gt;
+&lt;li&gt;&lt;a href=&#34;https://devcenter.heroku.com/articles/introduction-local-development-with-docker&#34;&gt;Introduction: Local Development with Docker&lt;/a&gt;&lt;/li&gt;
+&lt;/ul&gt;
+</description>
+    </item>
+    
+    <item>
+      <title>Go言語でプラグイン機構をつくる</title>
+      <link>http://deeeet.com/writing/2015/04/28/pingo/</link>
+      <pubDate>Tue, 28 Apr 2015 13:18:07 +0900</pubDate>
+      
+      <guid>http://deeeet.com/writing/2015/04/28/pingo/</guid>
+      <description>
+
+&lt;p&gt;&lt;a href=&#34;https://github.com/dullgiulio/pingo&#34;&gt;dullgiulio/pingo&lt;/a&gt;&lt;/p&gt;
+
+&lt;p&gt;Go言語でのプラグイン機構の提供方法は実装者の好みによると思う（cf. &lt;a href=&#34;http://togetter.com/li/618378&#34;&gt;fluentd の go 実装におけるプラグイン構想&lt;/a&gt;）．Go言語はクロスコンパイルも含めビルドは楽なのでプラグインを含めて再ビルドでも良いと思う．が，使う人がみなGo言語の環境を準備しているとも限らないし，使い始めてもらう障壁はなるべく下げたい．プラグインのバイナリだけを持ってこればすぐに使えるという機構は魅力的だと思う．&lt;/p&gt;
+
+&lt;p&gt;Go言語によるプラグイン機構はHashicorpの一連のプロダクトや&lt;a href=&#34;https://github.com/cloudfoundry/cli&#34;&gt;CloudFoundryのCLI&lt;/a&gt;などが既に提供していてかっこいい．&lt;a href=&#34;http://golang.org/pkg/net/rpc/&#34;&gt;net/rpc&lt;/a&gt;を使っているのは見ていてこれを自分で1から実装するのは面倒だなと思っていた．&lt;/p&gt;
+
+&lt;p&gt;&lt;a href=&#34;https://github.com/dullgiulio/pingo&#34;&gt;dullgiulio/pingo&lt;/a&gt;を使うと実装の面倒な部分を受け持ってくれて気軽にプラグイン機構を作れる．&lt;/p&gt;
+
+&lt;h2 id=&#34;使い方:a825773c24f3dbf858597347e35e9afc&#34;&gt;使い方&lt;/h2&gt;
+
+&lt;p&gt;サンプルに従ってプラグインを呼び出す本体とプラグインを実装してみる．&lt;/p&gt;
+
+&lt;p&gt;まず，プラグイン側の実装（&lt;code&gt;plugins/hello-world/main.go&lt;/code&gt;）は以下．&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-golang&#34;&gt;package main
+
+import (
+    &amp;quot;github.com/dullgiulio/pingo&amp;quot;
+)
+    
+type HelloPlugin struct{}
+
+func (p *HelloPlugin) Say(name string, msg *string) error {
+    *msg = &amp;quot;Hello, &amp;quot; + name
+    return nil
+}
+
+func main() {
+    plugin := &amp;amp;HelloPlugin{}
+    pingo.Register(plugin)
+    pingo.Run()
+}
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;&lt;code&gt;struct&lt;/code&gt;としてプラグインを定義し，メソッドを定義する．メイン関数はそれを登録（&lt;code&gt;Register&lt;/code&gt;）して起動（&lt;code&gt;Run&lt;/code&gt;）するだけ．&lt;/p&gt;
+
+&lt;p&gt;プラグインはあらかじめビルドしておく．&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-bash&#34;&gt;$ cd plugins/hello-world
+$ go build
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;次にプラグインを呼び出す本体の実装は以下．上のプラグインで実装した&lt;code&gt;Say()&lt;/code&gt;を呼び出す．&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-golang&#34;&gt;package main
+
+import (
+    &amp;quot;fmt&amp;quot;
+    &amp;quot;github.com/dullgiulio/pingo&amp;quot;
+)
+
+func main() {
+
+    p := pingo.NewPlugin(&amp;quot;tcp&amp;quot;, &amp;quot;plugins/hello-world/hello-world&amp;quot;)
+    p.Start()
+    defer p.Stop()
+
+    var res string
+    err := p.Call(&amp;quot;HelloPlugin.Say&amp;quot;, &amp;quot;deeeet&amp;quot;, &amp;amp;res)
+    if err != nil {
+        panic(err)
+    }
+
+    fmt.Println(res)
+
+}
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;バイナリのパスを指定しプラグインを読み込み（&lt;code&gt;NewPlugin&lt;/code&gt;），それを起動（&lt;code&gt;Start&lt;/code&gt;）する．あとは&lt;code&gt;Call&lt;/code&gt;でプラグインに定義したメソッドを呼び出して結果を受け取る．&lt;/p&gt;
+
+&lt;p&gt;プラグインとのやりとりのプロトコルとしては&lt;code&gt;tcp&lt;/code&gt;とUNIXドメインソケット（&lt;code&gt;unix&lt;/code&gt;）を利用することができる．&lt;/p&gt;
+
+&lt;h2 id=&#34;内部の仕組み:a825773c24f3dbf858597347e35e9afc&#34;&gt;内部の仕組み&lt;/h2&gt;
+
+&lt;p&gt;&lt;code&gt;pingo&lt;/code&gt;が何をしているのかを簡単に見てみる．&lt;/p&gt;
+
+&lt;p&gt;単に&lt;a href=&#34;http://golang.org/pkg/net/rpc/&#34;&gt;net/rpc&lt;/a&gt;をラップしているだけ．プラグインがサーバーで本体がクライアントとなりサーバーにコマンドを発行するようになっている．&lt;code&gt;pingo&lt;/code&gt;はサーバーの起動とクライアントへのそのアドレスの通知を受け持つ．&lt;/p&gt;
+
+&lt;p&gt;まず，プラグイン本体は&lt;code&gt;NewPlugin&lt;/code&gt;でバイナリを読み込み，&lt;code&gt;Start()&lt;/code&gt;でプラグインをサーバーとして起動する（普通に&lt;code&gt;exec.Command()&lt;/code&gt;を使う）．この時に以下のようなオプション引数を渡している．&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-golang&#34;&gt;flag.StringVar(&amp;amp;c.proto, &amp;quot;pingo:proto&amp;quot;, &amp;quot;unix&amp;quot;, &amp;quot;Protocol to use: unix or tcp&amp;quot;)
+flag.StringVar(&amp;amp;c.prefix, &amp;quot;pingo:prefix&amp;quot;, &amp;quot;pingo&amp;quot;, &amp;quot;Prefix to output lines&amp;quot;)
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;1つ目はプロトコルの指定．2つ目はプラグインと本体がメッセージをやりとりするための&lt;code&gt;prefix&lt;/code&gt;を指定する．本体は&lt;code&gt;prefix&lt;/code&gt;により予期するプラグインからのメッセージであることを認識する．&lt;/p&gt;
+
+&lt;p&gt;&lt;code&gt;Start()&lt;/code&gt;を実行すると，プラグイン側でサーバーが起動する（&lt;code&gt;Run()&lt;/code&gt;）．例えば&lt;code&gt;tcp&lt;/code&gt;だと&lt;code&gt;127.0.0.1:1024&lt;/code&gt;からport番号を1つずつ増やしながら最初にListenできたもので起動する．起動できたら以下のような内容を標準出力に出力する．&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-golang&#34;&gt;h.output(&amp;quot;ready&amp;quot;, fmt.Sprintf(&amp;quot;proto=%s addr=%s&amp;quot;, r.conf.proto, r.conf.addr))
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;プラグイン本体側では，以下のようにプラグインの出力を常にチェックしている．&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-golang&#34;&gt;func (c *ctrl) readOutput(r io.Reader) {
+    scanner := bufio.NewScanner(r)
+
+    for scanner.Scan() {
+        c.linesCh &amp;lt;- scanner.Text()
+    }
+}
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;そして&lt;code&gt;&amp;quot;ready&amp;quot;&lt;/code&gt;という文字列をkeyとしてサーバーが立ち上がったことを認識し，その出力をパースしてリクエストを投げるべきサーバーアドレスを認識する．文字列をパースするというゴリゴリの実装は他でも（例えば&lt;code&gt;terraform&lt;/code&gt;など）やられていることなのでこれが最適解なのではないかと思う．&lt;/p&gt;
+
+&lt;p&gt;あとは，プラグイン本体からプラグインに対して&lt;code&gt;*rpc.Client.Call()&lt;/code&gt;を呼び出すだけ．単純．&lt;/p&gt;
+
+&lt;h2 id=&#34;方針:a825773c24f3dbf858597347e35e9afc&#34;&gt;方針&lt;/h2&gt;
+
+&lt;p&gt;実際にプラグイン機構をもったツールをつくるにはどうするのが良いか考えてみた．例えば以下のような方針にすると思う．&lt;/p&gt;
+
+&lt;ul&gt;
+&lt;li&gt;ビルドするバイナリ名のルールを決める．あるディレクトリのこの名前のバイナリはプラグインとして読み込まれて有効になるようにする&lt;/li&gt;
+&lt;li&gt;プラグインの返り値（型）を実装側であらかじめ準備しそれを返させる&lt;/li&gt;
+&lt;/ul&gt;
+
+&lt;p&gt;あとはプラグイン側が本体からの呼び出しでしか起動しないようにできると良さそう（例えば環境変数にある特定のクッキー値をセットされているときのみ本体からの呼び出しであると認識するなど）&lt;/p&gt;
+
+&lt;h2 id=&#34;まとめ:a825773c24f3dbf858597347e35e9afc&#34;&gt;まとめ&lt;/h2&gt;
+
+&lt;p&gt;プラグインの数だけサーバープロセスが立つことになるのでデーモンとして常駐する系ではなく，単発系のCLIなどで使う良さそう．次に何か作るときにプラグイン機構を提供したければこれを使うか，参考にしたいと思う．&lt;/p&gt;
+
+&lt;h2 id=&#34;参考:a825773c24f3dbf858597347e35e9afc&#34;&gt;参考&lt;/h2&gt;
+
+&lt;ul&gt;
+&lt;li&gt;&lt;a href=&#34;https://www.hashicorp.com/blog/terraform-custom-providers.html&#34;&gt;Writing Custom Terraform Providers&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a href=&#34;http://mattn.kaoriya.net/software/lang/go/20130805173059.htm&#34;&gt;Big Sky :: Go言語でDLLの読み込み&lt;/a&gt;&lt;/li&gt;
+&lt;/ul&gt;
+</description>
+    </item>
+    
+    <item>
+      <title>Content Addressable DockerイメージとRegistry2.0</title>
+      <link>http://deeeet.com/writing/2015/04/20/docker-1_6_distribution/</link>
+      <pubDate>Mon, 20 Apr 2015 22:55:35 +0900</pubDate>
+      
+      <guid>http://deeeet.com/writing/2015/04/20/docker-1_6_distribution/</guid>
+      <description>
+
+&lt;p&gt;&lt;a href=&#34;http://blog.docker.com/2015/04/docker-release-1-6/&#34;&gt;Docker 1.6: Engine &amp;amp; Orchestration Updates, Registry 2.0, &amp;amp; Windows Client Preview | Docker Blog&lt;/a&gt;&lt;/p&gt;
+
+&lt;p&gt;Docker1.6が出た．コンテナやイメージのラベリング（RancherOSの&lt;a href=&#34;http://rancher.com/docker-labels/&#34;&gt;&amp;ldquo;Adding Label Support to Docker 1.6&amp;rdquo;&lt;/a&gt;がわかりやすい）や，Logging Driversといった新機能が追加された．今回のリリースで自分的に嬉しいのはDockerイメージがContent-addressableになったこと（&lt;a href=&#34;https://github.com/docker/docker/pull/11109&#34;&gt;#11109&lt;/a&gt;）．&lt;/p&gt;
+
+&lt;p&gt;今までDocker Regitryを介したイメージのやりとりはイメージの名前とタグ（e.g., &lt;code&gt;tcnksm/golang:1.2&lt;/code&gt;）しか使うことができなかった．タグはイメージの作成者によって付与されるのもであり，同じタグであっても必ず同じイメージが利用できるという保証はなかった（Gitでいうとコミットハッシュが使えず，タグのみしか使えないという状況）．&lt;/p&gt;
+
+&lt;p&gt;Docker1.6と同時に発表されたRegistry2.0（&lt;a href=&#34;https://github.com/docker/distribution&#34;&gt;docker/distribution&lt;/a&gt;）によりイメージにユニークなID（&lt;code&gt;digest&lt;/code&gt;）が付与されるようになり，確実に同じイメージを参照することができるようになった（immutable image references）．&lt;/p&gt;
+
+&lt;h2 id=&#34;使ってみる:29f4c419ea694f51a0d54715dacf08d5&#34;&gt;使ってみる&lt;/h2&gt;
+
+&lt;p&gt;DockerHubはすでにRegistry2.0になっているのですぐにこの機能は使える．が，今回は自分でPrivate Registryを立ててこの機能を試してみる（環境はboot2docker on OSX）．&lt;/p&gt;
+
+&lt;p&gt;まずはRegistryを立てる．v1と同じようにDockerイメージが提供されている．&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-bash&#34;&gt;$ docker run -p 5000:5000 registry:2.0
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;簡単な&lt;code&gt;Dockerfile&lt;/code&gt;を準備して&lt;code&gt;tcnksm/test-digest&lt;/code&gt;イメージをビルドする．&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-bash&#34;&gt;FROM busybox
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-bash&#34;&gt;$ docker build -t $(boot2docker ip):5000/tcnksm/test-digest:latest .
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;&lt;code&gt;images&lt;/code&gt;コマンドで確認する．&lt;code&gt;--digests&lt;/code&gt;オプションをつけると&lt;code&gt;digest&lt;/code&gt;が表示されるようになる．Gitと同じように考えると直感とズレるかもしれないが&lt;code&gt;build&lt;/code&gt;するだけでは&lt;code&gt;digest&lt;/code&gt;は生成されない．&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-bash&#34;&gt;$ docker images --digests
+REPOSITORY                               TAG                 DIGEST              IMAGE ID            CREATED             VIRTUAL SIZE
+192.168.59.103:5000/tcnksm/test-digest   latest              &amp;lt;none&amp;gt;              8c2e06607696        3 days ago          2.433 MB
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;Registryに&lt;code&gt;push&lt;/code&gt;してみる．&lt;code&gt;push&lt;/code&gt;すると&lt;code&gt;digest&lt;/code&gt;が生成される．&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-bash&#34;&gt;$ docker push $(boot2docker ip):5000/tcnksm/test-digest:latest
+...
+Digest: sha256:e4c425e28a3cfe41efdfceda7ccce6be4efd6fc775b24d5ae26477c96fb5eaa4
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;生成したイメージを削除し&lt;code&gt;digest&lt;/code&gt;を使ってイメージを&lt;code&gt;pull&lt;/code&gt;してみる．&lt;code&gt;NAME:TAG&lt;/code&gt;ではなく&lt;code&gt;NAME@DIGEST&lt;/code&gt;という形式で指定する．&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-bash&#34;&gt;$ docker rmi $(boot2docker ip):5000/tcnksm/test-digest:latest
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-bash&#34;&gt;$ docker pull $(boot2docker ip):5000/tcnksm/test-digest@sha256:e4c425e28a3cfe41efdfceda7ccce6be4efd6fc775b24d5ae26477c96fb5eaa4
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;&lt;code&gt;images&lt;/code&gt;コマンドで確認する．今回は&lt;code&gt;digest&lt;/code&gt;が表示されているのが確認できる．&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-bash&#34;&gt;$ docker images --digests
+REPOSITORY                               TAG                 DIGEST                                                                    IMAGE ID            CREATED             VIRTUAL SIZE
+192.168.59.103:5000/tcnksm/test-digest   &amp;lt;none&amp;gt;              sha256:e4c425e28a3cfe41efdfceda7ccce6be4efd6fc775b24d5ae26477c96fb5eaa4   8c2e06607696        3 days ago          2.433 MB
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;h3 id=&#34;dockerfile:29f4c419ea694f51a0d54715dacf08d5&#34;&gt;Dockerfile&lt;/h3&gt;
+
+&lt;p&gt;&lt;code&gt;Dockerfile&lt;/code&gt;の&lt;code&gt;FROM&lt;/code&gt;でのイメージ名の指定にも&lt;code&gt;digest&lt;/code&gt;は使える．気がついたら元のイメージ更新されていて完成イメージが意図しないものになっていたということが避けられる．&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-bash&#34;&gt;FROM 192.168.59.103:5000/tcnksm/test-digest@sha256:e4c425e28a3cfe41efdfceda7ccce6be4efd6fc775b24d5ae26477c96fb5eaa4
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-bash&#34;&gt;$ docker build .
+Step 0 : FROM 192.168.59.103:5000/tcnksm/test-digest@sha256:e4c425e28a3cfe41efdfceda7ccce6be4efd6fc775b24d5ae26477c96fb5eaa4
+---&amp;gt; 8c2e06607696
+Successfully built 8c2e06607696
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;h3 id=&#34;イメージの更新:29f4c419ea694f51a0d54715dacf08d5&#34;&gt;イメージの更新&lt;/h3&gt;
+
+&lt;p&gt;&lt;code&gt;Dockerfile&lt;/code&gt;を編集して新しいイメージを&lt;code&gt;build&lt;/code&gt;する．&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-bash&#34;&gt;FROM busybox
+MAINTAINER tcnksm
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-bash&#34;&gt;$ docker build -t $(boot2docker ip):5000/tcnksm/test-digest:latest .
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;Registryに&lt;code&gt;push&lt;/code&gt;する．すると今度は異なる&lt;code&gt;digest&lt;/code&gt;が生成される．&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-bash&#34;&gt;$ docker push $(boot2docker ip):5000/tcnksm/test-digest:latest
+...
+Digest: sha256:4675f7a9d45932e3043058ef032680d76e8aacccda94b74374efe156e2940ee5
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;h2 id=&#34;仕組み:29f4c419ea694f51a0d54715dacf08d5&#34;&gt;仕組み&lt;/h2&gt;
+
+&lt;p&gt;簡単に仕組みを説明する．&lt;code&gt;digest&lt;/code&gt;は手元で生成されるわけではない．&lt;code&gt;push&lt;/code&gt;してRegistry側で生成される．&lt;/p&gt;
+
+&lt;p&gt;まずclientはイメージと共にImage ManifestをRegistryに送る（署名する）．Image ManifestはそのDocker Imageの内容をJSONで定義したもの．Golangのstructでいうと以下のようなものでイメージの名前やタグ，FSレイヤーといった情報が書かれる（Manifestは&lt;a href=&#34;https://github.com/docker/distribution/blob/master/docs/spec/manifest-v2-1.md&#34;&gt;ここ&lt;/a&gt;に定義されている）．&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-golang&#34;&gt;type ManifestData struct {
+    Name          string             `json:&amp;quot;name&amp;quot;`
+    Tag           string             `json:&amp;quot;tag&amp;quot;`
+    Architecture  string             `json:&amp;quot;architecture&amp;quot;`
+    FSLayers      []*FSLayer         `json:&amp;quot;fsLayers&amp;quot;`
+    History       []*ManifestHistory `json:&amp;quot;history&amp;quot;`
+    SchemaVersion int                `json:&amp;quot;schemaVersion&amp;quot;`
+}
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;APIを叩くとManifestの中身を見ることができる．&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-bash&#34;&gt;$ curl $(boot2docker ip):5000/v2/tcnksm/test-digest/manifests/latest
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;そしてRegistryは以下の関数内でリクエストされたManifestを元に&lt;code&gt;digest&lt;/code&gt;を生成する（&lt;a href=&#34;https://github.com/docker/distribution/blob/master/registry/handlers/images.go&#34;&gt;registry/handlers/images.go&lt;/a&gt;）．&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-golang&#34;&gt;// PutImageManifest validates and stores and image in the registry.
+func (imh *imageManifestHandler) PutImageManifest(w http.ResponseWriter, r *http.Request) 
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;&lt;code&gt;Docker-Content-Digest&lt;/code&gt;ヘッダでそれをclientに送る（&lt;a href=&#34;https://github.com/docker/distribution/blob/master/docs/spec/api.md#put-manifest&#34;&gt;API doc&lt;/a&gt;）&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;202 Accepted
+Location: &amp;lt;url&amp;gt;
+Content-Length: 0
+Docker-Content-Digest: &amp;lt;digest&amp;gt;
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;h3 id=&#34;regitryが異なったら:29f4c419ea694f51a0d54715dacf08d5&#34;&gt;Regitryが異なったら&amp;hellip;?&lt;/h3&gt;
+
+&lt;p&gt;送るManifestは同じなのでRegistryが違っても同じ&lt;code&gt;digest&lt;/code&gt;が付与される．&lt;code&gt;digest&lt;/code&gt;はRegistryをまたがってユニークになる．&lt;/p&gt;
+
+&lt;p&gt;上で作成したイメージをDockerHubに&lt;code&gt;push&lt;/code&gt;してみる．同じ&lt;code&gt;digest&lt;/code&gt;が付与される．&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-bash&#34;&gt;$ docker build -t tcnksm/test-digest:latest .
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-bash&#34;&gt;$ docker push tcnksm/test-digest:latest
+...
+Digest: sha256:e4c425e28a3cfe41efdfceda7ccce6be4efd6fc775b24d5ae26477c96fb5eaa4
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;h2 id=&#34;registry2-0:29f4c419ea694f51a0d54715dacf08d5&#34;&gt;Registry2.0&lt;/h2&gt;
+
+&lt;p&gt;&lt;a href=&#34;http://blog.docker.com/2015/04/faster-and-better-image-distribution-with-registry-2-0-and-engine-1-6/&#34;&gt;Faster and Better Image Distribution with Registry 2.0 and Engine 1.6 | Docker Blog&lt;/a&gt;&lt;/p&gt;
+
+&lt;p&gt;&lt;a href=&#34;https://github.com/docker/distribution&#34;&gt;docker/distribution&lt;/a&gt;は新しいRegistryの実装で，APIやセキュリティなど今までのRegistryの問題を解決しようとしている．今まではPythonで実装されていたがGo言語で再実装されている．&lt;/p&gt;
+
+&lt;p&gt;特徴的なのは，&lt;/p&gt;
+
+&lt;ul&gt;
+&lt;li&gt;イメージManifestの再定義（&lt;a href=&#34;https://github.com/docker/distribution/blob/master/docs/spec/manifest-v2-1.md&#34;&gt;Image Manifest Version 2, Schema 1&lt;/a&gt;） - &lt;a href=&#34;https://github.com/docker/docker/issues/8093&#34;&gt;#8093&lt;/a&gt;を参照．セキュリティの改善が主な目的．&lt;/li&gt;
+&lt;li&gt;APIの刷新（&lt;a href=&#34;https://github.com/docker/distribution/blob/master/docs/spec/api.md&#34;&gt;Docker Registry HTTP API V2&lt;/a&gt;, &lt;a href=&#34;https://github.com/docker/distribution/blob/master/docs/spec/api.md#detail&#34;&gt;#Detail&lt;/a&gt;）- URIの改善，Manifest V2を利用できるようにする，Push/Pullが途中で死んでも終わったところから再開できるようにする，などなど（詳しく見てないけどclientはGo言語のinterfaceとして定義されていたので自分で独自のものをつくれる&amp;hellip;?）&lt;/li&gt;
+&lt;li&gt;バックエンドのストレージをPluggable化（&lt;a href=&#34;https://github.com/docker/distribution/blob/master/docs/storagedrivers.md&#34;&gt;Docker-Registry Storage Driver&lt;/a&gt;）- 現在は，インメモリ，ファイルシステム，S3，Azure Blob Storageが選択できる．Go言語のinterfaceとして定義されてるので自分で実装することもできる．&lt;/li&gt;
+&lt;li&gt;Webhookの実装（&lt;a href=&#34;https://github.com/docker/distribution/blob/master/docs/notifications.md&#34;&gt;Notifications&lt;/a&gt;）- Push/Pullといったイベントが発生するごとに設定したendopointにリクエストを送ることができる．&lt;/li&gt;
+&lt;/ul&gt;
+
+&lt;p&gt;あとまだスケルトンしかないが&lt;code&gt;dist&lt;/code&gt;コマンドというものを作ろうとしている（&lt;a href=&#34;https://github.com/docker/distribution/tree/master/cmd/dist&#34;&gt;dist&lt;/a&gt;）．これはDockerデーモンなしでDockerイメージのpull/pushを行うコマンド．Dockerの少し嫌な部分としてrumtimeとイメージのダウンロードが分かれていないというのがあったが，それをここで解決しようとしているっぽい．&lt;/p&gt;
+
+&lt;h2 id=&#34;references:29f4c419ea694f51a0d54715dacf08d5&#34;&gt;References&lt;/h2&gt;
+
+&lt;ul&gt;
+&lt;li&gt;&lt;a href=&#34;https://docs.docker.com/registry/overview/&#34;&gt;Docker Registry 2.0&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a href=&#34;https://github.com/docker/distribution/blob/master/docs/spec/auth/token.md&#34;&gt;Docker Registry v2 authentication via central service&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a href=&#34;https://github.com/docker/distribution/blob/master/docs/deploying.md&#34;&gt;Deploying a registry service&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a href=&#34;https://github.com/kelseyhightower/docker-registry-osx-setup-guide&#34;&gt;kelseyhightower/docker-registry-osx-setup-guide&lt;/a&gt;&lt;/li&gt;
+&lt;/ul&gt;
+</description>
+    </item>
+    
+    <item>
+      <title>Go言語のCLIツールのpanicをラップしてクラッシュレポートをつくる</title>
+      <link>http://deeeet.com/writing/2015/04/17/panicwrap/</link>
+      <pubDate>Fri, 17 Apr 2015 00:18:38 +0900</pubDate>
+      
+      <guid>http://deeeet.com/writing/2015/04/17/panicwrap/</guid>
+      <description>
+
+&lt;p&gt;&lt;a href=&#34;https://github.com/mitchellh/panicwrap&#34;&gt;mitchellh/panicwrap&lt;/a&gt;&lt;/p&gt;
+
+&lt;p&gt;Go言語でpanicが発生したらどうしようもない．普通はちゃんとテストをしてそもそもpanicが発生しないようにする（もしくはトップレベルで&lt;code&gt;recover&lt;/code&gt;する）．しかし，クロスコンパイルして様々な環境に配布することを，もしくはユーザが作者が思ってもいない使いかたをすることを考慮すると，すべてを作者の想像力の範疇のテストでカバーし，panicをゼロにできるとは限らない．&lt;/p&gt;
+
+&lt;p&gt;panicが発生した場合，ユーザからすると何が起こったか分からない（Go言語を使ったことがあるユーザなら「あの表示」を見て，panicが起こったことがわかるかもしれない）．適切なエラーメッセージを表示できると良い．開発者からすると，そのpanicの詳しい発生状況を基に修正を行い，新たなテストケースを追加して二度とそのバグが発生しないようにしておきたい．&lt;/p&gt;
+
+&lt;p&gt;&lt;a href=&#34;https://github.com/mitchellh/panicwrap&#34;&gt;mitchellh/panicwrap&lt;/a&gt;を使うと，panicが発生したときにそれ（バイナリ）を再び実行し，設定したhandlerを実行することで，その標準出力/エラー出力を取得することができる．このパッケージを使えばpanicが起こったときに詳細なクラッシュレポートを作成し，ユーザにそれを報告してもらうことができる．&lt;/p&gt;
+
+&lt;h2 id=&#34;使い方:fc683d9200d02aa9313aee343da796ef&#34;&gt;使い方&lt;/h2&gt;
+
+&lt;p&gt;使い方は簡単でトップレベルにhandlerを登録するだけ．まず簡単に動作例を説明する．以下の例はpanicが発生したときにそのpanicの出力を&lt;code&gt;crash.log&lt;/code&gt;に書き込む例．&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-golang&#34;&gt;package main
+
+import (
+    &amp;quot;fmt&amp;quot;
+    &amp;quot;os&amp;quot;
+
+    &amp;quot;github.com/mitchellh/panicwrap&amp;quot;
+)
+
+func main() {
+    // (1)
+    exitStatus, _ := panicwrap.BasicWrap(handler)    
+
+    // (2)
+    if exitStatus &amp;gt;= 0 {
+        os.Exit(exitStatus)
+    }
+
+    // (3)
+    panic(&amp;quot;Panic happend here...&amp;quot;)
+}
+
+func handler(output string) {
+    f, _ := os.Create(&amp;quot;crash.log&amp;quot;)
+    fmt.Fprintf(f, &amp;quot;The child panicked!\n\n%s&amp;quot;,output)
+    os.Exit(1)
+}
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;以下のように動作する．&lt;/p&gt;
+
+&lt;ul&gt;
+&lt;li&gt;&lt;code&gt;(1)&lt;/code&gt;ではhandlerを&lt;code&gt;BasicWrap&lt;/code&gt;に登録する&lt;/li&gt;
+&lt;li&gt;&lt;code&gt;(2)&lt;/code&gt;はpanicが発生した場合．この場合&lt;code&gt;exitStatus&lt;/code&gt;は0以上の値になる&lt;/li&gt;
+&lt;li&gt;&lt;code&gt;(3)&lt;/code&gt;は通常の実行．ここで&lt;code&gt;panic&lt;/code&gt;を発生させている．&lt;/li&gt;
+&lt;/ul&gt;
+
+&lt;p&gt;動作としては&lt;code&gt;(2)&lt;/code&gt;でpanicが発生し&lt;code&gt;(0)&lt;/code&gt;で登録したhandler（ここでは&lt;code&gt;crash.log&lt;/code&gt;への書き込み）を実行し，&lt;code&gt;(1)&lt;/code&gt;で終了する．&lt;/p&gt;
+
+&lt;h2 id=&#34;内部の仕組み:fc683d9200d02aa9313aee343da796ef&#34;&gt;内部の仕組み&lt;/h2&gt;
+
+&lt;p&gt;&lt;code&gt;panicwrap&lt;/code&gt;が何をしているかを簡単に見てみる．&lt;code&gt;BasicWrap&lt;/code&gt;から&lt;code&gt;Wrap&lt;/code&gt;が呼ばれ中で自分自身（バイナリ）を実行している．&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-golang&#34;&gt;exePath, err := osext.Executable()
+....
+
+cmd := exec.Command(exePath, os.Args[1:]...)
+cmd.Env = append(os.Environ(), c.CookieKey+&amp;quot;=&amp;quot;+c.CookieValue)
+...
+
+if err := cmd.Start(); err != nil {
+    return 1, err
+}
+...    
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;実行する際には環境変数にあらかじめ決められた&lt;code&gt;Cookie&lt;/code&gt;を設定し，自分が子プロセス（&lt;code&gt;Wrap&lt;/code&gt;から呼ばれたプロセス）なのか親プロセス（&lt;code&gt;Wrap&lt;/code&gt;を読んだプロセス）なのかを判別できるようにしている．子プロセスの場合は&lt;code&gt;Wrap&lt;/code&gt;は&lt;code&gt;-1&lt;/code&gt;を返すため，通常のプロセス（上記の例で言うと&lt;code&gt;(2)&lt;/code&gt;）が実行される．&lt;/p&gt;
+
+&lt;p&gt;panicの発生は，&lt;code&gt;trackPanic&lt;/code&gt;がgoroutineとして常に監視している．&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-golang&#34;&gt;func trackPanic(r io.Reader, w io.Writer, dur time.Duration, result chan&amp;lt;- string)
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;&lt;code&gt;r&lt;/code&gt;には実行中の標準エラー出力が渡ってくるのでそれを読み込み&lt;code&gt;panic:&lt;/code&gt;の文字列が含まれないかを検出する．それが検出され，かつ終了コードが0以外の場合はpanicが発生したとしてhandlerを実行する（&lt;code&gt;panic:&lt;/code&gt;という文字列を標準エラーに出力してNon-Zeroで終了するとpanicとして扱われる）．&lt;/p&gt;
+
+&lt;h2 id=&#34;使いこなす:fc683d9200d02aa9313aee343da796ef&#34;&gt;使いこなす&lt;/h2&gt;
+
+&lt;p&gt;&lt;code&gt;BasicWrap&lt;/code&gt;を使うだけではpanicの出力しか取得できない．クラッシュレポートにはもっと様々な情報を含めたい．例えば，実行環境は何か，どのような引数を指定して実行したか，などなど．&lt;code&gt;WrapConfig&lt;/code&gt;を自分で定義することで出力などをカスタマイズすることができる．&lt;/p&gt;
+
+&lt;p&gt;以下は，ユーザが実行したコマンド引数をクラッシュレポートに出力する例&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-golang&#34;&gt;
+func main() {
+
+    // (1)
+    logTempFile, _ := ioutil.TempFile(&amp;quot;&amp;quot;, &amp;quot;tmp-log&amp;quot;)
+
+    var wrapConfig panicwrap.WrapConfig
+
+    // (2)
+    wrapConfig.Handler = handlerFunc(logTempFile)
+    
+    // (3)
+    wrapConfig.Writer = logTempFile
+
+    exitStatus, err := panicwrap.Wrap(&amp;amp;wrapConfig)
+
+    if err != nil {
+        panic(err)
+    }
+
+    if exitStatus &amp;gt;= 0 {
+        os.Exit(exitStatus)
+    }
+
+    // (4)
+    log.SetOutput(os.Stderr)
+    log.Printf(&amp;quot;Run command: %s\n&amp;quot;, strings.Join(os.Args[0:], &amp;quot; &amp;quot;))
+
+    panic(&amp;quot;Fuck!!!&amp;quot;)
+}
+
+func handlerFunc(logF *os.File) panicwrap.HandlerFunc {
+    return func(output string) {
+
+        file, _ := os.Create(&amp;quot;crash.log&amp;quot;)
+
+        // Seek the log file to read from begining
+        logF.Seek(0, 0)
+
+        // Write to crash.log
+        io.Copy(file, logF)
+
+        // Tell user a crash occured and ask to tell us a report.
+        fmt.Fprint(os.Stderr, &amp;quot;\n\n!!! Application crashed, please report this !!! \n\n&amp;quot;)
+
+        os.Exit(1)
+    }
+}
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;（わかりやすさのためにエラー処理や&lt;code&gt;close&lt;/code&gt;処理は省略している）&lt;/p&gt;
+
+&lt;p&gt;以下のように動作する．&lt;/p&gt;
+
+&lt;ul&gt;
+&lt;li&gt;&lt;code&gt;(1)&lt;/code&gt;ではTempファイルを作成する，クラッシュレポートに出力したい内容はここに書き込む&lt;/li&gt;
+&lt;li&gt;&lt;code&gt;(2)&lt;/code&gt;ではhandlerを指定する．上のTempファイルの内容を&lt;code&gt;crash.log&lt;/code&gt;にpanicの出力と共に書き込んで保存するということをする&lt;/li&gt;
+&lt;li&gt;&lt;code&gt;(3)&lt;/code&gt;では&lt;code&gt;wrapConfig.Writer&lt;/code&gt;をTempファイルにする．&lt;code&gt;wrapConfig.Writer&lt;/code&gt;は&lt;code&gt;Wrap&lt;/code&gt;で実行したプロセスの標準エラー出力の書き込み先である（デフォルトは&lt;code&gt;os.Stderr&lt;/code&gt;）&lt;/li&gt;
+&lt;li&gt;&lt;code&gt;(4)&lt;/code&gt;からは通常の実行だがlogの出力先を標準エラー出力にする．これで&lt;code&gt;Wrap&lt;/code&gt;プロセスの出力はTempファイルに吐き出されることになる．あとはlogにクラッシュレポートに含めたい内容を書き込んでいくだけ．&lt;/li&gt;
+&lt;/ul&gt;
+
+&lt;h2 id=&#34;まとめ:fc683d9200d02aa9313aee343da796ef&#34;&gt;まとめ&lt;/h2&gt;
+
+&lt;p&gt;現在作ってるCLIツールが複数のプラットフォームに配布する予定なのでこれを利用してpanicしたときの詳しい状況を理解できるようにしている（バグレポート用のURLを表示するということもしている）．バグを報告してくれるかは善意に依るがその障壁は下げておきたい．&lt;/p&gt;
+
+&lt;p&gt;Hashicorp系のツールではこれがほとんど使われているので読んでみると面白い．基本はそれらを参考にした．&lt;/p&gt;
+</description>
+    </item>
+    
+    <item>
+      <title>CoreOS Meetup Tokyo #1 を開催した</title>
+      <link>http://deeeet.com/writing/2015/04/13/coreos-meetup-tokyo-1/</link>
+      <pubDate>Mon, 13 Apr 2015 22:03:28 +0900</pubDate>
+      
+      <guid>http://deeeet.com/writing/2015/04/13/coreos-meetup-tokyo-1/</guid>
+      <description>
+
+&lt;p&gt;&lt;a href=&#34;http://coreos-meetup-tokyo.connpass.com/event/12596/&#34;&gt;CoreOS Meetup Tokyo #1 - connpass&lt;/a&gt;&lt;/p&gt;
+
+&lt;p&gt;今回のMeetupは，etcd2.0のリリースやrktの登場，5月の&lt;a href=&#34;https://coreos.com/fest/&#34;&gt;CoreOS Fest 2015&lt;/a&gt;，また各社のCoreOSの導入事例の兆しを受けての開催．といってもCoreOSの利用事例はまだ少ないと感じたため，CoreOSだけではなくその関連技術やプラットフォームをテーマとした．それでも20分の発表8本というとても濃いMeetupとなり非常に勉強になった．またそこまで人は集まらないと思っていたところ100人枠に350人の応募があり，注目の高さにも驚いた（次回は抽選にするなど考慮します）．&lt;/p&gt;
+
+&lt;p&gt;発表資料は全て，&lt;a href=&#34;http://coreos-meetup-tokyo.connpass.com/event/12596/presentation/&#34;&gt;CoreOS Meetup Tokyo #1 - 資料一覧 - connpass&lt;/a&gt;にまとめてある．が，簡単にMeetupの内容をまとめておく．各種テーマが散っているので自分なりにまとめておく．&lt;/p&gt;
+
+&lt;h2 id=&#34;概要:cef69bd2ad9274d0801615ad8dc14be4&#34;&gt;概要&lt;/h2&gt;
+
+&lt;p&gt;まず，自分からはCoreOSについて知らない人でもMeetupにキャッチアップできるできるようにCoreOSの概要を簡単に紹介した．&lt;/p&gt;
+
+&lt;script async class=&#34;speakerdeck-embed&#34; data-id=&#34;27e1fef591484f0b91d46cc44ebd434e&#34; data-ratio=&#34;1.77777777777778&#34; src=&#34;http://speakerdeck.com/assets/embed.js&#34;&gt;&lt;/script&gt;
+
+&lt;p&gt;&lt;a href=&#34;https://speakerdeck.com/tcnksm/introduction-of-coreos-at-coreos-meetup-tokyo-number-1-number-coreosjp&#34;&gt;Introduction of CoreOS&lt;/a&gt;&lt;/p&gt;
+
+&lt;p&gt;CoreOSとは何か，モチベーションは何か，どんな特徴がありどんな技術が使われているのかについて話した．CoreOSについてはRebuildでも簡単にしゃべらせてもらったので参考にしてください．&lt;/p&gt;
+
+&lt;ul&gt;
+&lt;li&gt;&lt;a href=&#34;http://rebuild.fm/83/&#34;&gt;Rebuild: 83: Living In A Container (deeeet)&lt;/a&gt;&lt;/li&gt;
+&lt;/ul&gt;
+
+&lt;h2 id=&#34;要素技術:cef69bd2ad9274d0801615ad8dc14be4&#34;&gt;要素技術&lt;/h2&gt;
+
+&lt;p&gt;次にCoreOSで使われている技術について．今回はコンテナの話が2本とFleetの概要の発表が1本だった．&lt;/p&gt;
+
+&lt;ul&gt;
+&lt;li&gt;&lt;a href=&#34;https://twitter.com/mopemope&#34;&gt;@mopemope&lt;/a&gt;, &lt;a href=&#34;http://www.slideshare.net/YutakaMatsubara/rocket-46800960?ref=http://coreos-meetup-tokyo.connpass.com/event/12596/presentation/&#34;&gt;&amp;ldquo;CoreOS/Rocket&amp;rdquo;&lt;/a&gt; - rktとは何か，どのような思想で作られているのか，Dockerとは何が違うのか，現状何ができるのかについて．特にDockerとの比較はとてもわかりやすくて良かった．「Dockerほど高機能ではないが，その分シンプルで組み合わせ可能」という説明が確かにという感じ．&lt;/li&gt;
+&lt;li&gt;&lt;a href=&#34;https://github.com/kawamuray&#34;&gt;@kawamuray&lt;/a&gt;, &lt;a href=&#34;http://www.slideshare.net/kawamuray/coreos-meetup?ref=http://coreos-meetup-tokyo.connpass.com/event/12596/presentation/&#34;&gt;&amp;ldquo;Docker + Checkpoint/Restore&amp;rdquo;&lt;/a&gt; - CoreOS関係ないw CRIUの応用はLive migrationくらいだと思っていたけど，コンテナの中身（アプリケーション）に依存せずに起動を高速化するという応用は今後大切になりそう（複数の役割のコンテナをMicroservices的に立てるときに1つだけ起動が遅くてそれを考慮しようとすると管理側に複雑さが入り込む．特に大規模な分散システムだと問題が顕著になりそう）．&lt;/li&gt;
+&lt;li&gt;&lt;a href=&#34;https://twitter.com/spesnova&#34;&gt;@spesnova&lt;/a&gt;, &lt;a href=&#34;https://speakerdeck.com/spesnova/understanding-fleet&#34;&gt;&amp;ldquo;Understanding fleet&amp;rdquo;&lt;/a&gt; - Fleetの仕組みについて．FleetのスケジューリングはMesosほど複雑なことをしてなくて，もっとも少ないUnitを実行しているAgentに均等にタスクを割り振っているだけ．自分的にはこのシンプルさが好きだし，これで十分なことも多いと思う．&lt;/li&gt;
+&lt;/ul&gt;
+
+&lt;h2 id=&#34;iaas:cef69bd2ad9274d0801615ad8dc14be4&#34;&gt;IaaS&lt;/h2&gt;
+
+&lt;p&gt;CoreOS OEMの話をNIFTY Cloudの&lt;a href=&#34;https://twitter.com/higebu&#34;&gt;@higebu&lt;/a&gt;さんにしていただいた（&lt;a href=&#34;http://www.slideshare.net/higebu/20150409-core-osoemonniftycloud&#34;&gt;&amp;ldquo;CoreOS OEM in NIFTY Cloud&amp;rdquo;&lt;/a&gt;）．CoreOSのOEMとは，IaaSプロバイダーがそのプラットフォームでCoreOSを利用可能にするために，プラットフォームの独自の設定などをCoreOSに取り込んでもらうための仕組みでCloudに特化したCoreOSならではのもの．NIFTY CloudもCoreOSが使えるようになっており，その経緯について話してももらった．&lt;/p&gt;
+
+&lt;p&gt;普通の人はIaaSサービスでCoreOSを使うだけなので，これは万人向けの話ではない．が，CoreOSがどのように提供されるのかを知ることは使う側としてとても大事だと思うので，非常に勉強になった．特にたくさんあるCoreOSのレポジトリがどんな役割があるのかを知れて良かった．&lt;/p&gt;
+
+&lt;h2 id=&#34;プロダクション運用:cef69bd2ad9274d0801615ad8dc14be4&#34;&gt;プロダクション運用&lt;/h2&gt;
+
+&lt;p&gt;実際にCoreOSで実運用を始めている話が2本あった．&lt;/p&gt;
+
+&lt;ul&gt;
+&lt;li&gt;&lt;a href=&#34;https://twitter.com/spesnova&#34;&gt;@spesnova&lt;/a&gt;, &lt;a href=&#34;https://speakerdeck.com/spesnova/coreos-yun-yong-falsesuo-gan&#34;&gt;&amp;ldquo;CoreOS 運用の所感&amp;rdquo;&lt;/a&gt; - Wantedlyでの運用について．etcd/fleetをオフにして運用しているとのこと．ダイナミックデプロイを犠牲にしても得られるCoreOS利点として，ホストマシンの構築タスクがほぼない．AMI焼く必要もない，脆弱性対応（Ghostとか）が楽，起動が速い，コンテナとOSの分離（ホストの抽象化）の促進はそうだなと思うし，導入の参考になると思う．Channelの選びかたも参考になった．Docker後の世界でOpsとDevがいかに協調するか，という話はとても面白かったし&lt;a href=&#34;https://twitter.com/deeeet/status/586133045473779712&#34;&gt;賛同できた&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a href=&#34;https://twitter.com/ianmlewis&#34;&gt;@harukasan&lt;/a&gt;, &lt;a href=&#34;https://speakerdeck.com/harukasan/coreos-in-pixiv&#34;&gt;&amp;ldquo;CoreOSで運用する際に考えないといけないこと&amp;rdquo;&lt;/a&gt; - pixivでの運用について．こちらはFleetとetcdも使っているとのこと．とにかく導入時に考えるべきことが網羅されていて良かった．自分的にはCoreOSをどう捉えているのか，もしくはどのような場合に選択肢になるのか，k8sが必要になるのはどのラインか考え方がとても共感できた（cf. &lt;a href=&#34;http://blog.harukasan.jp/entry/2015/04/10/112517&#34;&gt;&amp;ldquo;CoreOS Meetup Tokyo #1 で発表してきました #coreosjp - BLOG::はるかさん&amp;rdquo;&lt;/a&gt;）&lt;/li&gt;
+&lt;/ul&gt;
+
+&lt;p&gt;まだみんながいろいろ試しているという段階が面白かった．&lt;/p&gt;
+
+&lt;p&gt;あとCoreOSのモニタリングはDataDogが人気っぽい．僕も自分のCoreOSクラスタはDDで監視している（cf. &lt;a href=&#34;https://speakerdeck.com/tcnksm/coreoskurasutafalsedockerkontenafalsejian-shi-number-monitoringcasual&#34;&gt;&amp;ldquo;CoreOSクラスタのDockerコンテナの監視&amp;rdquo;&lt;/a&gt;）&lt;/p&gt;
+
+&lt;h2 id=&#34;プラットフォーム:cef69bd2ad9274d0801615ad8dc14be4&#34;&gt;プラットフォーム&lt;/h2&gt;
+
+&lt;p&gt;最後にCoreOSの上でプラットフォームを構築するプロジェクトについての話が2本あった．&lt;/p&gt;
+
+&lt;ul&gt;
+&lt;li&gt;&lt;a href=&#34;https://twitter.com/jacopen&#34;&gt;@jacopen&lt;/a&gt;, &lt;a href=&#34;http://www.slideshare.net/jacopen/openshift-3dockerpaas?ref=http://coreos-meetup-tokyo.connpass.com/event/12596/presentation/&#34;&gt;&amp;ldquo;OpenShift 3で、DockerのPaaSを作る話&amp;rdquo;&lt;/a&gt; - OpenShiftはv3で今までのアーキテクチャーを一新してDockerとk8sの利用に舵を切っている．思想も面白くて，k8sに足りないPaaS的な側面，つまり，Webサービスの開発のライフサイクルの支援やユーザ管理などをOpenShiftが補うように構築されている．今回は奨励プラットフォームがRed Hat Atomicである部分をCoreOSで動かすというデモがあり面白かった（またWeb Hookの機能が面白いとの声もあった）．&lt;/li&gt;
+&lt;li&gt;&lt;a href=&#34;https://twitter.com/harukasan&#34;&gt;@ianmlewis&lt;/a&gt;, &amp;ldquo;Kubernetes on CoreOS&amp;rdquo; - CoreOSとk8sの関係は，&lt;a href=&#34;https://tectonic.com/&#34;&gt;TECTONIC&lt;/a&gt;の発表によってますます強くなっている．Dockerだけではなく，k8sを動かすホストとしてCoreOSを選択する事例は増えそう．&lt;/li&gt;
+&lt;/ul&gt;
+
+&lt;p&gt;CoreOS上にプラットフォームを構築している例として他にもDocker PaaSの&lt;a href=&#34;http://deis.io/&#34;&gt;Deis&lt;/a&gt;などがある．&lt;/p&gt;
+
+&lt;h2 id=&#34;まとめ:cef69bd2ad9274d0801615ad8dc14be4&#34;&gt;まとめ&lt;/h2&gt;
+
+&lt;p&gt;Meetupやその後で話したところCoreOSの導入事例は増えそうだなと感じた．特にDockerを載せるプラットフォームとしてはk8sほどのものを必要としないところは多いと思うのでCoreOSは良い選択になると思う．逆にk8sやOpenshiftのようなものを採用して実は裏はCoreOSです，という流れもあると思う．&lt;/p&gt;
+
+&lt;p&gt;今回発表はなかったが，&lt;a href=&#34;http://cloudfoundry.org/index.html&#34;&gt;Cloud Foundry&lt;/a&gt;がそのコンポーネントでetcdを使っているようにCoreOSのコンポーネントが単体で使われる事例も増えるのではと思う．特に日本では分散Key&amp;amp;Valueとして&lt;a href=&#34;https://www.consul.io/&#34;&gt;consul&lt;/a&gt;の導入が見られるが，Simple alternativeとしてetcdはあるのではと思う．&lt;/p&gt;
+
+&lt;p&gt;とにかく濃く，面白い発表をたくさん聞くことができてとても面白いMeetupだった．また機会があればお願いします．&lt;a href=&#34;https://twitter.com/kazunori_279&#34;&gt;@kazunori_279&lt;/a&gt;さん，&lt;a href=&#34;http://connpass.com/user/nishimurakaz/open/&#34;&gt;nishimurakaz&lt;/a&gt;さん，また会場提供の&lt;a href=&#34;https://www.fout.co.jp/&#34;&gt;FreakOut&lt;/a&gt;さんありがとうございました．&lt;/p&gt;
+</description>
+    </item>
+    
+  </channel>
+</rss>

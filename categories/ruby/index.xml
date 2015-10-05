@@ -1,0 +1,363 @@
+<?xml version="1.0" encoding="utf-8" standalone="yes" ?>
+<rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom">
+  <channel>
+    <title>Ruby on SOTA</title>
+    <link>http://deeeet.com/categories/ruby/</link>
+    <description>Recent content in Ruby on SOTA</description>
+    <generator>Hugo -- gohugo.io</generator>
+    <language>ja-jp</language>
+    <copyright>Copyright (C) 2013-2015 Taichi Nakashima All Right Reserved.</copyright>
+    <lastBuildDate>Mon, 17 Mar 2014 00:00:00 +0000</lastBuildDate>
+    <atom:link href="http://deeeet.com/categories/ruby/index.xml" rel="self" type="application/rss+xml" />
+    
+    <item>
+      <title>RubyのコマンドラインツールのMan Pageをつくる</title>
+      <link>http://deeeet.com/writing/2014/03/17/gem-man/</link>
+      <pubDate>Mon, 17 Mar 2014 00:00:00 +0000</pubDate>
+      
+      <guid>http://deeeet.com/writing/2014/03/17/gem-man/</guid>
+      <description>
+
+&lt;p&gt;コマンドラインツールでは，&lt;code&gt;--help&lt;/code&gt;オプションで簡単に使い方やオプションの説明を出力する．単純に使ってもらう分にはこれで足りる．ただ，さらにそのコマンドラインツールを使ってもらいたい場合には，詳細なドキュメントや使い方の例，簡単なチュートリアルをコマンドライン上で提供できるのがよい．単純に&lt;code&gt;Optparse&lt;/code&gt;などでこれをやろうとすると，スペースが足りないし，ちょっとヘルプを見たいだけのユーザには邪魔になる．&lt;/p&gt;
+
+&lt;p&gt;伝統的なUNIXコマンドは，&lt;code&gt;man&lt;/code&gt;コマンドを通じてそのような詳細な情報を提供している．例えば，&lt;code&gt;man ls&lt;/code&gt;と打てば，&lt;code&gt;ls&lt;/code&gt;コマンドの詳細が見れる．RubyでつくったコマンドラインツールでもMan Pageを通じて，同様の情報を提供できるとよい．&lt;/p&gt;
+
+&lt;p&gt;しかし，Rubygems.orgを通してコマンドラインツールを配信する場合，標準の&lt;code&gt;man&lt;/code&gt;コマンドを通じてMan pageを提供するのは難しい．GithubのChris Wanstrath氏による&lt;a href=&#34;https://github.com/defunkt/gem-man&#34;&gt;gem-man&lt;/a&gt;を使えば，&lt;code&gt;gem man&lt;/code&gt;コマンドを通じて標準の&lt;code&gt;man&lt;/code&gt;と同様のMan Pageを簡単に提供できる．&lt;/p&gt;
+
+&lt;p&gt;さらに，Man Pageは，&lt;a href=&#34;http://ja.wikipedia.org/wiki/Roff&#34;&gt;nroff&lt;/a&gt;という専用の言語で書かれており，わざわざ習得するのはめんどい．これも，&lt;a href=&#34;https://github.com/rtomayko/ronn&#34;&gt;rtomayko/ronn&lt;/a&gt;を使えば，MarkdownでMan pageを書いて，nroff形式に変換することができる．&lt;/p&gt;
+
+&lt;h2 id=&#34;tl-dr:bf2fcdda1e637907b0367db7d80738a2&#34;&gt;TL;DR&lt;/h2&gt;
+
+&lt;ul&gt;
+&lt;li&gt;&lt;code&gt;gem man&lt;/code&gt;でrubyでつくったコマンドラインツールのMan Pageを提供する&lt;/li&gt;
+&lt;li&gt;&lt;a href=&#34;https://github.com/rtomayko/ronn&#34;&gt;ronn&lt;/a&gt;でMarkdown形式をMan Pageのnroff形式を吐き出す&lt;/li&gt;
+&lt;/ul&gt;
+
+&lt;p&gt;以下のようなものをつくる．&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-bash&#34;&gt;$ gem man your_app
+
+NAME
+    your_app - Sample of gem-man and ronn
+
+SYNOPSIS
+    your_app [options]
+
+DESCRIPTION
+    your_app is a simple command-line tool for ...
+
+OPTIONS
+    -h, --help
+      Show help page.
+etc...      
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;h2 id=&#34;install:bf2fcdda1e637907b0367db7d80738a2&#34;&gt;Install&lt;/h2&gt;
+
+&lt;p&gt;Gemとして&lt;code&gt;gem-man&lt;/code&gt;と&lt;code&gt;ronn&lt;/code&gt;をインストールする．&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-bash&#34;&gt;$ gem install gem-man ronn
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;Rubygemsとして配布する場合は，gemspecに以下を追記する．&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-ruby&#34;&gt;# your_app.gemspec
+spec.add_dependency &amp;quot;gem-man&amp;quot;
+spec.add_development_dependency &amp;quot;ronn&amp;quot;
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;Man Pageのソースは，プロジェクトのルートの&lt;code&gt;man&lt;/code&gt;ディレクトリに配置し，ファイル名は&lt;code&gt;your_app.1.ronn&lt;/code&gt;とする．&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-bash&#34;&gt;$ mkdir man
+$ touch man/your_app.1.ronn
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;&lt;code&gt;.1&lt;/code&gt;というファイル名は必須でMan Pageのセクション番号を示す．&lt;/p&gt;
+
+&lt;h2 id=&#34;ronnでman-pageをつくる:bf2fcdda1e637907b0367db7d80738a2&#34;&gt;ronnでMan Pageをつくる&lt;/h2&gt;
+
+&lt;p&gt;ronnを使えば，Man PageをMarkdown形式で書き，nroff形式で吐き出すことができる．例えば，以下のように書く．&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;your_app(1) - Sample of gem-man and ronn
+====
+
+## SYNOPSIS
+
+`your_app` [options]
+
+## DESCRIPTION
+
+**your_app** is a simple command-line tool for ...
+
+## OPTIONS
+
+  * -h, --help
+      Show help page.
+
+## Exmaple
+...
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;&lt;code&gt;##&lt;/code&gt;でセクションの始まり，&lt;code&gt;*&lt;/code&gt;でリストなど，普段&lt;code&gt;README.md&lt;/code&gt;などで書いてるのと同じ感じで作成できる．また，&lt;code&gt;&amp;lt;&amp;gt;&lt;/code&gt;で囲めばリンクとなり，&lt;code&gt;man/index.txt&lt;/code&gt;を準備すれば，他のMan Pageにリンクを貼ることもできる．&lt;/p&gt;
+
+&lt;p&gt;後は，以下のコマンドでnroff形式で吐き出すだけ．&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-bash&#34;&gt;$ ronn man/your_app.1.ronn
+roff: man/your_app.1
+html: man/your_app.1.html                                     
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;同時にHTML形式も吐き出される（例えば，ronnだと&lt;a href=&#34;http://rtomayko.github.io/ronn/ronn.1.html&#34;&gt;こんな感じ&lt;/a&gt;のページが生成される）．生成結果は，標準の&lt;code&gt;man&lt;/code&gt;を使ってプレビューできる．&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;$ man man/your_app.1
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;h2 id=&#34;gem-manを使う:bf2fcdda1e637907b0367db7d80738a2&#34;&gt;gem-manを使う&lt;/h2&gt;
+
+&lt;p&gt;後は，上で作成したmanディレクトリを一緒にgemとして配布すれば，ユーザは以下のコマンドで作成したMan Pageを表示できるようになる．&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;$ gem man your_app
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;UNIXの他のコマンドと同様に扱いたい場合は，以下のようなAliasを設定すればよい．&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-bash&#34;&gt;$ alias man=&#39;gem man -s&#39;
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;Man Pageがあれば，わざわざブラウザを立ち上げることなく，詳細のドキュメントをユーザに提示でき，より親切なコマンドラインツールをつくれる．&lt;/p&gt;
+
+&lt;h2 id=&#34;参考:bf2fcdda1e637907b0367db7d80738a2&#34;&gt;参考&lt;/h2&gt;
+
+&lt;ul&gt;
+&lt;li&gt;&lt;a href=&#34;http://pragprog.com/book/dccar/build-awesome-command-line-applications-in-ruby&#34;&gt;Build Awesome Command-Line Applications in Ruby&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a href=&#34;https://github.com/tcnksm/rbdock&#34;&gt;tcnksm/rbdock&lt;/a&gt;&lt;/li&gt;
+&lt;/ul&gt;
+</description>
+    </item>
+    
+    <item>
+      <title>Rakeのtask名にaliasを設定する</title>
+      <link>http://deeeet.com/writing/2014/03/05/rake-alias/</link>
+      <pubDate>Wed, 05 Mar 2014 00:00:00 +0000</pubDate>
+      
+      <guid>http://deeeet.com/writing/2014/03/05/rake-alias/</guid>
+      <description>&lt;p&gt;&lt;a href=&#34;http://stackoverflow.com/questions/7656541/the-alias-of-task-name-in-rake&#34;&gt;The alias of task name in rake&lt;/a&gt;&lt;/p&gt;
+
+&lt;p&gt;シンプルなやり方．&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-ruby&#34;&gt;# Rakefile
+namespace :db do
+    task :table do
+        puts &amp;quot;table&amp;quot;
+    end
+end
+  
+task :t =&amp;gt; [&amp;quot;db:table&amp;quot;]
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-bash&#34;&gt;$ rake t
+# -&amp;gt; &amp;quot;table&amp;quot;
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;複数のタスクを一気に登録したい場合は，以下のようなメソッドを準備する．&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-ruby&#34;&gt;# Rakefile
+def alias_tasks tasks
+    tasks.each do |new, old|
+        task new, [*Rake.application[old].arg_names] =&amp;gt; [old]
+    end
+end
+
+namespace :db do
+    task :table do
+        puts &amp;quot;table&amp;quot;
+    end
+    
+    task :schema do
+        puts &amp;quot;schema&amp;quot;
+    end
+end
+
+alias_tasks [
+             [:dt, &amp;quot;db:table&amp;quot;],
+             [:ds, &amp;quot;db:schema&amp;quot;]
+             ]                                      
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;pre&gt;&lt;code&gt;$ rake ds
+# -&amp;gt; schema
+&lt;/code&gt;&lt;/pre&gt;
+</description>
+    </item>
+    
+    <item>
+      <title>Rakefileに加えるべき7行</title>
+      <link>http://deeeet.com/writing/2014/02/15/7lines-rakefile/</link>
+      <pubDate>Sat, 15 Feb 2014 00:00:00 +0000</pubDate>
+      
+      <guid>http://deeeet.com/writing/2014/02/15/7lines-rakefile/</guid>
+      <description>&lt;p&gt;&lt;a href=&#34;http://erniemiller.org/2014/02/05/7-lines-every-gems-rakefile-should-have/&#34;&gt;7 Lines Every Gem&amp;rsquo;s Rakefile Should Have&lt;/a&gt;&lt;/p&gt;
+
+&lt;p&gt;必要なgemをrequireしてすぐに使えるようにしましょうと．自分はpryで．&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-ruby&#34;&gt;task :console do
+  require &#39;pry&#39;
+  requrey &#39;my_gem&#39; 
+  ARGV.clear
+  Pry.start
+end
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;OSSだとpry使ってないひともいる可能性があるからirbでやったほうがいいかも．&lt;/p&gt;
+</description>
+    </item>
+    
+    <item>
+      <title>Pushover使ってみた</title>
+      <link>http://deeeet.com/writing/2014/02/09/pushover/</link>
+      <pubDate>Sun, 09 Feb 2014 00:00:00 +0000</pubDate>
+      
+      <guid>http://deeeet.com/writing/2014/02/09/pushover/</guid>
+      <description>&lt;p&gt;&lt;a href=&#34;https://pushover.net/&#34;&gt;Pushover&lt;/a&gt;&lt;/p&gt;
+
+&lt;p&gt;PushoverはiOS/Androidの通知アプリ．提供されるシンプルなAPIを介して，アプリに通知を送れる．HTTP POSTさえできればよいので，Shell Scriptからでもrubyやperlからでも簡単に通知が送れる．&lt;/p&gt;
+
+&lt;p&gt;Rubyを使って遊んでみた．&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-ruby&#34;&gt;require &#39;net/https&#39;
+
+url = URI.parse(&amp;quot;https://api.pushover.net/1/messages.json&amp;quot;)
+
+req = Net::HTTP::Post.new(url.path)
+req.set_form_data({
+                    token: &amp;quot;****&amp;quot;,
+                    user:  &amp;quot;****&amp;quot;,                    
+                    message: &amp;quot;Check this link, http://deeeet.com/&amp;quot;,
+                    title: &amp;quot;お知らせ&amp;quot;,    
+                    device: &amp;quot;tcnksm_iphone&amp;quot;,        
+                    url: &amp;quot;tel:117&amp;quot;,
+                    url_title: &amp;quot;Call now&amp;quot;,
+                    sound: &amp;quot;alien&amp;quot;
+                    })
+                    
+res = Net::HTTP.new(url.host, url.port)
+res.use_ssl = true
+res.verify_mode = OpenSSL::SSL::VERIFY_PEER
+res.start {|http| http.request(req)}
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;&lt;code&gt;user&lt;/code&gt;はsign upするともらえるUser Key．&lt;code&gt;token&lt;/code&gt;はアプリを登録するともらえるAPI Token. &lt;code&gt;message&lt;/code&gt;は通知の本文． この3つが必須でこれだけでも通知は可能．&lt;/p&gt;
+
+&lt;p&gt;&lt;code&gt;title&lt;/code&gt;は通知のタイトル．指定しない場合は登録したアプリ名が使われる．&lt;code&gt;device&lt;/code&gt;は通知したいデバイスを指定する．指定しない場合は登録されている全てのデバイスに通知される．&lt;/p&gt;
+
+&lt;p&gt;通知は以下のような感じ．&lt;/p&gt;
+
+&lt;p&gt;&lt;img src=&#34;http://deeeet.com/images/push_normal.PNG&#34; class=&#34;image&#34;&gt;&lt;/p&gt;
+
+&lt;p&gt;通知をタップすると，詳細が表示される．&lt;/p&gt;
+
+&lt;p&gt;&lt;img src=&#34;http://deeeet.com/images/push_normal2.PNG&#34; class=&#34;image&#34;&gt;&lt;/p&gt;
+
+&lt;p&gt;通知本文内のURLは自動で判別されるため，ブラウザで開くことができる．&lt;code&gt;url&lt;/code&gt;と&lt;code&gt;url_title&lt;/code&gt;パラメータを与えれば，追加でURLを送ることもできる．これで長いURLも送ることができるし，アプリのURLスキームも使えるので，例えば上のように&lt;code&gt;tel:117&lt;/code&gt;とすれば，タップでそのまま電話アプリを開いて117に電話するなんてこともできる（117はありえんが）．また&lt;code&gt;sound&lt;/code&gt;パラメータで通知音を変更することもできる．使える音は&lt;a href=&#34;https://pushover.net/api#sounds&#34;&gt;ここ&lt;/a&gt;にある．&lt;/p&gt;
+
+&lt;p&gt;&lt;code&gt;priority&lt;/code&gt;パラメータで通知のレベルも変更することができる．レベルは，Low(-1)，Normal(0)，High(1)，Emergency(2)の4つがある．&lt;/p&gt;
+
+&lt;ul&gt;
+&lt;li&gt;Low: 通知は送られるが，通知音は鳴らない&lt;/li&gt;
+&lt;li&gt;Normal: デフォルト．自分で設定するQuiet Hoursの間は通知音は鳴らない&lt;/li&gt;
+&lt;li&gt;High: Quiet Hoursであっても通知音が鳴る&lt;/li&gt;
+&lt;li&gt;Emergency: 通知内の確認ボタンをタップするまで通知音が鳴り続ける&lt;/li&gt;
+&lt;/ul&gt;
+
+&lt;p&gt;例えば通知のレベルをHighにすると，通知は以下のように赤色になる．&lt;/p&gt;
+
+&lt;p&gt;&lt;img src=&#34;http://deeeet.com/images/push_hp.PNG&#34; class=&#34;image&#34;&gt;&lt;/p&gt;
+
+&lt;p&gt;通知のレベルをEmergencyにする場合は，以下のように&lt;code&gt;retry&lt;/code&gt;で通知の間隔，&lt;code&gt;expire&lt;/code&gt;で通知の持続時間を指定する必要がある．&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-ruby&#34;&gt;req.set_form_data({
+                    token: &amp;quot;****&amp;quot;, 
+                    user: &amp;quot;****&amp;quot;,  
+                    title: &amp;quot;めっちゃ緊急！&amp;quot;,
+                    message: &amp;quot;Something happen&amp;quot;,
+                    priority: 2,
+                    retry: 30,
+                    expire: 300,
+                    })
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;通知は以下のように，Highより赤く表示される．&lt;/p&gt;
+
+&lt;p&gt;&lt;img src=&#34;http://deeeet.com/images/push_em.PNG&#34; class=&#34;image&#34;&gt;&lt;/p&gt;
+
+&lt;p&gt;通知を止めるには，メッセージを開いて&amp;rdquo;Acknowledge Notification&amp;rdquo;をタップする必要がある．&lt;/p&gt;
+
+&lt;p&gt;&lt;img src=&#34;http://deeeet.com/images/push_em2.PNG&#34; class=&#34;image&#34;&gt;&lt;/p&gt;
+
+&lt;p&gt;ざっと触ってみたけど簡単だった．基本，障害通知を意識して作られてる印象あるけど，もっといろいろ面白い使い道がありそう．&lt;a href=&#34;https://ifttt.com/pushover&#34;&gt;IFTTTのRecipe&lt;/a&gt;も作れるようになってる．IFTTTでは物足りないときに簡単にスクリプト組めそうでよい．&lt;/p&gt;
+
+&lt;p&gt;rubyしか見てないが，gemも既にある，&lt;a href=&#34;https://github.com/erniebrodeur/pushover&#34;&gt;erniebrodeur/pushover&lt;/a&gt;&lt;/p&gt;
+
+&lt;p&gt;参考&lt;/p&gt;
+
+&lt;ul&gt;
+&lt;li&gt;今回のサンプルのソース，&lt;a href=&#34;https://github.com/tcnksm/pushover&#34;&gt;tcnksm/pushover&lt;/a&gt;&lt;/li&gt;
+&lt;/ul&gt;
+</description>
+    </item>
+    
+    <item>
+      <title>How to test ActionMailer</title>
+      <link>http://deeeet.com/writing/2013/11/07/rspec-actionmailer/</link>
+      <pubDate>Thu, 07 Nov 2013 00:00:00 +0000</pubDate>
+      
+      <guid>http://deeeet.com/writing/2013/11/07/rspec-actionmailer/</guid>
+      <description>&lt;p&gt;Railsに付属の&lt;a href=&#34;https://github.com/rails/rails/tree/master/actionmailer&#34;&gt;actionmailer&lt;/a&gt;．Railsプロジェクトではなく，単独でも使うことができる．erbテンプレートが使えたり，htmlメールが送れるため，簡単なバッチをつくるときによく利用する．最小限の利用サンプルは&lt;a href=&#34;https://github.com/tcnksm/snippets/tree/master/ruby/actionmailer&#34;&gt;こちら&lt;/a&gt;．&lt;/p&gt;
+
+&lt;p&gt;テストできるのは，メール送信数と送信先，送信元，件名，本文．まず，spec_helperの設定．&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-ruby&#34;&gt;ActionMailer::Base.delivery_method = :test
+ActionMailer::Base.perform_deliveries = true
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;送信数．意図した数のメールが送られているか．&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-ruby&#34;&gt;it &amp;quot;sends an mail&amp;quot; do
+    expect(ActionMailer::Base.deliveries.count).to eq(1)
+end
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;送信先．意図したアドレスに配信されたか．&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-ruby&#34;&gt;it &amp;quot;renders the receiver mail&amp;quot; do
+    expect(ActionMailer::Base.deliveries.first.to).to eq([&amp;quot;test@mail.net&amp;quot;])
+end
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;送信元．意図したアドレスから配信されているか．&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-ruby&#34;&gt;it &amp;quot;renders the sender mail&amp;quot; do
+    expect(ActionMailer::Base.deliveries.first.from).to eq([&amp;quot;sender@mail.net&amp;quot;])
+end
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;件名．意図した件名で配信されているか．&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-ruby&#34;&gt;it &amp;quot;set the success subject&amp;quot; do
+    expect(ActionMailer::Base.deliveries.first.subject).to match(/[Success]/)
+end
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;本文．意図した本文で配信されているか．&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-ruby&#34;&gt;it &amp;quot;sends the hello body&amp;quot; do
+    expect(ActionMailer::Base.deliveries.first.body).to match(/Hello, #{user}./)
+end
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;今回のテストはすべて&lt;a href=&#34;https://github.com/tcnksm/snippets/tree/master/ruby/actionmailer/spec&#34;&gt;ここ&lt;/a&gt;にまとめてある．&lt;/p&gt;
+</description>
+    </item>
+    
+  </channel>
+</rss>

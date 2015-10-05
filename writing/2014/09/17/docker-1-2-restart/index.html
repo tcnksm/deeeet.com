@@ -1,0 +1,251 @@
+<!doctype html>
+<html>
+  <head>
+    <meta http-equiv="content-type" content="text/html; charset=utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    
+    <title>Dockerの再起動オプション | SOTA</title>
+    
+    <link href="https://fonts.googleapis.com/css?family=Lato%3a900" rel="stylesheet" type="text/css">
+    <link rel="stylesheet" href="/css/main.css">
+    <link rel="shortcut icon" href="/favicon.png" type="image/x-icon" />
+    <link href="http://deeeet.com//index.xml" rel="alternate" type="application/rss+xml" title="" />
+    <meta name="title" content="http://deeeet.com/writing/2014/09/17/docker-1-2-restart/">
+    <link rel="canonical" href="http://deeeet.com/writing/2014/09/17/docker-1-2-restart/">
+    
+    <meta property="og:title" content="Dockerの再起動オプション"/>
+    <meta property="og:url" content="http://deeeet.com/writing/2014/09/17/docker-1-2-restart/"/>
+  </head>
+  
+  <body>
+    <section class="site-nav">
+      <header>
+        <nav id="navigation">
+          <ul class="menu">
+            <li><a href="https://github.com/tcnksm/talks">Talks</a></li>
+            <li><a href="https://tcnksm.exposure.co/">Photos</a></li>
+          </ul>
+
+          <a class="name" href="/">SOTA</a>
+        </nav>        
+      </header>
+    </section>
+    
+
+
+<article>
+  <div class="container">
+    <header>
+      <div class="meta">
+        <time pubdate datetime="2014-09-17" title="2014-09-17">September 17, 2014</time>
+      </div>
+      <h1 class="title">Dockerの再起動オプション</h1>
+    </header>
+    
+    <section>
+      
+
+<p><a href="http://blog.docker.com/2014/08/announcing-docker-1-2-0/">Announcing Docker 1.2.0 | Docker Blog</a></p>
+
+<p>v1.2でもいくつかの面白い機能が追加された．例えば，今まで<code>--privileged</code>オプションを使うと全権限を与えてしまっていたが<code>--cap-add</code>や<code>--cap-drop</code>オプションでそれを制限できるようになったり，<code>–device</code>オプションで利用したいデバイスを指定できたり，コンテナ起動時に<code>/etc/hosts</code>を編集できたり&hellip;など．</p>
+
+<p>中でも再起動オプションが良さげなので，実際に触ってみた．<code>docker run</code>を実行するときに<code>--restart</code>オプションに以下を指定するとコンテナの再起動の挙動を変更できる:</p>
+
+<ul>
+<li><code>no</code> - 再起動しない（デフォルト）</li>
+<li><code>on-failure</code> - 終了ステータスがnon-zeroの場合に再起動する</li>
+<li><code>on-failure:X</code> - 終了ステータスがnon-zeroの場合に<code>X</code>回だけ再起動する</li>
+<li><code>always</code> - 終了ステータスがなんであろうと再起動する</li>
+</ul>
+
+<h3 id="no:a8ce05ddb0ac3a35b1bc0778ca0f995e">no</h3>
+
+<p>これはデフォルトの挙動で，再起動は行わない．</p>
+
+<pre><code class="language-bash">$ docker run --restart=no busybox /bin/sh -c 'date; exit 1'
+Wed Sep 17 08:13:15 UTC 2014
+</code></pre>
+
+<pre><code class="language-bash">$ docker ps -a
+CONTAINER ID        IMAGE               COMMAND                CREATED             STATUS                     PORTS               NAMES
+e3389974b4ef        busybox:latest      &quot;/bin/sh -c 'date; e   5 seconds ago       Exited (1) 4 seconds ago                       jolly_hoover
+</code></pre>
+
+<h3 id="on-failure:a8ce05ddb0ac3a35b1bc0778ca0f995e">on-failure</h3>
+
+<p>これは終了ステータスがnon-zeroの場合に再起動し続ける．</p>
+
+<pre><code class="language-bash">$ docker run --restart=on-failure busybox /bin/sh -c 'date; exit 1'
+Wed Sep 17 08:15:38 UTC 2014
+</code></pre>
+
+<pre><code class="language-bash">$ docker ps -a
+CONTAINER ID        IMAGE               COMMAND                CREATED             STATUS                         PORTS               NAMES
+4fd4e22ecb35        busybox:latest      &quot;/bin/sh -c 'date; e   4 seconds ago       Restarting (1) 1 seconds ago                       trusting_wilson
+</code></pre>
+
+<p>ログを見ると，バックグランドで再起動し続けてるのがわかる．</p>
+
+<pre><code class="language-bash">$ docker log 4fd4e22ecb35
+Wed Sep 17 08:15:38 UTC 2014
+Wed Sep 17 08:15:39 UTC 2014
+Wed Sep 17 08:15:39 UTC 2014
+Wed Sep 17 08:15:41 UTC 2014
+Wed Sep 17 08:15:42 UTC 2014
+Wed Sep 17 08:15:46 UTC 2014
+Wed Sep 17 08:15:53 UTC 2014
+</code></pre>
+
+<h3 id="on-failure-x:a8ce05ddb0ac3a35b1bc0778ca0f995e">on-failure:X</h3>
+
+<p><code>on-failure</code>は再起動の回数を制限することができる．例えば5回にしてみる．</p>
+
+<pre><code class="language-bash">$ docker run --restart=on-failure:5 busybox /bin/sh -c 'date; exit 1'
+Wed Sep 17 08:51:05 UTC 2014
+</code></pre>
+
+<pre><code class="language-bash">$ docker ps -a
+CONTAINER ID        IMAGE               COMMAND                CREATED             STATUS                                  PORTS               NAMES
+c5a86fc5e242        busybox:latest      &quot;/bin/sh -c 'date; e   2 seconds ago       Restarting (1) Less than a second ago                       cocky_hawking
+</code></pre>
+
+<p>ログを見る．</p>
+
+<pre><code class="language-bash">$ docker logs c5a86fc5e242
+Wed Sep 17 08:51:05 UTC 2014
+Wed Sep 17 08:51:06 UTC 2014
+Wed Sep 17 08:51:07 UTC 2014
+Wed Sep 17 08:51:08 UTC 2014
+Wed Sep 17 08:51:10 UTC 2014
+</code></pre>
+
+<p>5回再起動した後にステータスを見るとコンテナが終了しているのが確認できる．</p>
+
+<pre><code class="language-bash">$ docker ps -a
+CONTAINER ID        IMAGE               COMMAND                CREATED             STATUS                      PORTS               NAMES
+c5a86fc5e242        busybox:latest      &quot;/bin/sh -c 'date; e   29 seconds ago      Exited (1) 24 seconds ago                       cocky_hawking
+</code></pre>
+
+<h3 id="always:a8ce05ddb0ac3a35b1bc0778ca0f995e">always</h3>
+
+<p>終了コードが何であっても起動し続ける．</p>
+
+<pre><code class="language-bash">$ docker run --restart=always busybox /bin/sh -c 'date; exit 0'
+Wed Sep 17 08:57:34 UTC 2014
+</code></pre>
+
+<pre><code class="language-bash">$ docker run --restart=always busybox /bin/sh -c 'date; exit 1'
+Wed Sep 17 08:57:37 UTC 2014
+</code></pre>
+
+<pre><code class="language-bash">$ docker ps -a
+CONTAINER ID        IMAGE               COMMAND                CREATED             STATUS                         PORTS               NAMES
+19df55aec365        busybox:latest      &quot;/bin/sh -c 'date; e   4 seconds ago       Restarting (1) 1 seconds ago                       drunk_ritchie
+a158cdffcaae        busybox:latest      &quot;/bin/sh -c 'date; e   8 seconds ago       Restarting (0) 3 seconds ago                       naughty_mclean
+</code></pre>
+
+<h3 id="再起動の間隔:a8ce05ddb0ac3a35b1bc0778ca0f995e">再起動の間隔</h3>
+
+<p>触っていて再起動の間隔が一定でないことに気がついた．ソースを読んでみると，</p>
+
+<ul>
+<li>デフォルトの再起動間隔は100ms</li>
+<li>コンテナが10秒以内で終了すると起動間隔を前回の2倍にする</li>
+<li>コンテナが10秒より長く起動した後に終了すると起動間隔をデフォルトに戻す</li>
+</ul>
+
+<p>というロジックが入っていた．上の例のような即終了する処理をしていると起動間隔はどんどん長くなる（ドキュメントが見当たらなかったので，この辺は外部から指定できたり，いづれ変更は入りそう）．</p>
+
+<p><a href="https://github.com/docker/docker/blob/master/daemon/monitor.go">docker/daemon/monitor.go</a></p>
+
+<pre><code class="language-go">// resetMonitor resets the stateful fields on the containerMonitor based on the
+// previous runs success or failure.  Reguardless of success, if the container had
+// an execution time of more than 10s then reset the timer back to the default
+func (m *containerMonitor) resetMonitor(successful bool) {
+    executionTime := time.Now().Sub(m.lastStartTime).Seconds()
+
+    if executionTime &gt; 10 {
+        m.timeIncrement = defaultTimeIncrement
+    } else {
+        // otherwise we need to increment the amount of time we wait before restarting
+        // the process.  We will build up by multiplying the increment by 2
+        m.timeIncrement *= 2
+    }
+
+    // the container exited successfully so we need to reset the failure counter
+    if successful {
+        m.failureCount = 0
+    } else {
+        m.failureCount++
+    }
+}
+</code></pre>
+
+<h2 id="まとめ:a8ce05ddb0ac3a35b1bc0778ca0f995e">まとめ</h2>
+
+<p>使いどころを間違えなければ，良い感じで使えそう．</p>
+
+<p>コンテナの再起動は外部ツール（e.g., systemd）の領域だったけどDockerのみでそれができるようになった．でも，それらが不要になるわけではない．CLIから使えるということはAPIが公開されているということなので，外部ツールはより効率よくそれを使えるようになるということかなと．</p>
+
+<h3 id="参考:a8ce05ddb0ac3a35b1bc0778ca0f995e">参考</h3>
+
+<ul>
+<li><a href="https://news.ycombinator.com/item?id=8212908">Docker 1.2.0, with restart policies | Hacker News</a></li>
+<li><a href="https://speakerdeck.com/vieux/whats-new-in-the-latest-docker-release-and-docker-hub-at-braintree">What&rsquo;s new in the latest Docker release and Docker Hub @ braintree // Speaker Deck</a></li>
+</ul>
+
+      <div class="social">
+  
+  
+  <a href="https://twitter.com/share" class="twitter-share-button" data-via="deeeet" data-count="none">Tweet</a>
+  
+  
+</div>
+
+    </section>
+
+    <footer>
+      <address>
+        
+        <img src="/images/bio.jpeg"/>
+        
+        <p>Written by <strong><a rel="author" href="https://twitter.com/deeeet" title="Taichi Nakashima" target="_blank">Taichi Nakashima</a></strong><br>
+          <span class="muted">A Tokyo based PaaS engineer. Please contact me via twitter.</span>
+        </p>
+      </address>
+
+    </footer>
+
+  </div>
+</article>
+
+<script type="text/javascript" src="//ajax.googleapis.com/ajax/libs/jquery/1.7.2/jquery.min.js"></script>
+<script type="text/javascript" src="/js/main.js"></script>
+
+<script>!function(d,s,id){var js,fjs=d.getElementsByTagName(s)[0],p=/^http:/.test(d.location)?'http':'https';if(!d.getElementById(id)){js=d.createElement(s);js.id=id;js.src=p+'://platform.twitter.com/widgets.js';fjs.parentNode.insertBefore(js,fjs);}}(document, 'script', 'twitter-wjs');</script>
+
+
+<script type="text/javascript">var HN=[];HN.factory=function(e){return function(){HN.push([e].concat(Array.prototype.slice.call(arguments,0)))};},HN.on=HN.factory("on"),HN.once=HN.factory("once"),HN.off=HN.factory("off"),HN.emit=HN.factory("emit"),HN.load=function(){var e="hn-button.js";if(document.getElementById(e))return;var t=document.createElement("script");t.id=e,t.src="//hn-button.herokuapp.com/hn-button.js";var n=document.getElementsByTagName("script")[0];n.parentNode.insertBefore(t,n)},HN.load();</script>
+
+
+  <script>
+  (function(i,s,o,g,r,a,m){i['GoogleAnalyticsObject']=r;i[r]=i[r]||function(){
+  (i[r].q=i[r].q||[]).push(arguments)},i[r].l=1*new Date();a=s.createElement(o),
+  m=s.getElementsByTagName(o)[0];a.async=1;a.src=g;m.parentNode.insertBefore(a,m)
+  })(window,document,'script','//www.google-analytics.com/analytics.js','ga');
+
+  ga('create', 'UA-45390253-1', 'auto');
+  ga('send', 'pageview');
+
+</script>
+
+
+
+<script>
+  $(document).ready(function() {
+  
+  $('p:has(img)').css('text-align', 'center');
+  $('iframe').css('style', 'display: block; margin: 0px auto;');
+  });
+</script>
+

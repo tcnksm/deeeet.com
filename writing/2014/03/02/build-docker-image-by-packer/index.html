@@ -1,0 +1,250 @@
+<!doctype html>
+<html>
+  <head>
+    <meta http-equiv="content-type" content="text/html; charset=utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    
+    <title>Packerを使ってChef/Puppet/AnsibleでDockerのイメージをつくる | SOTA</title>
+    
+    <link href="https://fonts.googleapis.com/css?family=Lato%3a900" rel="stylesheet" type="text/css">
+    <link rel="stylesheet" href="/css/main.css">
+    <link rel="shortcut icon" href="/favicon.png" type="image/x-icon" />
+    <link href="http://deeeet.com//index.xml" rel="alternate" type="application/rss+xml" title="" />
+    <meta name="title" content="http://deeeet.com/writing/2014/03/02/build-docker-image-by-packer/">
+    <link rel="canonical" href="http://deeeet.com/writing/2014/03/02/build-docker-image-by-packer/">
+    
+    <meta property="og:title" content="Packerを使ってChef/Puppet/AnsibleでDockerのイメージをつくる"/>
+    <meta property="og:url" content="http://deeeet.com/writing/2014/03/02/build-docker-image-by-packer/"/>
+  </head>
+  
+  <body>
+    <section class="site-nav">
+      <header>
+        <nav id="navigation">
+          <ul class="menu">
+            <li><a href="https://github.com/tcnksm/talks">Talks</a></li>
+            <li><a href="https://tcnksm.exposure.co/">Photos</a></li>
+          </ul>
+
+          <a class="name" href="/">SOTA</a>
+        </nav>        
+      </header>
+    </section>
+    
+
+
+<article>
+  <div class="container">
+    <header>
+      <div class="meta">
+        <time pubdate datetime="2014-03-02" title="2014-03-02">March 02, 2014</time>
+      </div>
+      <h1 class="title">Packerを使ってChef/Puppet/AnsibleでDockerのイメージをつくる</h1>
+    </header>
+    
+    <section>
+      
+
+<p><a href="http://www.packer.io/">Packer</a>は，Vagrantの作者であるMitchell Hashimoto氏によって開発が進められているVirtualBoxやVMWare，Amazon EC2などの仮想マシンのテンプレートの作成を行うツール．VagrantのVirtualBox用のBoxを作るveeweeに置き換わるツールとして知られている．最近のアップデートでDockerのイメージのビルドをサポートした．</p>
+
+<h2 id="tl-dr:b621108be372951be0849ffe1bfb86f3">TL;DR</h2>
+
+<p><a href="http://www.packer.io/docs/builders/docker.html#toc_4">Packerを使えばDockerのイメージをDockerfileを使わずビルドすることができる</a></p>
+
+<p>つまり，Dockerfileの特有な記述を使わず，今まで慣れ親しんできたChefやPuppet，Ansibleのようなプロビジョニングツールを使ってDockerのイメージをビルドできる．</p>
+
+<p>参考</p>
+
+<ul>
+<li><a href="http://deeeet.com/writing/2014/03/03/why-building-docker-by-packer/">DockerイメージのビルドにPackerを使うべき理由</a></li>
+</ul>
+
+<h2 id="サンプル:b621108be372951be0849ffe1bfb86f3">サンプル</h2>
+
+<p><a href="https://github.com/tcnksm/packer-docker">tcnksm/packer-docker</a></p>
+
+<p>サンプルコードは全て上のレポジトリにある．ChefとPuppetとAnsibleで最小限で単純なサンプルを試した．</p>
+
+<h2 id="準備-vagrantfile:b621108be372951be0849ffe1bfb86f3">準備（Vagrantfile）</h2>
+
+<p>実行はすべてVagrantのVM上で行う．Vagrantの1.4以上がインストールされていれば，以下のVagrantfileを使えばすぐに試せる．</p>
+
+<pre><code class="language-ruby">Vagrant.configure(&quot;2&quot;) do |config|
+    config.vm.box = &quot;precise64&quot;
+    config.vm.box_url = &quot;http://files.vagrantup.com/precise64.box&quot;
+    # 
+    config.vm.provision :docker do |d|
+        d.pull_images &quot;ubuntu&quot;
+    end
+    
+    config.vm.provision :shell, :inline =&gt; &lt;&lt;-PREPARE
+apt-get -y update
+apt-get install -y wget unzip curl
+
+mkdir /home/vagrant/packer
+cd /home/vagrant/packer
+wget https://dl.bintray.com/mitchellh/packer/0.5.2_linux_amd64.zip
+unzip 0.5.2_linux_amd64.zip
+echo &quot;export PATH=$PATH:/home/vagrant/packer&quot; &gt; /home/vagrant/.bashrc
+PREPARE
+
+end
+</code></pre>
+
+<p>DockerとPackerの最新版のインストールしているだけ（注: PackerはOSX上でも動くが，OSXのDocker Clientの<a href="https://github.com/dotcloud/docker/issues/4023">バグ</a>のためにうまく連携できなったので，PackerもVagrant上で実行している）．</p>
+
+<h2 id="準備-chef:b621108be372951be0849ffe1bfb86f3">準備（Chef）</h2>
+
+<p>ここでは例として，apacheのインストールを行うクックブックとレシピを準備する．</p>
+
+<pre><code>$ knife cookbook create apache -o site-cookbooks
+</code></pre>
+
+<pre><code># site-cookbooks/apache/recipes/default.rb
+execute &quot;apt-get update&quot;
+package &quot;apache2&quot; do
+    action :install
+end
+</code></pre>
+
+<h2 id="テンプレート:b621108be372951be0849ffe1bfb86f3">テンプレート</h2>
+
+<p>Packerは，json形式での設定ファイルを基に仮想マシン/イメージのビルドを行う．ここでは，Ubuntuベースイメージから上で作成したChefのレシピを使ってDockerのイメージを作成する．</p>
+
+<pre><code class="language-json"># machine_chef.json
+{
+    &quot;builders&quot;:[{
+        &quot;type&quot;: &quot;docker&quot;,
+        &quot;image&quot;: &quot;ubuntu&quot;,
+        &quot;export_path&quot;: &quot;image.tar&quot;
+    }],
+    
+    &quot;provisioners&quot;:[
+    {
+        &quot;type&quot;: &quot;shell&quot;,
+        &quot;inline&quot;: [
+            &quot;apt-get -y update&quot;,
+            &quot;apt-get install -y curl&quot;
+        ]
+    },
+    {
+        &quot;type&quot;: &quot;chef-solo&quot;,
+        &quot;cookbook_paths&quot;: [&quot;site-cookbooks&quot;],
+        &quot;run_list&quot;: [&quot;apache::default&quot;]
+    }
+    ],
+    
+    &quot;post-processors&quot;: [{
+        &quot;type&quot;: &quot;docker-import&quot;,
+        &quot;repository&quot;: &quot;tcnksm/packer-chef&quot;,
+        &quot;tag&quot;: &quot;0.1&quot;
+    }]
+}
+</code></pre>
+
+<p>Packerの設定ファイルは以下の3つの要素からなる．</p>
+
+<ul>
+<li>builders</li>
+<li>provisioners</li>
+<li>post-processors</li>
+</ul>
+
+<p><strong>builders</strong>には，主に作成されるテンプレートの種類や詳細の設定を記述する．作りたいマシンの種類，つまり，isoからVagrantのBoxを作りたいのか，Amazon EC2のAMIを作りたいのか，DigitalOcean用のイメージを作りたいのかによって記述は大きく異なる．例では，タイプをDockerとして，ベースイメージにubuntuを指定している．</p>
+
+<p><strong>provisioners</strong>には，プロビジョニングの設定を記述する．どの種類のマシンを作成する場合であっても，ShellscriptからChef，Puppet，Ansibleとった慣れ親しんだプロビジョニングツールが使える．Packerのすごいのはこの部分ではないかと思っている．Vagrantのプロビジョニングを利用したことある人には読みやすいと思う．例では，inline shellによるプロビジョニングとChefによるプロビジョニングを指定している．</p>
+
+<p>（注: 現時点では，ChefのプロビジョニングのみChefのインストールまで自動で行ってくれる．ただし，その際にcurlを使うのでそれだけは自分でインストールしている．PuppetやAnsibleは事前に自分でインストールする必要がある．詳細は<a href="https://github.com/tcnksm/packer-docker">サンプルコード</a>を参照．）</p>
+
+<p><strong>post-processors</strong>には，作成したテンプレートに対する後処理の設定を記述する．VagrantのBoxであればBoxの名前を指定する．今回の例では，Dockerイメージのレポジトリ名とタグ名を指定している．</p>
+
+<h2 id="イメージのビルド:b621108be372951be0849ffe1bfb86f3">イメージのビルド</h2>
+
+<p>以下を実行するだけ．</p>
+
+<pre><code class="language-bash">$ packer build machine_chef.json
+</code></pre>
+
+<p>終了すれば，<code>tcnksm/packer-chef:0.1</code>というDockerイメージが作られている．</p>
+
+<pre><code class="language-bash">$ docker images
+</code></pre>
+
+<p>以上．</p>
+
+<h2 id="まとめ:b621108be372951be0849ffe1bfb86f3">まとめ</h2>
+
+<p>今まで使ってきたプロビジョニングツールを使えるのはすごくよい．というもの，まだまだChefやPuppetといったツールは使われていくだろうし，知見も多く蓄積されているから．また，Dockerfileはdockerに特有なので他のツールに移植するといったこと難しい．</p>
+
+<p>かといってDockerfile使われなくなるか，というと全然そんなことはなささそう．現時点でのPackerでDockerのイメージをビルドする際の欠点は，Stepごとのスナップショットをとるといったdockerの良さが使えない（ただ，<a href="http://deeeet.com/writing/2014/03/03/why-building-docker-by-packer/">将来サポートされる予定らしい</a>）ことや，<code>EXPOSE</code>とかが簡単に書けないことなどがある．</p>
+
+<ul>
+<li><a href="http://ssig33.com/text/Docker%20%E3%82%92%E3%83%97%E3%83%AD%E3%83%80%E3%82%AF%E3%83%88%E3%81%AE%E3%83%87%E3%83%97%E3%83%AD%E3%82%A4%E3%81%AB%E4%BD%BF%E3%81%86">ssig33.com - Docker をプロダクトのデプロイに使う</a></li>
+<li><a href="http://shibayu36.hatenablog.com/entry/2013/12/23/153019">Docker, Mesos, Sensu等を利用したBlue-Green Deploymentの仕組み - $shibayu36-&gt;blog;</a></li>
+</ul>
+
+<p>とかを見てると，とインフラレイヤーやアプリケーションレイヤーにわけて差分ビルドをしている．変更が少ないかつ，Chefやpuppetの知見が多くありそうなインフラレイヤーのイメージのビルドにはPacker+Chef，Puppetを使い，変更が多くありそうなアプリケーションレイヤはDockerfileで直接書くとかにすると良さそうと思った．</p>
+
+<p>参考</p>
+
+<ul>
+<li><a href="http://www.packer.io/docs/builders/docker.html">Docker builder</a></li>
+<li><a href="http://deeeet.com/writing/2014/03/03/why-building-docker-by-packer/">DockerイメージのビルドにPackerを使うべき理由</a></li>
+<li><a href="http://deeeet.com/writing/2014/03/02/packer/">Packer雑感</a></li>
+</ul>
+
+      <div class="social">
+  
+  
+  <a href="https://twitter.com/share" class="twitter-share-button" data-via="deeeet" data-count="none">Tweet</a>
+  
+  
+</div>
+
+    </section>
+
+    <footer>
+      <address>
+        
+        <img src="/images/bio.jpeg"/>
+        
+        <p>Written by <strong><a rel="author" href="https://twitter.com/deeeet" title="Taichi Nakashima" target="_blank">Taichi Nakashima</a></strong><br>
+          <span class="muted">A Tokyo based PaaS engineer. Please contact me via twitter.</span>
+        </p>
+      </address>
+
+    </footer>
+
+  </div>
+</article>
+
+<script type="text/javascript" src="//ajax.googleapis.com/ajax/libs/jquery/1.7.2/jquery.min.js"></script>
+<script type="text/javascript" src="/js/main.js"></script>
+
+<script>!function(d,s,id){var js,fjs=d.getElementsByTagName(s)[0],p=/^http:/.test(d.location)?'http':'https';if(!d.getElementById(id)){js=d.createElement(s);js.id=id;js.src=p+'://platform.twitter.com/widgets.js';fjs.parentNode.insertBefore(js,fjs);}}(document, 'script', 'twitter-wjs');</script>
+
+
+<script type="text/javascript">var HN=[];HN.factory=function(e){return function(){HN.push([e].concat(Array.prototype.slice.call(arguments,0)))};},HN.on=HN.factory("on"),HN.once=HN.factory("once"),HN.off=HN.factory("off"),HN.emit=HN.factory("emit"),HN.load=function(){var e="hn-button.js";if(document.getElementById(e))return;var t=document.createElement("script");t.id=e,t.src="//hn-button.herokuapp.com/hn-button.js";var n=document.getElementsByTagName("script")[0];n.parentNode.insertBefore(t,n)},HN.load();</script>
+
+
+  <script>
+  (function(i,s,o,g,r,a,m){i['GoogleAnalyticsObject']=r;i[r]=i[r]||function(){
+  (i[r].q=i[r].q||[]).push(arguments)},i[r].l=1*new Date();a=s.createElement(o),
+  m=s.getElementsByTagName(o)[0];a.async=1;a.src=g;m.parentNode.insertBefore(a,m)
+  })(window,document,'script','//www.google-analytics.com/analytics.js','ga');
+
+  ga('create', 'UA-45390253-1', 'auto');
+  ga('send', 'pageview');
+
+</script>
+
+
+
+<script>
+  $(document).ready(function() {
+  
+  $('p:has(img)').css('text-align', 'center');
+  $('iframe').css('style', 'display: block; margin: 0px auto;');
+  });
+</script>
+

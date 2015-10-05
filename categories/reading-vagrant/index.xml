@@ -1,0 +1,153 @@
+<?xml version="1.0" encoding="utf-8" standalone="yes" ?>
+<rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom">
+  <channel>
+    <title>Reading Vagrant on SOTA</title>
+    <link>http://deeeet.com/categories/reading-vagrant/</link>
+    <description>Recent content in Reading Vagrant on SOTA</description>
+    <generator>Hugo -- gohugo.io</generator>
+    <language>ja-jp</language>
+    <copyright>Copyright (C) 2013-2015 Taichi Nakashima All Right Reserved.</copyright>
+    <lastBuildDate>Tue, 25 Feb 2014 00:00:00 +0000</lastBuildDate>
+    <atom:link href="http://deeeet.com/categories/reading-vagrant/index.xml" rel="self" type="application/rss+xml" />
+    
+    <item>
+      <title>&#34;実践Vagrant&#34;を読んだ</title>
+      <link>http://deeeet.com/writing/2014/02/25/vagrant-up-and-running/</link>
+      <pubDate>Tue, 25 Feb 2014 00:00:00 +0000</pubDate>
+      
+      <guid>http://deeeet.com/writing/2014/02/25/vagrant-up-and-running/</guid>
+      <description>
+
+&lt;p&gt;&lt;a href=&#34;http://www.oreilly.co.jp/books/9784873116655/&#34;&gt;O&amp;rsquo;Reilly Japan - 実践 Vagrant&lt;/a&gt;&lt;/p&gt;
+
+&lt;p&gt;Vagrantは普通に問題なく使えているし，本をわざわざ読む必要もないと思ったが，以下のようなモチベーションで購入．&lt;/p&gt;
+
+&lt;ul&gt;
+&lt;li&gt;Mitchell Hashimoto氏の設計思想的な部分を知りたかった&lt;/li&gt;
+&lt;li&gt;プラグインをつくりたかった&lt;/li&gt;
+&lt;li&gt;落ち穂拾い&lt;/li&gt;
+&lt;/ul&gt;
+
+&lt;p&gt;まず，設計思想．1章に&amp;rdquo;Vagrant道&amp;rdquo;という節があり，ユースケースというか，Vagrantを使った高レベルなワークフローが説明されている．開発者や運用技術者からみて，普段のプロジェクトの中でVagrantがどのような役割を果たすのかが簡単にまとめられている．Vagrantが近年の開発環境にあまりに自然に入り込んできたのは，このようなビジョンがあってからこそだと思う．誰もが理解できるビジョンを掲げ，それをコードに落とし込むところがMitchell氏のすごさなんだと改めて認識した．開発者としても，ビジョン-&amp;gt;コードの流れを参考にしたい．&lt;/p&gt;
+
+&lt;h2 id=&#34;プラグインの開発:f2e3a2c3e354e5248072de122eac172d&#34;&gt;プラグインの開発&lt;/h2&gt;
+
+&lt;p&gt;次にプラグイン．これを読んでからいくつかプラグインを作ってみた．公開したのは以下．&lt;/p&gt;
+
+&lt;ul&gt;
+&lt;li&gt;&lt;a href=&#34;http://deeeet.com/writing/2014/02/19/vagrant-pushover/&#34;&gt;プロビジョニングの終了をiOS/Androidに通知するVagrantのpluginつくった&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a href=&#34;http://deeeet.com/writing/2014/02/24/vagrant-secret/&#34;&gt;他人に共有したくない設定をVagrantfileに書くためのpluginつくった&lt;/a&gt;&lt;/li&gt;
+&lt;/ul&gt;
+
+&lt;p&gt;プラグインを作るのはとても簡単．本書でカバーされているのは，以下．&lt;/p&gt;
+
+&lt;ul&gt;
+&lt;li&gt;新しいサブコマンドの開発 (command)&lt;/li&gt;
+&lt;li&gt;新しい設定オプションの開発 (config)&lt;/li&gt;
+&lt;li&gt;&lt;code&gt;config.vm.provision :docker&lt;/code&gt;のような新しいプロビジョナーの開発 (provisioner)&lt;/li&gt;
+&lt;li&gt;&lt;code&gt;vagrant up&lt;/code&gt;のような既存動作を変更 (hook)&lt;/li&gt;
+&lt;/ul&gt;
+
+&lt;p&gt;プラグインはrubygemsとして開発する．rubygemを作ったことがあるひとであればすんなりと開発できる．詳しくは書かないが，基本はrubyのDSLによる簡単な記述し，そのDSLの戻り値を決められたメソッドを実装したクラスにするだけ．&lt;/p&gt;
+
+&lt;p&gt;すこしハマった部分．本書や公式ドキュメントだと&lt;code&gt;Vagrantfile&lt;/code&gt;に&lt;code&gt;Vagrant.require_plugin &amp;quot;my_plugin&amp;quot;&lt;/code&gt;を記述してプラグインのテストを行うように書かれているが，自分の環境だとうまく動かなかった．そのため，プラグインをビルドして，直接システムのVagrantに読み込ませてテストを行った．毎回コマンド打つのは億劫なので，以下のようなRakeタスクを作った．&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-ruby&#34;&gt;require &amp;quot;vagrant-secret&amp;quot;
+require &amp;quot;bundler/gem_tasks&amp;quot;
+
+version = VagrantPlugins::Secret::VERSION
+
+desc &amp;quot;Install plugin to system vagrant.&amp;quot;
+task :install_plugin do
+    system(&amp;quot;git add -u&amp;quot;)
+    Rake::Task[:build].execute
+    system(&amp;quot;/usr/bin/vagrant plugin install pkg/vagrant-secret-#{version}.gem&amp;quot;)
+end
+
+desc &amp;quot;Uninstall plugin&amp;quot;
+task :uninstall_plugin do
+    system(&amp;quot;/usr/bin/vagrant plugin uninstall vagrant-secret&amp;quot;)
+end
+
+# alias
+task :i =&amp;gt; :install_plugin
+task :u =&amp;gt; :uninstall_plugin
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;ちょっとTips．プラグイン定義の先頭に以下を記述して，プラグインが実際にVagrantの中で動作しているかを確認するのがよい．これは，本書のコラムに書かれていた内容．他のVagrant pluginのプロジェクトにも採用されている．&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-ruby&#34;&gt;begin
+    require &amp;quot;vagrant&amp;quot;
+rescue LoadError
+    raise &amp;quot;The Vagrant plugin must be run within Vagrant.&amp;quot;
+end
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;また，本書には書かれていないけど，プラグインはVagrantfileに直接書くことができる．例えば，OSXからDockerを簡単に使えるようにするプロジェクトである&lt;a href=&#34;https://github.com/fnichol/dvm/blob/master/Vagrantfile&#34;&gt;dvm&lt;/a&gt;の&lt;code&gt;Vagrantfile&lt;/code&gt;でやられてたりする．本書の&lt;code&gt;apt-get&lt;/code&gt;プロビジョナーを&lt;code&gt;Vagrantfile&lt;/code&gt;に直接書くと，&lt;a href=&#34;https://gist.github.com/tcnksm/39be2506b8a5e846cd59&#34;&gt;こうなる&lt;/a&gt;．ものすごい単純なプラグインをつくる場合や，試しにつくってみたい場合はこれで足りる．&lt;/p&gt;
+
+&lt;p&gt;公式にも丁寧な&lt;a href=&#34;http://docs.vagrantup.com/v2/plugins/development-basics.html&#34;&gt;ドキュメント&lt;/a&gt;がある．また，Vagrantのコマンドそのものもプラグインとして&lt;a href=&#34;https://github.com/mitchellh/vagrant/tree/master/plugins/commands&#34;&gt;実装されている&lt;/a&gt;ので参考になった．&lt;/p&gt;
+
+&lt;h2 id=&#34;落ち穂拾い:f2e3a2c3e354e5248072de122eac172d&#34;&gt;落ち穂拾い&lt;/h2&gt;
+
+&lt;p&gt;最後に落ち穂拾い．ざっと読んで自分が知らなかったや，試してなかったことなどをまとめておく．&lt;/p&gt;
+
+&lt;p&gt;まず，ネットワークの設定について．&lt;code&gt;forward_port&lt;/code&gt;や&lt;code&gt;private_network&lt;/code&gt;はよく使うが，&lt;code&gt;public_network&lt;/code&gt;もある．これを使うと，仮想マシンを物理マシン上のデバイスにして，仮想マシンをネットワーク上の別の物理マシンであるかのように見せることができるようになる．&lt;/p&gt;
+
+&lt;p&gt;これができると何が良いかというと，&lt;code&gt;private_network&lt;/code&gt;のようにアクセス可能なIPを持たせるだけでなく，隔離されないので，ゲストマシンが提供するWebサイトをモバイルから確認したり，他のひとと共同作業ができるようになる．設定を有効にし，&lt;code&gt;vagrat up&lt;/code&gt;してブリッジしたいデバイスを選択するだけ．&lt;/p&gt;
+
+&lt;p&gt;次に，複数マシン構成のクラスタのモデリング．以下のようにすれば，Webアプリ用のマシンとDB用のマシンをそれぞれ立ち上げることができる．&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-ruby&#34;&gt;Vagrant.configure(&amp;quot;2&amp;quot;) do |config|
+    config.vm.box = &amp;quot;precise64&amp;quot;
+
+    config.vm.define :web do |web|
+        web.vm.network :private_network, ip: &amp;quot;192.168.50.4&amp;quot;
+    end
+
+    config.vm.define :db do |db|
+        db.vm.network :private_network, ip: &amp;quot;192.168.50.5&amp;quot;
+    end
+end
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;新しいサブマシンを定義するブロックは，単にVagrantfileを作成するときの設定ブロックがもうひとつあるだけ．webやdbというのはただの設定変数．また，サブマシンの設定は，プログラミングの変数スコープのように全体的な設定（上で言うと&lt;code&gt;config.vm.box&lt;/code&gt;）を引き継ぐ．&lt;/p&gt;
+
+&lt;p&gt;&lt;code&gt;vagrant up&lt;/code&gt;や&lt;code&gt;vagrant reload&lt;/code&gt;といったコマンドは，対象マシンの名前を指定して実行できるようになる．例えば，&lt;code&gt;vagrant provision web&lt;/code&gt;とすれば，webと名付けられたサブマシンのみのプロビジョニングが実行される．複数のサブマシンが存在するとき，引数なしでコマンドを実行すると全てのマシンが対象となる．&lt;/p&gt;
+
+&lt;p&gt;複数のサブマシンを同一のネットワーク上に配置することができる．Vagrantはデフォルトで，255.255.255.0というサブネットマスクを使用するため，上の例のように最初の3つの部分（オクテット）が同じであれば，マシンは同一ネットワーク上に存在することになる．&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-bash&#34;&gt;$ vagrant ssh web
+$ ping 192.168.50.5
+vagrant@precise64:~$ ping 192.168.50.5
+PING 192.168.50.5 (192.168.50.5) 56(84) bytes of data.
+64 bytes from 192.168.50.5: icmp_req=1 ttl=64 time=0.483 ms
+64 bytes from 192.168.50.5: icmp_req=2 ttl=64 time=0.374 ms
+64 bytes from 192.168.50.5: icmp_req=3 ttl=64 time=0.327 ms
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;最後にボックス．Vagrantのボックスは，拡張子こそ&lt;code&gt;.box&lt;/code&gt;となっているが，単なるtarファイルに過ぎない．以下のファイルが含まれる．&lt;/p&gt;
+
+&lt;ul&gt;
+&lt;li&gt;&lt;code&gt;box-disk.vmdk&lt;/code&gt;: VirtualBoxのエクスポートで得られる．圧縮されたハードディスク．&lt;/li&gt;
+&lt;li&gt;&lt;code&gt;bok.ovf&lt;/code&gt;: VirtualBoxのエクスポートで得られる．マシンを動作させるための仮想ハードウェア．&lt;/li&gt;
+&lt;li&gt;&lt;code&gt;Vagranfile&lt;/code&gt;: 普段使うものと同じ．デフォルト値などを記述する．&lt;/li&gt;
+&lt;li&gt;&lt;code&gt;metadata.json&lt;/code&gt;: Vagratに対して，このボックスが使うシステムを伝える．&lt;/li&gt;
+&lt;/ul&gt;
+
+&lt;p&gt;プロビジョナーを走らせたり，手動であれこれセットアップしたVagrant環境をboxとして吐き出すことができる．以下のようにするだけ．これで&lt;code&gt;package.box&lt;/code&gt;が作成される．&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-bash&#34;&gt;$ vagrant package
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;VirtualBoxを使って，スクラッチで新しいボックスを生成することもできる．Vagrantユーザの作成やSSHサーバのインストールなどが必要になる．&lt;/p&gt;
+
+&lt;p&gt;以上．&lt;/p&gt;
+
+&lt;p&gt;わかったつもりでいても知らない設定などが多く含まれていたのでよかった．Vagrantを既に使っている人は，公式のドキュメントやその他のブログポストなどで十分足りると思う（それがVagrantというツールのすごいところでもある）．なぜ，Vagrantが良いのかわからないレベルだと本書はとても最適な一冊だと思う．また，プラグインを作りたいひとにもおすすめできる．デブサミの会場で先行販売されてたので思わず購入したが，発売日に電子版の販売がアナウンスされてた．&lt;/p&gt;
+
+&lt;p&gt;あるべきなのになかなかなかった．なければしんどいのに，あれば空気のように当然のものとして使ってしまう．それがVagrant．&lt;/p&gt;
+</description>
+    </item>
+    
+  </channel>
+</rss>

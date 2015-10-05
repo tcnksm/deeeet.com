@@ -1,0 +1,177 @@
+<!doctype html>
+<html>
+  <head>
+    <meta http-equiv="content-type" content="text/html; charset=utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    
+    <title>1コマンドでkubernetesを立ち上げるboot2kubernetesというツールをつくった | SOTA</title>
+    
+    <link href="https://fonts.googleapis.com/css?family=Lato%3a900" rel="stylesheet" type="text/css">
+    <link rel="stylesheet" href="/css/main.css">
+    <link rel="shortcut icon" href="/favicon.png" type="image/x-icon" />
+    <link href="http://deeeet.com//index.xml" rel="alternate" type="application/rss+xml" title="" />
+    <meta name="title" content="http://deeeet.com/writing/2015/08/17/boot2kubernetes-jp/">
+    <link rel="canonical" href="http://deeeet.com/writing/2015/08/17/boot2kubernetes-jp/">
+    
+    <meta property="og:title" content="1コマンドでkubernetesを立ち上げるboot2kubernetesというツールをつくった"/>
+    <meta property="og:url" content="http://deeeet.com/writing/2015/08/17/boot2kubernetes-jp/"/>
+  </head>
+  
+  <body>
+    <section class="site-nav">
+      <header>
+        <nav id="navigation">
+          <ul class="menu">
+            <li><a href="https://github.com/tcnksm/talks">Talks</a></li>
+            <li><a href="https://tcnksm.exposure.co/">Photos</a></li>
+          </ul>
+
+          <a class="name" href="/">SOTA</a>
+        </nav>        
+      </header>
+    </section>
+    
+
+
+<article>
+  <div class="container">
+    <header>
+      <div class="meta">
+        <time pubdate datetime="2015-08-17" title="2015-08-17">August 17, 2015</time>
+      </div>
+      <h1 class="title">1コマンドでkubernetesを立ち上げるboot2kubernetesというツールをつくった</h1>
+    </header>
+    
+    <section>
+      
+
+<p><a href="https://github.com/tcnksm/boot2kubernetes">tcnksm/boot2kubernetes</a></p>
+
+<p><a href="http://googlecloudplatform.blogspot.jp/2015/07/Kubernetes-V1-Released.html">kubernetes 1.0がリリースされた</a>．これから実際に試す機会も増えそうなのでDockerを使って簡単に（1コマンドで）kubernetesクラスタを立てるコマンドをつくった．</p>
+
+<h2 id="デモ:223bfc5a943aeb203f5eccff79a7281e">デモ</h2>
+
+<p>以下はOSX上でシングルNodeのkubernetesクラスタを立てて<code>kubectl</code>でリクエストを投げるデモ．</p>
+
+<p><img src="/images/boot2k8s.gif" class="image"></p>
+
+<h2 id="使い方:223bfc5a943aeb203f5eccff79a7281e">使い方</h2>
+
+<p>以下のコマンドでクラスタを立ち上げる．</p>
+
+<pre><code class="language-bash">$ boot2k8s up
+</code></pre>
+
+<p>このコマンドで必要なDockerイメージがPullされコンテナが起動する．boot2docker上でDockerを動かしている場合ローカルから<code>kubectl</code>でクラスタにアクセスするにはport forwardが必要になる．その場合<code>boot2k8s</code>はport forwardサーバーも同時に起動する．</p>
+
+<p>終了する（コンテナを削除する）には以下を実行する．</p>
+
+<pre><code class="language-bash">$ boot2k8s destroy
+</code></pre>
+
+<p><code>boot2k8s</code>が立ち上げたkubernetesコンテナとkubernetesによって立ち上げられたpodを削除することができる．</p>
+
+<h2 id="インストール:223bfc5a943aeb203f5eccff79a7281e">インストール</h2>
+
+<p>OSXの場合はHomebrewでインストールできる．</p>
+
+<pre><code class="language-bash">$ brew tap tcnksm/boot2k8s
+$ brew install boot2k8s
+</code></pre>
+
+<p>他のプラットフォームの場合は<a href="https://github.com/tcnksm/boot2kubernetes/releases">リリースページ</a>にバイナリがある．</p>
+
+<h2 id="内部の実装:223bfc5a943aeb203f5eccff79a7281e">内部の実装</h2>
+
+<p>Dockerを使ってシングルNodeのKubernetesクラスタをローカル開発環境に立てる方法はkubernetesの公式が提供している（cf. <a href="https://github.com/kubernetes/kubernetes/blob/release-1.0/docs/getting-started-guides/docker.md">Running Kubernetes locally via Docker</a>）．基本はこのドキュメントとやっていることは同じで，面倒な部分を含めて全てを1つのコマンドにまとめている．</p>
+
+<p>同じように1コマンドでKubernetesクラスタを立ち上げる試みとして<a href="http://sebgoa.blogspot.jp/2015/04/1-command-to-kubernetes-with-docker.html">&ldquo;1 command to Kubernetes with Docker compose&rdquo;</a>がある．これは<code>docker-compose</code>を使っている．同様に<code>boot2k8s</code>は<code>docker-compose</code>のGo言語実装である<a href="https://github.com/docker/libcompose">libcompose</a>をライブラリとして利用して複数コンテナを立ち上げている（<code>boot2k8s</code>のcomposeファイルは<a href="https://github.com/tcnksm/boot2kubernetes/blob/0.1.0/config/k8s.yml">k8s.yml</a>にあるので<code>docker-compose</code>のみを使いたい人はこれをそのまま利用できる）．</p>
+
+<p><code>boot2k8s</code>は<a href="https://github.com/jteeuwen/go-bindata">go-bindata</a>でcomposeファイルをbyteとして埋め込み<code>libcompose</code>で起動する．コードで示すと以下のようになる．</p>
+
+<pre><code class="language-golang">// Read .yml file as bytes by go-bindata
+compose, _ := config.Asset(&quot;k8s.yml&quot;)
+
+// Setup new docker-compose project
+context := &amp;docker.Context{
+    Context: project.Context{
+        ComposeBytes: compose,
+        ProjectName:  &quot;boot2k8s&quot;,
+    },
+}
+
+project, _ := docker.NewProject(context)
+
+project.Up()
+</code></pre>
+
+<p><code>boot2k8s</code>の利点はport forwardingやコンテナの削除機能を持っていることが挙げられる．さらに今後はDocker machineと連携して様々な環境でkubernetesを簡単に立ち上げられるようにする予定．</p>
+
+<h2 id="最後に:223bfc5a943aeb203f5eccff79a7281e">最後に</h2>
+
+<p>バグや意見はGitHubの<a href="https://github.com/tcnksm/boot2kubernetes/issues">Issue</a>，もしくは<a href="https://twitter.com/deeeet">@deeeet</a>までお願いします．</p>
+
+<p><a href="https://twitter.com/rrreeeyyy">@rrreeeyyy</a>くんに事前に意見をもらいました．ありがとう．</p>
+
+<h3 id="参考:223bfc5a943aeb203f5eccff79a7281e">参考</h3>
+
+<ul>
+<li><a href="http://sebgoa.blogspot.jp/2015/04/1-command-to-kubernetes-with-docker.html">&ldquo;1 command to Kubernetes with Docker compose&rdquo;</a></li>
+<li><a href="http://rancher.com/our-journey-with-docker-compose-and-the-introduction-of-libcompose/">&ldquo;Libcompose and our journey with Docker Compose&rdquo;</a></li>
+</ul>
+
+      <div class="social">
+  
+  
+  <a href="https://twitter.com/share" class="twitter-share-button" data-via="deeeet" data-count="none">Tweet</a>
+  
+  
+</div>
+
+    </section>
+
+    <footer>
+      <address>
+        
+        <img src="/images/bio.jpeg"/>
+        
+        <p>Written by <strong><a rel="author" href="https://twitter.com/deeeet" title="Taichi Nakashima" target="_blank">Taichi Nakashima</a></strong><br>
+          <span class="muted">A Tokyo based PaaS engineer. Please contact me via twitter.</span>
+        </p>
+      </address>
+
+    </footer>
+
+  </div>
+</article>
+
+<script type="text/javascript" src="//ajax.googleapis.com/ajax/libs/jquery/1.7.2/jquery.min.js"></script>
+<script type="text/javascript" src="/js/main.js"></script>
+
+<script>!function(d,s,id){var js,fjs=d.getElementsByTagName(s)[0],p=/^http:/.test(d.location)?'http':'https';if(!d.getElementById(id)){js=d.createElement(s);js.id=id;js.src=p+'://platform.twitter.com/widgets.js';fjs.parentNode.insertBefore(js,fjs);}}(document, 'script', 'twitter-wjs');</script>
+
+
+<script type="text/javascript">var HN=[];HN.factory=function(e){return function(){HN.push([e].concat(Array.prototype.slice.call(arguments,0)))};},HN.on=HN.factory("on"),HN.once=HN.factory("once"),HN.off=HN.factory("off"),HN.emit=HN.factory("emit"),HN.load=function(){var e="hn-button.js";if(document.getElementById(e))return;var t=document.createElement("script");t.id=e,t.src="//hn-button.herokuapp.com/hn-button.js";var n=document.getElementsByTagName("script")[0];n.parentNode.insertBefore(t,n)},HN.load();</script>
+
+
+  <script>
+  (function(i,s,o,g,r,a,m){i['GoogleAnalyticsObject']=r;i[r]=i[r]||function(){
+  (i[r].q=i[r].q||[]).push(arguments)},i[r].l=1*new Date();a=s.createElement(o),
+  m=s.getElementsByTagName(o)[0];a.async=1;a.src=g;m.parentNode.insertBefore(a,m)
+  })(window,document,'script','//www.google-analytics.com/analytics.js','ga');
+
+  ga('create', 'UA-45390253-1', 'auto');
+  ga('send', 'pageview');
+
+</script>
+
+
+
+<script>
+  $(document).ready(function() {
+  
+  $('p:has(img)').css('text-align', 'center');
+  $('iframe').css('style', 'display: block; margin: 0px auto;');
+  });
+</script>
+

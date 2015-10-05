@@ -1,0 +1,80 @@
+<?xml version="1.0" encoding="utf-8" standalone="yes" ?>
+<rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom">
+  <channel>
+    <title>Design on SOTA</title>
+    <link>http://deeeet.com/categories/design/</link>
+    <description>Recent content in Design on SOTA</description>
+    <generator>Hugo -- gohugo.io</generator>
+    <language>ja-jp</language>
+    <copyright>Copyright (C) 2013-2015 Taichi Nakashima All Right Reserved.</copyright>
+    <lastBuildDate>Wed, 05 Feb 2014 00:00:00 +0000</lastBuildDate>
+    <atom:link href="http://deeeet.com/categories/design/index.xml" rel="self" type="application/rss+xml" />
+    
+    <item>
+      <title>Middlemanを使ってみた</title>
+      <link>http://deeeet.com/writing/2014/02/05/middleman/</link>
+      <pubDate>Wed, 05 Feb 2014 00:00:00 +0000</pubDate>
+      
+      <guid>http://deeeet.com/writing/2014/02/05/middleman/</guid>
+      <description>&lt;p&gt;&lt;a href=&#34;http://deeeet.com/&#34;&gt;deeeet.com&lt;/a&gt;&lt;/p&gt;
+
+&lt;p&gt;&lt;a href=&#34;http://middlemanapp.com/&#34;&gt;Middleman&lt;/a&gt;は，&lt;a href=&#34;http://haml.info/&#34;&gt;Haml&lt;/a&gt;と&lt;a href=&#34;http://sass-lang.com/&#34;&gt;Sass&lt;/a&gt;, &lt;a href=&#34;http://compass-style.org/&#34;&gt;Compass&lt;/a&gt;がデフォルトで使えるため，簡単にいい感じのサイトをつくることができる．例えば，&lt;a href=&#34;http://www.packer.io/&#34;&gt;Packerの公式サイト&lt;/a&gt;などMiddlemanで作られていてとてもいい感じだ（Githubのレポジトリみるかぎり，Mitchellさんデザインも自分でやっている&amp;hellip;?）．他にも個人のBlogをMiddlemanで作ってるひともいる．今後，簡単なサイト立てるときはまた使いそうなので，まとめておく．&lt;/p&gt;
+
+&lt;p&gt;HamlやSassを使うために特別に設定を書く必要はない．ただ拡張子を，Hamlの場合は，&lt;code&gt;.html.haml&lt;/code&gt;（laytoutファイルは&lt;code&gt;.haml&lt;/code&gt;）に，Sassの場合は，&lt;code&gt;.scss&lt;/code&gt;にしておけばよい．buildの際は，HamlはhtmlにSassはcssとして生成される．Sassは&lt;code&gt;:css_dir&lt;/code&gt;のアンダースコアで始まらないファイルがcssとして吐き出される（つまり&lt;code&gt;@import&lt;/code&gt;されるpartialなどは無視される）．&lt;/p&gt;
+
+&lt;p&gt;設定ファイルである&lt;code&gt;config.rb&lt;/code&gt;では，Liveloadを有効にしておくと，ソースを更新する度に，ブラウザで再読み込みをしてくれるので便利．&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-ruby&#34;&gt;activate :livereload
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;デプロイなどはOctopressと同じように以下のようなRakeタスクを作っておくと楽になる．&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-ruby&#34;&gt;ssh_user       = &amp;quot;&amp;quot;
+ssh_port       = &amp;quot;&amp;quot;
+document_root  = &amp;quot;~/www/&amp;quot;
+rsync_args     = &amp;quot;&amp;quot;
+source         = &amp;quot;build&amp;quot;
+
+desc &amp;quot;Build middleman&amp;quot;
+task :build do
+    system(&amp;quot;middleman build&amp;quot;)
+end
+
+desc &amp;quot;Deploy website via rsync&amp;quot;
+task :deploy do
+    puts &amp;quot;## Deploying website via Rsync&amp;quot;
+    system(&amp;quot;rsync -avze &#39;ssh -p #{ssh_port}&#39; #{exclude} #{rsync_args} #{&amp;quot;--delete&amp;quot; unless rsync_delete == false} #{source}/ #{ssh_user}:#{document_root}&amp;quot;)
+end
+
+desc &amp;quot;Build &amp;amp; deploy&amp;quot;
+task :gen_deploy do
+    Rake::Task[&amp;quot;build&amp;quot;].invoke
+    Rake::Task[&amp;quot;deploy&amp;quot;].invoke
+end
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;Compassは初めて使ったがとても便利だった．例えば，hoverしたときの色の変化にtransition効果（時間変化）をつけたいとする．この場合は，CompassのCSS3モジュールにmixinが準備されているので，以下のように呼び出してすぐに使える．&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-css&#34;&gt;@import &amp;quot;compass/css3/transition&amp;quot;;
+a:hover{
+    color: $color-hover;
+    @include transition-duration(1s);
+}
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;他にも&lt;a href=&#34;http://compass-style.org/reference/compass/&#34;&gt;公式のReference&lt;/a&gt;のサンプル等を参考にすれば，複雑なCSSの知識なしにいろいろできる．&lt;/p&gt;
+
+&lt;p&gt;&lt;a href=&#34;http://fortawesome.github.io/Font-Awesome/&#34;&gt;Font Awesome&lt;/a&gt;も簡単に使える．middleman用のライブラリ&lt;a href=&#34;https://github.com/cristianferrarig/font-awesome-middleman&#34;&gt;cristianferrarig/font-awesome-middleman&lt;/a&gt;をインストールして，&lt;code&gt;:fonts_dir&lt;/code&gt;に公式からダウンロードしたFontを配置するだけ．&lt;/p&gt;
+
+&lt;p&gt;今回作成したサイトのソースは&lt;a href=&#34;https://github.com/tcnksm/deeeet.com/blob/master/source/stylesheets/parts/_header.scss&#34;&gt;tcnksm/deeeet.com&lt;/a&gt;にある．&lt;/p&gt;
+
+&lt;p&gt;参考&lt;/p&gt;
+
+&lt;ul&gt;
+&lt;li&gt;&lt;a href=&#34;http://liginc.co.jp/designer/archives/11623&#34;&gt;CSSの常識が変わる！「Compass」、基礎から応用まで！ | 株式会社LIG&lt;/a&gt;&lt;/li&gt;
+&lt;/ul&gt;
+</description>
+    </item>
+    
+  </channel>
+</rss>

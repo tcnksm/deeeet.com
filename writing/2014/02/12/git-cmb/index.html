@@ -1,0 +1,158 @@
+<!doctype html>
+<html>
+  <head>
+    <meta http-equiv="content-type" content="text/html; charset=utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    
+    <title>Gitのcommitメッセージに定型文をぶっ込む | SOTA</title>
+    
+    <link href="https://fonts.googleapis.com/css?family=Lato%3a900" rel="stylesheet" type="text/css">
+    <link rel="stylesheet" href="/css/main.css">
+    <link rel="shortcut icon" href="/favicon.png" type="image/x-icon" />
+    <link href="http://deeeet.com//index.xml" rel="alternate" type="application/rss+xml" title="" />
+    <meta name="title" content="http://deeeet.com/writing/2014/02/12/git-cmb/">
+    <link rel="canonical" href="http://deeeet.com/writing/2014/02/12/git-cmb/">
+    
+    <meta property="og:title" content="Gitのcommitメッセージに定型文をぶっ込む"/>
+    <meta property="og:url" content="http://deeeet.com/writing/2014/02/12/git-cmb/"/>
+  </head>
+  
+  <body>
+    <section class="site-nav">
+      <header>
+        <nav id="navigation">
+          <ul class="menu">
+            <li><a href="https://github.com/tcnksm/talks">Talks</a></li>
+            <li><a href="https://tcnksm.exposure.co/">Photos</a></li>
+          </ul>
+
+          <a class="name" href="/">SOTA</a>
+        </nav>        
+      </header>
+    </section>
+    
+
+
+<article>
+  <div class="container">
+    <header>
+      <div class="meta">
+        <time pubdate datetime="2014-02-12" title="2014-02-12">February 12, 2014</time>
+      </div>
+      <h1 class="title">Gitのcommitメッセージに定型文をぶっ込む</h1>
+    </header>
+    
+    <section>
+      <p>Gitのcommitメッセージに定型文をぶっ込みたいときがある．例えば<code>$default</code>のような環境変数が設定されていて，それを自動でcommitメッセージに含めるようにしたいとする．</p>
+
+<p>以下のようなaliasを設定する．</p>
+
+<pre><code>[alias]
+    cmd = &quot;!f () { git commit -m \&quot;$1 ($default)\&quot; $2;}; f&quot;
+</code></pre>
+
+<pre><code class="language-bash">$ export default=&quot;default message&quot;
+$ git cmd &quot;Some changes&quot; # -&gt; git commit -m &quot;Some changes (default message)&quot;
+</code></pre>
+
+<p><code>f()</code>という関数を定義してそれを最後に実行する．こんな回りくどいやり方をするのは，gitのaliasが最後に<code>&quot;$@&quot;</code>をつけてサブコマンド以外の引数をすべて展開するためで，単純に<code>$1</code>で第一引数を取得して&hellip;では期待通りにはならない．関数定義して最後にそれを実行すれば，gitがつける<code>&quot;$@&quot;</code>をその関数の引数として使える．</p>
+
+<p>自分のチームだとStashとJIRAを使っていて，JIRAのチケット名をcommitメッセージに含めるとStash上でJIRAのIssueとリンクされる．慣習としてbranch名とJIRAのチケット名を同じにしているので，ブランチ名をcommitメッセージに含めることができれば少し楽．</p>
+
+<p>例えば，JIRAのissueの名前が<code>xxx-1456</code>とするとこんな感じのことをする．</p>
+
+<pre><code class="language-bash">$ git checkout -b xxx-1456
+(Some changes)
+$ git commit -m &quot;Some changes (xxx-1456)&quot; 
+</code></pre>
+
+<p>以下ようなaliasを設定すれば，自動でブランチ名を最後に含めたcommitメッセージが作られる．</p>
+
+<pre><code>cmb = &quot;!f () { git commit -m \&quot;$1 ($(git branch -a | grep '^*' | cut -b 3-))\&quot; $2;}; f&quot;
+</code></pre>
+
+<pre><code class="language-bash">$ git checkout -b xxx-1456
+(Some changes)
+$ git cmb &quot;Some changes&quot; # -&gt; git commit -m &quot;Some changes (xxx-1456)&quot;
+</code></pre>
+
+<p>かなり希有なパターンだけど，他にも応用できるかなと．ちなみに<code>export GIT_TRACE=1</code>すると，gitが何やってるのか細かく見れるので複雑なaliasを作るとき便利．</p>
+
+<p>ついでによく使ってる，ちょっとマイナーなaliasをいくつか．まず，Initial commitを一気にやる，<code>git this</code>．</p>
+
+<pre><code>this = !git init &amp;&amp; git add . &amp;&amp; git commit -m \&quot;Initial commit\&quot;
+</code></pre>
+
+<p><code>.gitignore</code>にファイルを追加する，<code>git ignore FILE</code>．</p>
+
+<pre><code>ignore = &quot;!ignore () { echo $1 &gt;&gt; .gitignore;}; ignore&quot;
+</code></pre>
+
+<p>aliasを全部表示する，<code>git alias</code>．</p>
+
+<pre><code>alias  = !git config --list | grep 'alias\\.' | sed 's/alias\\.\\([^=]*\\)=\\(.*\\)/\\1\\ =&gt; \\2/' | sort
+</code></pre>
+
+<p>参考</p>
+
+<ul>
+<li><a href="http://rcmdnk.github.io/blog/2013/12/20/computer-git/">Gitのエイリアスで引数を使う #git - rcmdnk&rsquo;s blog</a></li>
+<li><a href="http://blog.blindgaenger.net/advanced_git_aliases.html">Advanced Git aliases</a></li>
+<li><a href="https://github.com/tcnksm/dotfiles/blob/master/git/gitconfig">tcnksm/gitcofig</a></li>
+</ul>
+
+      <div class="social">
+  
+  
+  <a href="https://twitter.com/share" class="twitter-share-button" data-via="deeeet" data-count="none">Tweet</a>
+  
+  
+</div>
+
+    </section>
+
+    <footer>
+      <address>
+        
+        <img src="/images/bio.jpeg"/>
+        
+        <p>Written by <strong><a rel="author" href="https://twitter.com/deeeet" title="Taichi Nakashima" target="_blank">Taichi Nakashima</a></strong><br>
+          <span class="muted">A Tokyo based PaaS engineer. Please contact me via twitter.</span>
+        </p>
+      </address>
+
+    </footer>
+
+  </div>
+</article>
+
+<script type="text/javascript" src="//ajax.googleapis.com/ajax/libs/jquery/1.7.2/jquery.min.js"></script>
+<script type="text/javascript" src="/js/main.js"></script>
+
+<script>!function(d,s,id){var js,fjs=d.getElementsByTagName(s)[0],p=/^http:/.test(d.location)?'http':'https';if(!d.getElementById(id)){js=d.createElement(s);js.id=id;js.src=p+'://platform.twitter.com/widgets.js';fjs.parentNode.insertBefore(js,fjs);}}(document, 'script', 'twitter-wjs');</script>
+
+
+<script type="text/javascript">var HN=[];HN.factory=function(e){return function(){HN.push([e].concat(Array.prototype.slice.call(arguments,0)))};},HN.on=HN.factory("on"),HN.once=HN.factory("once"),HN.off=HN.factory("off"),HN.emit=HN.factory("emit"),HN.load=function(){var e="hn-button.js";if(document.getElementById(e))return;var t=document.createElement("script");t.id=e,t.src="//hn-button.herokuapp.com/hn-button.js";var n=document.getElementsByTagName("script")[0];n.parentNode.insertBefore(t,n)},HN.load();</script>
+
+
+  <script>
+  (function(i,s,o,g,r,a,m){i['GoogleAnalyticsObject']=r;i[r]=i[r]||function(){
+  (i[r].q=i[r].q||[]).push(arguments)},i[r].l=1*new Date();a=s.createElement(o),
+  m=s.getElementsByTagName(o)[0];a.async=1;a.src=g;m.parentNode.insertBefore(a,m)
+  })(window,document,'script','//www.google-analytics.com/analytics.js','ga');
+
+  ga('create', 'UA-45390253-1', 'auto');
+  ga('send', 'pageview');
+
+</script>
+
+
+
+<script>
+  $(document).ready(function() {
+  
+  $('p:has(img)').css('text-align', 'center');
+  $('iframe').css('style', 'display: block; margin: 0px auto;');
+  });
+</script>
+

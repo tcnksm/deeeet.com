@@ -1,0 +1,1811 @@
+<?xml version="1.0" encoding="utf-8" standalone="yes" ?>
+<rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom">
+  <channel>
+    <title>Golang on SOTA</title>
+    <link>http://deeeet.com/categories/golang/</link>
+    <description>Recent content in Golang on SOTA</description>
+    <generator>Hugo -- gohugo.io</generator>
+    <language>ja-jp</language>
+    <copyright>Copyright (C) 2013-2015 Taichi Nakashima All Right Reserved.</copyright>
+    <lastBuildDate>Thu, 18 Dec 2014 00:00:00 +0000</lastBuildDate>
+    <atom:link href="http://deeeet.com/categories/golang/index.xml" rel="self" type="application/rss+xml" />
+    
+    <item>
+      <title>Go言語でテストしやすいコマンドラインツールをつくる</title>
+      <link>http://deeeet.com/writing/2014/12/18/golang-cli-test/</link>
+      <pubDate>Thu, 18 Dec 2014 00:00:00 +0000</pubDate>
+      
+      <guid>http://deeeet.com/writing/2014/12/18/golang-cli-test/</guid>
+      <description>
+
+&lt;p&gt;本記事は&lt;a href=&#34;http://qiita.com/advent-calendar/2014/go&#34;&gt;Go Advent Calendar 2014&lt;/a&gt;の18日目の記事です．&lt;/p&gt;
+
+&lt;p&gt;Go言語は，クロスコンパイルや配布のしやすさからコマンドラインツールの作成に採用されることが多い．自分もGo言語でいくつかのコマンドラインツールを作成してきた．例えば，GitHub Releaseへのツールのアップロードを簡単に行う&lt;a href=&#34;https://github.com/tcnksm/ghr&#34;&gt;ghr&lt;/a&gt;というコマンドラインツールを開発をしている．&lt;/p&gt;
+
+&lt;p&gt;コマンドラインツールをつくるときもテストは重要である．Go言語では標準テストパッケージだけで十分なテストを書くことができる．しかし，コマンドラインツールは標準出力や標準入力といったI/O処理が多く発生する．そのテスト，例えばある引数を受けたらこの出力を返し，この終了ステータスで終了するといったテストは，ちゃんとした手法が確立されているわけではなく，迷うことが多い（少なくとも自分は結構悩んだ）．&lt;/p&gt;
+
+&lt;p&gt;本記事では，いくつかのOSSツール（得に&lt;a href=&#34;https://github.com/hashicorp/atlas-upload-cli&#34;&gt;hashicorp/atlas-upload-cli&lt;/a&gt;）を参考に，Go言語によるコマンドラインツールおいてI/O処理に関するテストを書きやすくし，すっきりとしたコードを既述する方法について解説する．&lt;/p&gt;
+
+&lt;p&gt;なお，特別なパッケージは使用せず，標準パッケージのみを利用する．&lt;/p&gt;
+
+&lt;h2 id=&#34;tl-dr:4084104a284281eaf945f0012c731af4&#34;&gt;TL;DR&lt;/h2&gt;
+
+&lt;p&gt;&lt;a href=&#34;http://golang.org/pkg/io/#Writer&#34;&gt;io.Writer&lt;/a&gt;を入力とするメソッドをつくり，そこに実処理を書く．main関数やテストからはio.Writerを書き換えて，それを呼び出すようにする（文脈によりioの向き先を変える）．&lt;/p&gt;
+
+&lt;h2 id=&#34;実例:4084104a284281eaf945f0012c731af4&#34;&gt;実例&lt;/h2&gt;
+
+&lt;p&gt;ここでは，簡単な例として&lt;code&gt;awesome-cli&lt;/code&gt;というコマンドラインツールを作成し，その出力結果と終了コードのテストを書く．&lt;/p&gt;
+
+&lt;p&gt;&lt;code&gt;awesome-cli&lt;/code&gt;は&lt;code&gt;-version&lt;/code&gt;オプションを与えると，以下のような出力と，終了コードが得られるとする．&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-bash&#34;&gt;$ awesome-cli -version
+awesome-cli version v0.1.0
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-bash&#34;&gt;$ echo $?
+0
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;以下では，この挙動のテストをどのように書くかを，&lt;code&gt;awesome-cli&lt;/code&gt;のコードそのものと共に解説する．&lt;/p&gt;
+
+&lt;h2 id=&#34;コード:4084104a284281eaf945f0012c731af4&#34;&gt;コード&lt;/h2&gt;
+
+&lt;p&gt;&lt;code&gt;awesome-cli&lt;/code&gt;は以下の2つのソースで構成する．&lt;/p&gt;
+
+&lt;ul&gt;
+&lt;li&gt;&lt;code&gt;cli.go&lt;/code&gt; - オプション引数処理を含めた具体的な処理&lt;/li&gt;
+&lt;li&gt;&lt;code&gt;main.go&lt;/code&gt; - main関数&lt;/li&gt;
+&lt;/ul&gt;
+
+&lt;p&gt;そして&lt;code&gt;cli_test.go&lt;/code&gt;にI/Oに関わるテスト，ここでは&lt;code&gt;-version&lt;/code&gt;オプション引数を与えたときの出力とその終了コードのテスト，を既述する．以下ではこれらを具体的に説明する．&lt;/p&gt;
+
+&lt;h3 id=&#34;cli-go:4084104a284281eaf945f0012c731af4&#34;&gt;cli.go&lt;/h3&gt;
+
+&lt;p&gt;まず，引数処理を含めた具体的な処理を行う&lt;code&gt;cli.go&lt;/code&gt;は以下のように既述する．引数処理には標準の&lt;a href=&#34;http://golang.org/pkg/flag/&#34;&gt;flag&lt;/a&gt;パッケージを利用する．&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-go&#34;&gt;package main
+
+import (
+    &amp;quot;flag&amp;quot;
+    &amp;quot;fmt&amp;quot;
+    &amp;quot;io&amp;quot;
+)
+
+// 終了コード
+const (
+    ExitCodeOK = iota
+    ExitCodeParseFlagError
+)
+
+type CLI struct
+    outStream, errStream io.Writer
+}
+
+// 引数処理を含めた具体的な処理
+func (c *CLI) Run(args []string) int {
+
+    // オプション引数のパース
+    var version bool
+    flags := flag.NewFlagSet(&amp;quot;awesome-cli&amp;quot;, flag.ContinueOnError)
+    flags.SetOutput(c.errStream)
+    flags.BoolVar(&amp;amp;version, &amp;quot;version&amp;quot;, false, &amp;quot;Print version information and quit&amp;quot;)
+
+    if err := flags.Parse(args[1:]); err != nil
+        return ExitCodeParseFlagError
+    }
+
+    // バージョン情報の表示
+    if version {
+        fmt.Fprintf(c.errStream, &amp;quot;awesome-cli version %sn&amp;quot;, Version)
+        return ExitCodeOK
+    }
+
+    fmt.Fprint(c.outStream, &amp;quot;Do awesome workn&amp;quot;)
+
+    return ExitCodeOK
+}
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;まず，&lt;a href=&#34;http://golang.org/pkg/io/#Writer&#34;&gt;io.Writer&lt;/a&gt;の&lt;code&gt;outStream&lt;/code&gt;と&lt;code&gt;errStream&lt;/code&gt;をフィールドをもつ&lt;code&gt;CLI&lt;/code&gt;構造体を作る．そして&lt;code&gt;CLI&lt;/code&gt;構造体をレシーバとし，コマンドライン引数をその引数としてもつ&lt;code&gt;Run()&lt;/code&gt;メソッドを定義する．&lt;/p&gt;
+
+&lt;p&gt;&lt;code&gt;Run()&lt;/code&gt;にはオプション引数のパース処理と具体的な処理を既述し，戻り値としてステータスコードを返すようにする．&lt;/p&gt;
+
+&lt;p&gt;オプション引数のパースには&lt;a href=&#34;http://golang.org/pkg/flag/#FlagSet&#34;&gt;flag.FlagSet&lt;/a&gt;を新たに作成して行う．これにより以下が可能になる．&lt;/p&gt;
+
+&lt;ul&gt;
+&lt;li&gt;出力先を変えられる
+
+&lt;ul&gt;
+&lt;li&gt;&lt;code&gt;flags.SetOutput(c.errStream)&lt;/code&gt;&lt;/li&gt;
+&lt;/ul&gt;&lt;/li&gt;
+&lt;li&gt;パースするべきオプション引数を引数として渡せるようになる
+
+&lt;ul&gt;
+&lt;li&gt;&lt;code&gt;flags.Parse(args[1:])&lt;/code&gt;&lt;/li&gt;
+&lt;/ul&gt;&lt;/li&gt;
+&lt;/ul&gt;
+
+&lt;p&gt;（ちなみに&lt;a href=&#34;http://golang.org/pkg/flag/#Parse&#34;&gt;flag.Parse()&lt;/a&gt;は&lt;code&gt;os.Args[1:]&lt;/code&gt;をパースする）&lt;/p&gt;
+
+&lt;p&gt;具体的な処理はいつも通り既述する．ただし，I/O処理，例えばユーザに対してエラーを提示する処理などは，&lt;code&gt;outStream&lt;/code&gt;と&lt;code&gt;errStream&lt;/code&gt;をそれぞれ標準出力，標準エラー出力の書き出し先として利用するようにする．&lt;/p&gt;
+
+&lt;p&gt;&lt;code&gt;Run()&lt;/code&gt;の戻り値は，&lt;code&gt;0&lt;/code&gt;（正常）&lt;code&gt;1&lt;/code&gt;（エラー）のように直接数値を書いても良いが，&lt;code&gt;ExitCodeOK &lt;/code&gt;のように定数として定義しておくとテストときにその可読性につながる．また&lt;code&gt;iota&lt;/code&gt;を使えば，エラーコードが増えたときにも簡単に対応できる．&lt;/p&gt;
+
+&lt;p&gt;これらにより&lt;code&gt;Run()&lt;/code&gt;，つまり引数処理を含めた具体的な処理，をメソッドとしてテストすることができるようになる．&lt;/p&gt;
+
+&lt;h3 id=&#34;main-go:4084104a284281eaf945f0012c731af4&#34;&gt;main.go&lt;/h3&gt;
+
+&lt;p&gt;次にmain関数をもつ&lt;code&gt;main.go&lt;/code&gt;は以下のように既述する．&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-go&#34;&gt;package main
+
+import (
+    &amp;quot;os&amp;quot;
+)
+
+const Version string = &amp;quot;v0.1.0&amp;quot;
+
+func main() {
+    cli := &amp;amp;CLI{outStream: os.Stdout, errStream: os.Stderr}
+    os.Exit(cli.Run(os.Args))
+}
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;main関数は&lt;code&gt;CLI&lt;/code&gt;構造体の&lt;code&gt;outStream&lt;/code&gt;と&lt;code&gt;errStream&lt;/code&gt;をそれぞれ&lt;code&gt;os.Stdout&lt;/code&gt;，&lt;code&gt;os.Stderr&lt;/code&gt;として&lt;code&gt;cli.go&lt;/code&gt;の&lt;code&gt;Run()&lt;/code&gt;メソッドを呼び出すだけ．これにより，コマンドラインツール実行時の出力は標準出力と標準エラー出力に書き出されるようになる．&lt;/p&gt;
+
+&lt;p&gt;&lt;code&gt;Run()&lt;/code&gt;の引数は&lt;code&gt;os.Args&lt;/code&gt;を渡すようにする．そして&lt;code&gt;Run()&lt;/code&gt;は終了ステータスを返すので，それを受け&lt;code&gt;os.Exit()&lt;/code&gt;で終了するようにする．&lt;/p&gt;
+
+&lt;h3 id=&#34;cli-test-go:4084104a284281eaf945f0012c731af4&#34;&gt;cli_test.go&lt;/h3&gt;
+
+&lt;p&gt;テストは以下のように既述する．ここでは，&lt;code&gt;-version&lt;/code&gt;オプション引数を与えたときの出力とその終了ステータスをテストする．&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-go&#34;&gt;package main
+
+import (
+    &amp;quot;bytes&amp;quot;
+    &amp;quot;fmt&amp;quot;
+    &amp;quot;strings&amp;quot;
+    &amp;quot;testing&amp;quot;
+)
+
+func TestRun_versionFlag(t *testing.T) {
+    outStream, errStream := new(bytes.Buffer), new(bytes.Buffer)
+    cli := &amp;amp;CLIoutStream: outStream, errStream: errStream
+    args := strings.Split(&amp;quot;awesome-cli -version&amp;quot;, &amp;quot; &amp;quot;)
+
+    status := cli.Run(args)
+    if status != ExitCodeOK
+        t.Errorf(&amp;quot;ExitStatus=%d, want %d&amp;quot;, status, ExitCodeOK)
+    }
+
+    expected := fmt.Sprintf(&amp;quot;awesome-cli version %s&amp;quot;, Version)
+    if !strings.Contains(errStream.String(), expected)
+        t.Errorf(&amp;quot;Output=%q, want %q&amp;quot;, errStream.String(), expected)
+     }
+}
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;テストでは，&lt;code&gt;CLI&lt;/code&gt;構造体の&lt;code&gt;outStream&lt;/code&gt;と&lt;code&gt;errStream&lt;/code&gt;をそれぞれ&lt;a href=&#34;http://golang.org/pkg/bytes/#Buffer&#34;&gt;bytes.Buffer&lt;/a&gt;として，&lt;code&gt;Run()&lt;/code&gt;メソッドを呼び出す．これにより&lt;code&gt;Run()&lt;/code&gt;実行後に各出力を取り出してテストに使うすることができる．&lt;/p&gt;
+
+&lt;p&gt;実際にテストしたい，コマンドと引数は以下のように書く．&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-go&#34;&gt;args := strings.Split(&amp;quot;awesome-cli -version&amp;quot;, &amp;quot; &amp;quot;)
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;そして&lt;code&gt;strings.Split()&lt;/code&gt;により&lt;code&gt;os.Args&lt;/code&gt;と同じものを作り出し，&lt;code&gt;Run()&lt;/code&gt;への引数とする．&lt;/p&gt;
+
+&lt;p&gt;あとは，いつも通りの&lt;code&gt;if&lt;/code&gt;によるテストを書いているだけ．終了ステータスは期待した値が返ってきているか，出力は予期するものが含まれているかを書く．&lt;/p&gt;
+
+&lt;h2 id=&#34;番外編-環境変数のテスト:4084104a284281eaf945f0012c731af4&#34;&gt;番外編（環境変数のテスト）&lt;/h2&gt;
+
+&lt;p&gt;軽く番外編．コマンドラインツールでは環境変数を用いることがある．例えば，API  を叩くようなコマンドラインツールは，そのTokenを引数で与えるよりも環境変数で設定させることが多い．このように環境変数が絡んだ場合のテストの書き方についても簡単に紹介する．&lt;/p&gt;
+
+&lt;p&gt;以下のようなヘルパー関数を準備するとよい．&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-go&#34;&gt;func setTestEnv(key, val string) func() {
+    preVal := os.Getenv(key)
+    os.Setenv(key, val)
+    return func()
+        os.Setenv(key, preVal)
+    }
+}
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;この関数は，もともと環境変数に設定されていた値を一時的に退避して，実際に使いたい値を設定する．そして，退避した値を再びセットし直すための関数を戻り値として返す．&lt;/p&gt;
+
+&lt;p&gt;使うときは以下のようにする．テストが終わると&lt;code&gt;defer&lt;/code&gt;により値のリストアが行われる．&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-go&#34;&gt;func TestAPIToken(t *testing.T) {
+    reset = setTestEnv(&amp;quot;Token&amp;quot;,&amp;quot;……&amp;quot;)
+    defer reset()
+
+    // Awesome test
+}
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;h2 id=&#34;まとめ:4084104a284281eaf945f0012c731af4&#34;&gt;まとめ&lt;/h2&gt;
+
+&lt;p&gt;本記事では，Go言語でテストしやすいコマンドラインツールを書く方法について紹介した．&lt;a href=&#34;http://golang.org/pkg/io/#Writer&#34;&gt;io.Writer&lt;/a&gt;を入力とするメソッドをつくることで，テストしやすい，かつ見通しの良いコードが書けるようになった．&lt;/p&gt;
+
+&lt;h3 id=&#34;参考:4084104a284281eaf945f0012c731af4&#34;&gt;参考&lt;/h3&gt;
+
+&lt;ul&gt;
+&lt;li&gt;&lt;a href=&#34;https://yuya-takeyama.github.io/presentations/2014/11/30/gocon_2014_autumn/#1.0&#34;&gt;Unit-testing programs depend on I/O in Go&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a href=&#34;http://yuuki.hatenablog.com/entry/go-cli-unix&#34;&gt;Go言語によるCLIツール開発とUNIX哲学について&lt;/a&gt;&lt;/li&gt;
+&lt;/ul&gt;
+</description>
+    </item>
+    
+    <item>
+      <title>Go Conference 2014 Autumnの手伝いをした</title>
+      <link>http://deeeet.com/writing/2014/12/01/go-conference-2014-autumn/</link>
+      <pubDate>Mon, 01 Dec 2014 00:00:00 +0000</pubDate>
+      
+      <guid>http://deeeet.com/writing/2014/12/01/go-conference-2014-autumn/</guid>
+      <description>
+
+&lt;p&gt;&lt;a href=&#34;http://gocon.connpass.com/event/9748/&#34;&gt;Go Conference 2014 autumn - connpass&lt;/a&gt;&lt;/p&gt;
+
+&lt;p&gt;自分の所属チームをはじめ弊社でもGolangの導入は始まっているため，合コンの会場の提供及び，運営の手伝いをした．会議の内容については他に良いまとめ記事があるので，そちらに任せ，普段あまり語られない会場について軽く書いておく．&lt;/p&gt;
+
+&lt;p&gt;今回やってみてこういう大規模なカンファレンスを余裕でやる設備あるなと思った．運営とかの&amp;rdquo;複雑さを隠蔽して&amp;rdquo;良いところを挙げると，&lt;/p&gt;
+
+&lt;ul&gt;
+&lt;li&gt;500人以上は余裕で入れるキャパシティがある&lt;/li&gt;
+&lt;li&gt;プロジェクターが全面に配置されている（どの席からでもスライドちゃんと見える）&lt;/li&gt;
+&lt;li&gt;Wifiがめちゃしっかりしてる（普段から何千人が普通に使えてる）&lt;/li&gt;
+&lt;li&gt;音響もめちゃしっかりしてる&lt;/li&gt;
+&lt;/ul&gt;
+
+&lt;p&gt;しかも設備は，タッチパネルで余裕の操作ができる．毎週全世界の支社を含めた，全社員が参加する会をやってるくらいなので，それに耐えうる設備がある．&lt;/p&gt;
+
+&lt;p&gt;逆にしんどい部分を挙げると，&lt;/p&gt;
+
+&lt;ul&gt;
+&lt;li&gt;セキュリティが厳重（当たり前だけど柔軟さとのトレードオフ）&lt;/li&gt;
+&lt;li&gt;パイプ椅子なのでケツが死ぬ&lt;/li&gt;
+&lt;li&gt;電源不足（でもこれは僕の怠惰による準備不足）&lt;/li&gt;
+&lt;li&gt;会場の自販機がEdyしか使えない&lt;/li&gt;
+&lt;/ul&gt;
+
+&lt;p&gt;今回他の会場を探す機会があったが，費用を考えた場合に，300人以上の会場はなかなかない．今後，大規模なカンファレンスをやる機会があれば，少し考慮に入れてもらっても良いかもしれない．僕はしばらくやりたくないけど，社員に知り合いがいればなんとかなるかもしれません．&lt;/p&gt;
+
+&lt;h2 id=&#34;謝辞:080a263c784957465f0d019cc5bfa958&#34;&gt;謝辞&lt;/h2&gt;
+
+&lt;p&gt;&lt;a href=&#34;https://twitter.com/hyoshiok&#34;&gt;@hyoshiok&lt;/a&gt;さんの協力がなければ，何もできませんでした．ありがとうございました．あと会場の関係上，当日は社員スタッフに手伝っていただきました．本当にありがとうございました！&lt;/p&gt;
+
+&lt;p&gt;主催の@tenntennさん，@jxck_さん，@ymotongpooさん，めちゃおもろいカンファレンスを開いて頂いてありがとうございました！またスタッフの方々もお疲れ様でした！&lt;/p&gt;
+
+&lt;p&gt;あと運営の手伝いをして，普段自分が気軽に参加している勉強会やカンファレンスのありがたさを実感した．&lt;/p&gt;
+
+&lt;p&gt;次回は発表枠で参加したい．&lt;/p&gt;
+
+&lt;h3 id=&#34;参考:080a263c784957465f0d019cc5bfa958&#34;&gt;参考&lt;/h3&gt;
+
+&lt;ul&gt;
+&lt;li&gt;&lt;a href=&#34;http://ymotongpoo.hatenablog.com/entry/2014/12/01/080131&#34;&gt;Go Conference 2014 autumn を終えて #gocon&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a href=&#34;http://qiita.com/tenntenn/items/05704c8600040a4f6748&#34;&gt;私のGopherコレクション2014 #golang&lt;/a&gt;&lt;/li&gt;
+&lt;/ul&gt;
+</description>
+    </item>
+    
+    <item>
+      <title>CI-as-a-ServiceでGo言語プロジェクトの最新ビルドを継続的に提供する</title>
+      <link>http://deeeet.com/writing/2014/10/16/golang-in-ci-as-a-service/</link>
+      <pubDate>Thu, 16 Oct 2014 00:00:00 +0000</pubDate>
+      
+      <guid>http://deeeet.com/writing/2014/10/16/golang-in-ci-as-a-service/</guid>
+      <description>
+
+&lt;p&gt;Go言語で作成したツールのリリース方法について，最近実践していることを書く．&lt;/p&gt;
+
+&lt;p&gt;リリースは，ローカルから人手で行っている．具体的には，自分のローカル環境でクロスコンパイルし，&lt;a href=&#34;http://shijimiii.info/technical-memo/semver/&#34;&gt;セマンティック バージョニング&lt;/a&gt;によるタグをつけ，&lt;code&gt;CHANGELOG.md&lt;/code&gt;を丁寧に書いた上でリリースをしている．クロスコンパイルには&lt;a href=&#34;https://github.com/mitchellh/gox&#34;&gt;mitchellh/gox&lt;/a&gt;，リリースには自分で作成した&lt;a href=&#34;https://github.com/tcnksm/ghr&#34;&gt;tcnksm/ghr&lt;/a&gt;を使っている（&lt;code&gt;ghr&lt;/code&gt;については，&lt;a href=&#34;http://deeeet.com/writing/2014/07/29/ghr/&#34;&gt;&amp;ldquo;高速に自作パッケージをGithubにリリースするghrというツールをつくった&amp;rdquo;&lt;/a&gt;を参考）．&lt;/p&gt;
+
+&lt;p&gt;その一方で，開発中の最新のビルドも提供するようにしている．例えば，&lt;a href=&#34;https://github.com/tcnksm/ghr/releases/tag/pre-release&#34;&gt;こんな感じ&lt;/a&gt;で，Pre-Releaseとして提供している．Go言語での開発なので，&lt;code&gt;go get&lt;/code&gt;してくださいと言える．しかし，環境によってビルドが失敗することもあるし，そもそもGo言語を使っていないユーザもいる．新機能をいち早く使うことにはワクワク感がある（少なくとも自分にはある）．ユーザに負担なくそれを提供したい．&lt;/p&gt;
+
+&lt;p&gt;頻繁に開発を行っているときに，これを上記のように人手で毎回やるのは厳しい．WebアプリケーションのようにGit pushを契機にCI-as-a-Serviceでテストが通ったものを自動でリリースするのが美しい．&lt;/p&gt;
+
+&lt;p&gt;しかし，今ままでこれをやるのは意外と面倒だった．毎回違った名前でリリースするとリリースだらけになるし，リリースを消すにも新たなシェルスクリプトを頑張って書くしかなかった．&lt;/p&gt;
+
+&lt;p&gt;&lt;code&gt;ghr&lt;/code&gt;の最新バージョンでは，&lt;code&gt;--replace&lt;/code&gt;オプションをサポートしている．このオプションを使うと，一度リリースしたものを入れ替えてリリースすることができるようになる．もともとは誤ってリリースしてしまったものを入れ替えたいという要望から作ったが，上記のようなCI-as-a-Serviceとの連携でも威力を発揮する．&lt;/p&gt;
+
+&lt;p&gt;人によって好みのCI-as-a-Serviceは違う．無料かつ知名度のある&lt;a href=&#34;http://wercker.com/&#34;&gt;Wercker&lt;/a&gt;，&lt;a href=&#34;https://travis-ci.org/&#34;&gt;TravisCI&lt;/a&gt;，&lt;a href=&#34;https://drone.io/&#34;&gt;drone.io&lt;/a&gt;を使い，上記のようにGo言語プロジェクトの最新のビルドを継続的にリリースする方法について書く．&lt;/p&gt;
+
+&lt;h2 id=&#34;wercker:9ed6227624a862d1c2ad5008b2ba81f5&#34;&gt;Wercker&lt;/h2&gt;
+
+&lt;p&gt;Werckerには専用のステップを準備した（&lt;a href=&#34;https://github.com/tcnksm/wercker-step-ghr&#34;&gt;tcnksm/wercker-step-ghr&lt;/a&gt;）．以下のような&lt;code&gt;wercker.yml&lt;/code&gt;を準備すればよい．これで，テストが通ったあとに，goxによりクロスコンパイルが行われ，zipで圧縮，Githubへのリリースが行われる．リリースはPre-Releaseとして行われる．実際に動いているサンプルは，&lt;a href=&#34;https://github.com/tcnksm-sample/wercker-golang&#34;&gt;tcnksm-sample/wercker-golang&lt;/a&gt;で確認できる．&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-yaml&#34;&gt;box: tcnksm/gox
+build:
+  steps:
+    - setup-go-workspace
+    - script:
+      name: go get
+      code: |
+        go get -t ./...
+    - tcnksm/goveralls:
+      token: $COVERALLS_TOKEN
+    - tcnksm/gox
+    - tcnksm/zip:
+      input: $WERCKER_OUTPUT_DIR/pkg
+      output: $WERCKER_OUTPUT_DIR/dist
+deploy:
+  steps:
+    - tcnksm/ghr:
+      token: $GITHUB_TOKEN
+      input: dist
+      replace: true
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;ちなみに自分はWerckerを採用している．Werckerの仕組みや，stepの自作の方法は別に記事を書いたので参考にしてください．&lt;/p&gt;
+
+&lt;ul&gt;
+&lt;li&gt;&lt;a href=&#34;http://deeeet.com/writing/2014/10/16/wercker/&#34;&gt;Werckerの仕組み，独自のboxとstepのつくりかた | SOTA&lt;/a&gt;&lt;/li&gt;
+&lt;/ul&gt;
+
+&lt;h2 id=&#34;travisci:9ed6227624a862d1c2ad5008b2ba81f5&#34;&gt;TravisCI&lt;/h2&gt;
+
+&lt;p&gt;TravisCIの場合は，以下のような&lt;code&gt;.travis.yml&lt;/code&gt;を準備すればよい．テスト，ビルド，リリースが行われる．実際に動いているサンプルは，&lt;a href=&#34;https://github.com/tcnksm-sample/travis-golang&#34;&gt;tcnksm-sample/travis-golang&lt;/a&gt;で確認できる．&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-yaml&#34;&gt;language: go
+go:
+  - 1.3
+env:
+  - &amp;quot;PATH=/home/travis/gopath/bin:$PATH&amp;quot;
+before_install:
+  - go get github.com/mitchellh/gox
+  - gox -build-toolchain
+  - go get github.com/tcnksm/ghr
+  - go get github.com/axw/gocov/gocov
+  - go get github.com/mattn/goveralls
+  - go get code.google.com/p/go.tools/cmd/cover
+script:
+  - go test -v -covermode=count -coverprofile=coverage.out ./...
+  - goveralls -coverprofile=coverage.out -service travis-ci -repotoken $COVERALLS_TOKEN
+after_success:
+  - gox -output &amp;quot;dist/{.OS}_{.Arch}_{.Dir}&amp;quot;
+  - ghr --username tcnksm-sample --token $GITHUB_TOKEN --replace --prerelease --debug pre-release dist/
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;h2 id=&#34;drone-io:9ed6227624a862d1c2ad5008b2ba81f5&#34;&gt;Drone.io&lt;/h2&gt;
+
+&lt;p&gt;Drone.ioの場合は，TraviCIやWerckerのような設定ファイルはない．以下をビルドスクリプトとしてDrone.ioに登録する．Goの最新版をインストールするところから始める必要がある．実際に動いているサンプルは，&lt;a href=&#34;https://github.com/tcnksm-sample/drone-golang&#34;&gt;tcnksm-sample/drone-golang&lt;/a&gt;で確認できる．&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-bash&#34;&gt;# Install go 1.3.1
+pushd /
+curl -s -o go.tar.gz https://storage.googleapis.com/golang/go1.3.1.linux-amd64.tar.gz
+tar xzf go.tar.gz
+export GOROOT=/go
+export PATH=$GOROOT/bin:$PATH
+go version
+popd
+
+# Get source code
+go get -t -d ./...
+
+go get github.com/axw/gocov/gocov
+go get github.com/mattn/goveralls
+
+go test -v -covermode=count -coverprofile=coverage.out ./...
+goveralls -coverprofile=coverage.out -service drone.io -repotoken $COVERALLS_TOKEN
+
+# Install gox
+go get github.com/mitchellh/gox
+gox -build-toolchain
+gox -output &amp;quot;pkg/{.OS}_{.Arch}_{.Dir}&amp;quot;
+
+# Release by ghr
+go get github.com/tcnksm/ghr
+ghr --username tcnksm-sample \
+    --token $GITHUB_TOKEN \
+    --replace \
+    --prerelease \
+    --debug \
+    pre-release pkg/
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;h2 id=&#34;まとめ:9ed6227624a862d1c2ad5008b2ba81f5&#34;&gt;まとめ&lt;/h2&gt;
+
+&lt;p&gt;各種CI-as-a-Serviceと&lt;code&gt;ghr&lt;/code&gt;を連携して継続的にGo言語プロジェクトの最新ビルドを提供する方法について書いた．ツールの宣伝になってしまったが，気に入った場合は，是非使ってみてください．&lt;/p&gt;
+
+&lt;p&gt;CI-as-a-Serviceの比較にもなった．結論から言うと自由度の高いWerckerが一番良い．クロスコンパイルをするためには別途ツールビルドが必要になる(&lt;code&gt;gox -build-toolchain&lt;/code&gt;)．これは時間がかかるため，毎回やるにはコストがかかる．Werckerを使えば，あらかじめboxとしてそれを準備しておけるし，stepをつくることで複雑なコマンドも隠蔽できる．&lt;/p&gt;
+
+&lt;p&gt;&lt;code&gt;ghr&lt;/code&gt;に関して要望やバグは，Githubの&lt;a href=&#34;https://github.com/tcnksm/ghr/issues&#34;&gt;Issue&lt;/a&gt;もしくは，&lt;a href=&#34;https://twitter.com/deeeet&#34;&gt;@deeeet&lt;/a&gt;までお願いします．&lt;/p&gt;
+
+&lt;h3 id=&#34;参考:9ed6227624a862d1c2ad5008b2ba81f5&#34;&gt;参考&lt;/h3&gt;
+
+&lt;ul&gt;
+&lt;li&gt;&lt;a href=&#34;http://motemen.hatenablog.com/entry/2014/06/27/xcompile-go-and-release-to-github-with-wercker&#34;&gt;Wercker で Go のプロジェクトをクロスコンパイルし，GitHub にリリースする - 詩と創作・思索のひろば (Poetry, Writing and Contemplation)&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a href=&#34;https://github.com/tcnksm/ghr/wiki/Integrate-ghr-with-CI-as-a-Service&#34;&gt;Integrate ghr with CI as a Service · tcnksm/ghr Wiki · GitHub&lt;/a&gt;&lt;/li&gt;
+&lt;/ul&gt;
+</description>
+    </item>
+    
+    <item>
+      <title>Go言語で作ったCLIツールを配布する</title>
+      <link>http://deeeet.com/talking/2014/08/11/golang-study/</link>
+      <pubDate>Mon, 11 Aug 2014 00:00:00 +0000</pubDate>
+      
+      <guid>http://deeeet.com/talking/2014/08/11/golang-study/</guid>
+      <description>
+
+&lt;script async class=&#34;speakerdeck-embed&#34; data-id=&#34;1e6e28a001af013285ba2abb871a81a5&#34; data-ratio=&#34;1.77777777777778&#34; src=&#34;http://speakerdeck.com/assets/embed.js&#34;&gt;&lt;/script&gt;
+
+&lt;p&gt;&lt;a href=&#34;http://connpass.com/event/7814/&#34;&gt;Golang勉強会&lt;/a&gt;&lt;/p&gt;
+
+&lt;p&gt;Go言語で作成したツールをクロスコンパイルして，複数プラットフォームに配布する方法について話してきた．自分がGoをはじめた理由の一つがクロスコンパイルによる配布のしやすさであり，いろいろ実践したりそれ用のツールを作ったりしてきたのでそれをまとめた．&lt;/p&gt;
+
+&lt;h3 id=&#34;参考:59e57060649a5deb678be6483b9232e5&#34;&gt;参考&lt;/h3&gt;
+
+&lt;p&gt;発表は以下の記事をもとにしている．&lt;/p&gt;
+
+&lt;ul&gt;
+&lt;li&gt;&lt;a href=&#34;http://deeeet.com/writing/2014/08/07/github-heroku-dist/&#34;&gt;&amp;ldquo;HerokuとGithubを使った統一的なツール配布&amp;rdquo;&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a href=&#34;http://deeeet.com/writing/2014/07/29/ghr/&#34;&gt;&amp;ldquo;高速に自作パッケージをGithubにリリースするghrというツールをつくった&amp;rdquo;&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a href=&#34;http://deeeet.com/writing/2014/07/23/github-release/&#34;&gt;&amp;ldquo;Go言語のツールをクロスコンパイルしてGithubにリリースする&amp;rdquo;&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a href=&#34;http://deeeet.com/writing/2014/05/20/brew-tap/&#34;&gt;&amp;ldquo;HomeBrewで自作ツールを配布する&amp;rdquo;&lt;/a&gt;&lt;/li&gt;
+&lt;/ul&gt;
+</description>
+    </item>
+    
+    <item>
+      <title>golang勉強会でGo製ツールの配布方法について話してきた</title>
+      <link>http://deeeet.com/writing/2014/08/11/golang-study/</link>
+      <pubDate>Mon, 11 Aug 2014 00:00:00 +0000</pubDate>
+      
+      <guid>http://deeeet.com/writing/2014/08/11/golang-study/</guid>
+      <description>
+
+&lt;script async class=&#34;speakerdeck-embed&#34; data-id=&#34;1e6e28a001af013285ba2abb871a81a5&#34; data-ratio=&#34;1.77777777777778&#34; src=&#34;http://speakerdeck.com/assets/embed.js&#34;&gt;&lt;/script&gt;
+
+&lt;p&gt;&lt;a href=&#34;https://speakerdeck.com/tcnksm/ship-your-cli-tool-built-by-golang-to-your-user-number-golangstudy&#34;&gt;&amp;ldquo;Ship your CLI tool built by golang to your user #golangstudy&amp;rdquo;&lt;/a&gt;&lt;/p&gt;
+
+&lt;p&gt;&lt;a href=&#34;http://connpass.com/event/7814/&#34;&gt;&amp;ldquo;Golang勉強会&amp;rdquo;&lt;/a&gt;で発表してきた．Go言語で作成したツールをクロスコンパイルして，複数プラットフォームに配布する方法について話してきた．自分がGoをはじめた理由の一つがクロスコンパイルによる配布のしやすさであり，いろいろ実践したりそれ用のツールを作ったりしてきたのでそれをまとめた．&lt;/p&gt;
+
+&lt;p&gt;以下の視点で話したつもり，&lt;/p&gt;
+
+&lt;ul&gt;
+&lt;li&gt;自動化により開発者の負担を減らす&lt;/li&gt;
+&lt;li&gt;ユーザがツールを使うまでの負担を減らす&lt;/li&gt;
+&lt;/ul&gt;
+
+&lt;p&gt;&lt;a href=&#34;http://deeeet.com/writing/2014/07/31/readme/&#34;&gt;&amp;ldquo;わかりやすいREADME.mdを書く&amp;rdquo;&lt;/a&gt;にも似たようなことを書いたけど，自分のような無名なエンジニアの作ったツールであってもユーザに使ってもらうには，2点目のような視点を大切にしないといけないと思う．&lt;/p&gt;
+
+&lt;p&gt;発表は以下の記事をもとにしている．&lt;/p&gt;
+
+&lt;ul&gt;
+&lt;li&gt;&lt;a href=&#34;http://deeeet.com/writing/2014/08/07/github-heroku-dist/&#34;&gt;&amp;ldquo;HerokuとGithubを使った統一的なツール配布&amp;rdquo;&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a href=&#34;http://deeeet.com/writing/2014/07/29/ghr/&#34;&gt;&amp;ldquo;高速に自作パッケージをGithubにリリースするghrというツールをつくった&amp;rdquo;&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a href=&#34;http://deeeet.com/writing/2014/07/23/github-release/&#34;&gt;&amp;ldquo;Go言語のツールをクロスコンパイルしてGithubにリリースする&amp;rdquo;&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a href=&#34;http://deeeet.com/writing/2014/05/20/brew-tap/&#34;&gt;&amp;ldquo;HomeBrewで自作ツールを配布する&amp;rdquo;&lt;/a&gt;&lt;/li&gt;
+&lt;/ul&gt;
+
+&lt;h2 id=&#34;感想:e5466722a604d42f657b1dce23d75d30&#34;&gt;感想&lt;/h2&gt;
+
+&lt;p&gt;特に以下の2つの発表が面白かった．&lt;/p&gt;
+
+&lt;ul&gt;
+&lt;li&gt;&lt;a href=&#34;https://speakerdeck.com/nabeken/go-and-license&#34;&gt;&amp;ldquo;GOとライセンス&amp;rdquo;&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&amp;ldquo;How To Think Go&amp;rdquo;&lt;/li&gt;
+&lt;/ul&gt;
+
+&lt;p&gt;まず，ライセンスの話．自分でバイナリ配布のことをいろいろやっておきながら，このことを全く考慮してなかった．ソースコードとバイナリではライセンス異なることを知らなかった．めんどくせえけど大事だと思います．参考文献読みます．&lt;/p&gt;
+
+&lt;p&gt;あと&lt;a href=&#34;https://twitter.com/lestrrat&#34;&gt;@lestrrat&lt;/a&gt;さんの&amp;rdquo;How to Think Go&amp;rdquo;．最高でした．
+rebuild.fmの&lt;a href=&#34;http://rebuild.fm/42/&#34;&gt;&amp;ldquo;Rebuild: 42: When in Golang, Do as the Gophers Do (lestrrat)&amp;rdquo;&lt;/a&gt;で話していたことを発表としてさらにパワーアップさせたという印象（これ5回以上聴いたので）．
+特に自分のためになったのが「Goで構造体設計」の話．今まで見たGoでのモデリングの説明で一番しっくりきた．
+「オブジェクトの階層を作ろうという考え方をしない（&amp;rsquo;動物&amp;rsquo;を作ろうとしない）」，「&amp;rsquo;草食動物&amp;rsquo;ではなく&amp;rsquo;草を食べる&amp;rsquo;というinterfaceを考えてメソッドをそろえる」
+などなど，いかにオブジェクト思考的な考え方からGo的な思考に変えていくかという説明の仕方がとてもわかりやすかった．
+今までの書いたコードは完全に失敗してるのでちゃんと書き直していきたい．&lt;/p&gt;
+
+&lt;h2 id=&#34;最後に:e5466722a604d42f657b1dce23d75d30&#34;&gt;最後に&lt;/h2&gt;
+
+&lt;p&gt;発表する機会を与えて下さった&lt;a href=&#34;https://twitter.com/bto&#34;&gt;@bto&lt;/a&gt;さん，ありがとうございました．
+さらなるモチベーションに繋がるとても良い勉強会でした．質疑の質もとても高かった．次に機会があれば是非参加したいです．&lt;/p&gt;
+
+&lt;h3 id=&#34;参考:e5466722a604d42f657b1dce23d75d30&#34;&gt;参考&lt;/h3&gt;
+
+&lt;ul&gt;
+&lt;li&gt;&lt;a href=&#34;http://lestrrat.ldblog.jp/archives/40268722.html&#34;&gt;HDE Incで開催のGo勉強会で話してきた : D-7 &lt;altijd in beweging&gt;&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a href=&#34;http://yosuke-furukawa.hatenablog.com/entry/2014/08/11/095157&#34;&gt;Go lang勉強会でgo-socket.ioの話してきた - from scratch&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a href=&#34;http://kyokomi.hatenablog.com/entry/2014/08/10/110909&#34;&gt;Go lang勉強会に参加した感想 - きょこみのーと&lt;/a&gt;&lt;/li&gt;
+&lt;/ul&gt;
+</description>
+    </item>
+    
+    <item>
+      <title>HerokuとGithubを使った統一的なツール配布</title>
+      <link>http://deeeet.com/writing/2014/08/07/github-heroku-dist/</link>
+      <pubDate>Thu, 07 Aug 2014 00:00:00 +0000</pubDate>
+      
+      <guid>http://deeeet.com/writing/2014/08/07/github-heroku-dist/</guid>
+      <description>
+
+&lt;p&gt;Go言語ではクロスコンパイルがとても簡単で，複数プラットフォーム向けのバイナリをつくってそれを配布するというのがさらっとできる．&lt;/p&gt;
+
+&lt;p&gt;単純にやるなら，&lt;/p&gt;
+
+&lt;ol&gt;
+&lt;li&gt;クロスコンパイルした各バイナリをzip等に固める&lt;/li&gt;
+&lt;li&gt;Github Releaseや&lt;a href=&#34;https://bintray.com/&#34;&gt;bintray&lt;/a&gt;，&lt;a href=&#34;https://drone.io/&#34;&gt;Dorone.io&lt;/a&gt;などにホストする&lt;/li&gt;
+&lt;/ol&gt;
+
+&lt;p&gt;そして，ユーザには自分のプラットフォームに合ったものをダウンロード／展開してPATHの通ったところに置いてもらう．&lt;/p&gt;
+
+&lt;p&gt;開発者からすると，すごい簡単．ホストするまで完全に自動化できる．でも，ユーザからすると若干めんどくさい．&lt;/p&gt;
+
+&lt;p&gt;もっとツールを使い初めてもらうまでの敷居を下げたい．&lt;/p&gt;
+
+&lt;h2 id=&#34;tl-dr:10104ee938ba1f589d7cd4c7da7eebf0&#34;&gt;TL;DR&lt;/h2&gt;
+
+&lt;p&gt;全プラットフォーム共通で以下のようにツールをインストールできるようにする．若干長いが1コマンド！&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-bash&#34;&gt;$ L=/usr/local/bin/ghr &amp;amp;&amp;amp; curl -sL -A &amp;quot;`uname -sp`&amp;quot;  http://ghr.herokuapp.com/ghr.zip | zcat &amp;gt;$L &amp;amp;&amp;amp; chmod +x $L
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;このような配布をHerokuとGithubを使ってできるようにする．&lt;/p&gt;
+
+&lt;h2 id=&#34;実例:10104ee938ba1f589d7cd4c7da7eebf0&#34;&gt;実例&lt;/h2&gt;
+
+&lt;p&gt;このようなツール配布を行っている例はいくつかある．&lt;/p&gt;
+
+&lt;ul&gt;
+&lt;li&gt;&lt;a href=&#34;https://github.com/heroku/hk&#34;&gt;heroku/hk&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a href=&#34;https://github.com/flynn/flynn/tree/master/cli&#34;&gt;flynn/cli&lt;/a&gt;&lt;/li&gt;
+&lt;/ul&gt;
+
+&lt;p&gt;例えば，Herokuのhkは，以下のようにインストールできる．&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-bash&#34;&gt;$ L=/usr/local/bin/hk &amp;amp;&amp;amp; curl -sL -A &amp;quot;`uname -sp`&amp;quot; https://hk.heroku.com/hk.gz | zcat &amp;gt;$L &amp;amp;&amp;amp; chmod +x $L
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;h2 id=&#34;動作の概要:10104ee938ba1f589d7cd4c7da7eebf0&#34;&gt;動作の概要&lt;/h2&gt;
+
+&lt;p&gt;Githubにリリースを作成し，各プラットフォーム向けのパッケージがホストされているとする．&lt;/p&gt;
+
+&lt;p&gt;動作の流れは以下のようになる．&lt;/p&gt;
+
+&lt;ol&gt;
+&lt;li&gt;ユーザがHerokuアプリに対してリクエストを投げる&lt;/li&gt;
+&lt;li&gt;アプリはリクエストに基づきプラットフォームを判定し，それに合ったGithub Release上のパッケージへのリダイレクトを返す&lt;/li&gt;
+&lt;li&gt;ユーザはプラットフォームに合ったパッケージをGithub Releaseから得る&lt;/li&gt;
+&lt;/ol&gt;
+
+&lt;h2 id=&#34;具体的な動作:10104ee938ba1f589d7cd4c7da7eebf0&#34;&gt;具体的な動作&lt;/h2&gt;
+
+&lt;p&gt;Githubリリースの作り方，ワンライナーの動作，Herokuアプリについて簡単に説明する．&lt;/p&gt;
+
+&lt;h3 id=&#34;github-release:10104ee938ba1f589d7cd4c7da7eebf0&#34;&gt;Github Release&lt;/h3&gt;
+
+&lt;p&gt;まず，Github Releaseページに作成したパッケージをホストしておく．パッケージ名は以下のルールに従うようにする．&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-bash&#34;&gt;${NAME}_${VERSION}_${OS}_${ARCH}.zip
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;&lt;code&gt;NAME&lt;/code&gt;はツール名，&lt;code&gt;OS&lt;/code&gt;はプラットフォーム名，&lt;code&gt;ARCH&lt;/code&gt;はプロセッサを指定する．すると，Github Release上のダウンロードURLは以下のようになる．&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-bash&#34;&gt;https://github.com/tcnksm/${NAME}/releases/download/${VERSION}/${NAME}_${VERSION}_${OS}_${ARCH}.zip
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;これは自動化できる（&lt;a href=&#34;http://deeeet.com/writing/2014/07/29/ghr/&#34;&gt;&amp;ldquo;高速に自作パッケージをGithubにリリースするghrというツールをつくった&amp;rdquo;&lt;/a&gt;）．&lt;/p&gt;
+
+&lt;h3 id=&#34;ワンライナー:10104ee938ba1f589d7cd4c7da7eebf0&#34;&gt;ワンライナー&lt;/h3&gt;
+
+&lt;p&gt;ワンライナーでやっているのは，&lt;/p&gt;
+
+&lt;ol&gt;
+&lt;li&gt;環境変数&lt;code&gt;L&lt;/code&gt;にインストールしたいPATHを指定する&lt;/li&gt;
+&lt;li&gt;&lt;code&gt;curl&lt;/code&gt;では，&lt;code&gt;-L&lt;/code&gt;オプションでリクエストで&lt;code&gt;30X&lt;/code&gt;の場合にリダイレクトするようにし，&lt;code&gt;-A&lt;/code&gt;でユーザエージェントを指定する&lt;/li&gt;
+&lt;li&gt;&lt;code&gt;zcat&lt;/code&gt;でzipを展開して&lt;code&gt;L&lt;/code&gt;に吐き出す&lt;/li&gt;
+&lt;/ol&gt;
+
+&lt;p&gt;ユーザエージェントは&lt;code&gt;uname&lt;/code&gt;で指定する．&lt;code&gt;-s&lt;/code&gt;オプションでシステム名（e.g., Darwin，Linux）を，&lt;code&gt;-p&lt;/code&gt;オプションでプロセッサ（e.g., i386）を出力するようにする．&lt;/p&gt;
+
+&lt;h3 id=&#34;herokuアプリ:10104ee938ba1f589d7cd4c7da7eebf0&#34;&gt;Herokuアプリ&lt;/h3&gt;
+
+&lt;p&gt;&lt;code&gt;curl&lt;/code&gt;のアクセス先は，専用に立てたHerokuアプリになる．Heorkuアプリでは，ユーザエージェントを元にプラットフォームを判別し，Github Releaseページ上のパッケージにリダイレクトさせる．&lt;/p&gt;
+
+&lt;p&gt;アプリはGo言語で書いた．以下はその抜粋．&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-go&#34;&gt;
+func main() {
+    http.HandleFunc(&amp;quot;/&amp;quot;+os.Getenv(&amp;quot;NAME&amp;quot;)+&amp;quot;.zip&amp;quot;, binary)
+}
+
+func binary(w http.ResponseWriter, r *http.Request) {
+    platform := guessPlatform(r.UserAgent())
+    http.Redirect(w, r, binaryURL(platform), http.StatusTemporaryRedirect)
+}
+
+func binaryURL(platform string) string {
+    return os.Getenv(&amp;quot;BASE_URL&amp;quot;) + &amp;quot;/download/&amp;quot; + os.Getenv(&amp;quot;VERSION&amp;quot;) + &amp;quot;/&amp;quot; + os.Getenv(&amp;quot;NAME&amp;quot;) + &amp;quot;_&amp;quot; + os.Getenv(&amp;quot;VERSION&amp;quot;) + &amp;quot;_&amp;quot; + platform + &amp;quot;.zip&amp;quot;
+}
+
+func guessOS(userAgent string) string {
+    if isDarwin(userAgent) {
+        return &amp;quot;darwin&amp;quot;
+    }
+
+    if isWindows(userAgent) {
+        return &amp;quot;windows&amp;quot;
+    }
+
+    return &amp;quot;linux&amp;quot;
+}
+
+func guessArch(userAgent string) string {
+    if isAmd64(userAgent) || isDarwin(userAgent) {
+        return &amp;quot;amd64&amp;quot;
+     }
+     
+     return &amp;quot;386&amp;quot;
+}
+
+func guessPlatform(userAgent string) string {
+    userAgent = strings.ToLower(userAgent)
+    return guessOS(userAgent) + &amp;quot;_&amp;quot; + guessArch(userAgent)
+}
+
+func isDarwin(userAgent string) bool {
+    return strings.Contains(userAgent, &amp;quot;mac os x&amp;quot;) || strings.Contains(userAgent, &amp;quot;darwin&amp;quot;)
+}
+
+func isWindows(userAgent string) bool {
+    return strings.Contains(userAgent, &amp;quot;windows&amp;quot;)
+}
+
+func isAmd64(userAgent string) bool {
+    return strings.Contains(userAgent, &amp;quot;x86_64&amp;quot;) || strings.Contains(userAgent, &amp;quot;amd64&amp;quot;)
+}
+
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;&lt;a href=&#34;https://github.com/tcnksm/re-dist-ghr&#34;&gt;tcnksm/re-dist-ghr&lt;/a&gt;&lt;/p&gt;
+
+&lt;p&gt;Github ReleaseページへのリダイレクトURLは，バージョン名(&lt;code&gt;$VERSION&lt;/code&gt;)やツール名（&lt;code&gt;$NAME&lt;/code&gt;）を環境変数で指定しておき，それから組み立てるようにしている．&lt;/p&gt;
+
+&lt;h2 id=&#34;運用:10104ee938ba1f589d7cd4c7da7eebf0&#34;&gt;運用&lt;/h2&gt;
+
+&lt;p&gt;新しいバージョンをリリースしたら，Herokuアプリの&lt;code&gt;$VERSION&lt;/code&gt;環境変数を更新するだけなのでとても楽．&lt;/p&gt;
+
+&lt;p&gt;さらに言えば，Herokuアプリのセットアップは&lt;a href=&#34;http://www.terraform.io/&#34;&gt;Terraform&lt;/a&gt;を使っているので（&lt;a href=&#34;http://deeeet.com/writing/2014/08/04/terraform-heroku/&#34;&gt;&amp;ldquo;TerraformでHerokuアプリのセットアップ&amp;rdquo;&lt;/a&gt;），設定ファイル書き換えて&lt;code&gt;terraform apply&lt;/code&gt;するだけ．自動化できそう．&lt;/p&gt;
+
+&lt;p&gt;Github Release上のパッケージ名が上記のルールに従っていれば，誰でも環境変数を変えるだけで使える．興味があればForkで何でもいいので使ってください．&lt;/p&gt;
+
+&lt;h2 id=&#34;他のやりかた:10104ee938ba1f589d7cd4c7da7eebf0&#34;&gt;他のやりかた&lt;/h2&gt;
+
+&lt;p&gt;もちろんOSXに向けてHomebrewレシピ，Debina系に向けてdebパッケージ，Red Hat系に向けてRPMパッケージがそれぞれ準備されているのが理想的．でも，個人開発だとそれを作る，メンテしていくコストが高い．&lt;/p&gt;
+
+&lt;p&gt;ただHomebrewのレシピは，クソ簡単なので準備してあげるとよい（&lt;a href=&#34;http://deeeet.com/writing/2014/05/20/brew-tap/&#34;&gt;&amp;ldquo;HomeBrewで自作ツールを配布する&amp;rdquo;&lt;/a&gt;）．&lt;/p&gt;
+
+&lt;h2 id=&#34;参考:10104ee938ba1f589d7cd4c7da7eebf0&#34;&gt;参考&lt;/h2&gt;
+
+&lt;ul&gt;
+&lt;li&gt;&lt;a href=&#34;http://sourceforge.jp/magazine/14/01/17/090000&#34;&gt;独自のDebパッケージやaptリポジトリを作ってみよう&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a href=&#34;http://sourceforge.jp/magazine/14/01/10/090000&#34;&gt;独自のRPMパッケージやyumリポジトリを作ってみよう&lt;/a&gt;&lt;/li&gt;
+&lt;/ul&gt;
+</description>
+    </item>
+    
+    <item>
+      <title>Go言語でCPU数に応じて並列処理数を制限する</title>
+      <link>http://deeeet.com/writing/2014/07/30/golang-parallel-by-cpu/</link>
+      <pubDate>Wed, 30 Jul 2014 00:00:00 +0000</pubDate>
+      
+      <guid>http://deeeet.com/writing/2014/07/30/golang-parallel-by-cpu/</guid>
+      <description>
+
+&lt;p&gt;負荷のかかる処理を制限なしに並列化しても意味ない．処理の並列数を予測可能な場合は，当たりをつけて最適化するのもよいが，不明確な場合は，CPU数による制限が単純な1つの解になる．&lt;/p&gt;
+
+&lt;h2 id=&#34;tl-dr:9e9b903938f825eaad6b5d0607a91478&#34;&gt;TL;DR&lt;/h2&gt;
+
+&lt;p&gt;CPU数に応じたバッファ長のChannelを使って&lt;a href=&#34;http://ja.wikipedia.org/wiki/%E3%82%BB%E3%83%9E%E3%83%95%E3%82%A9&#34;&gt;セマフォ&lt;/a&gt;を実装する．&lt;/p&gt;
+
+&lt;h2 id=&#34;実例:9e9b903938f825eaad6b5d0607a91478&#34;&gt;実例&lt;/h2&gt;
+
+&lt;ul&gt;
+&lt;li&gt;&lt;a href=&#34;https://github.com/mitchellh/gox&#34;&gt;mitchellh/gox&lt;/a&gt;&lt;/li&gt;
+&lt;/ul&gt;
+
+&lt;p&gt;&lt;code&gt;gox&lt;/code&gt;はGo言語製のツールを並列コンパイルするツール．コンパイルの処理は重いため，デフォルトで並列処理数をCPU数で制限している．&lt;/p&gt;
+
+&lt;h2 id=&#34;簡単な例:9e9b903938f825eaad6b5d0607a91478&#34;&gt;簡単な例&lt;/h2&gt;
+
+&lt;p&gt;例えば，以下のような単純な並列処理を考える．&lt;code&gt;heavy()&lt;/code&gt;（重い処理）を並列で実行する．&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-go&#34;&gt;package main
+
+import (
+        &amp;quot;fmt&amp;quot;
+        &amp;quot;sync&amp;quot;
+        &amp;quot;time&amp;quot;
+)
+
+func heavy(i int) {
+        fmt.Println(i)
+        time.Sleep(5 * time.Second)
+}
+
+func main() {
+        var wg sync.WaitGroup    
+        for i := 0; i &amp;lt;= 100; i++ {
+            wg.Add(1)
+            go func(i int) {
+                defer wg.Done()
+                heavy(i)
+            }(i)
+        }
+        wg.Wait()
+}
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;この並列処理の同時実行数をCPU数で制限する．&lt;/p&gt;
+
+&lt;p&gt;まず，利用可能なCPUのコア数は，&lt;a href=&#34;http://golang.org/pkg/runtime/&#34;&gt;runtime&lt;/a&gt;パッケージの&lt;code&gt;NumCPU()&lt;/code&gt;で取得できる．&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-go&#34;&gt;func NumCPU() int
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;次に，CPU数をバッファ長としたChannelを作成する．&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-go&#34;&gt;cpus := runtime.NumCPU()
+semaphore := make(chan int, cpus)
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;後は，&lt;code&gt;heavy()&lt;/code&gt;をChannelへの送受信で囲む．これで，CPU数だけバッファが溜まると，Channelへの送信がブロックされ，新しい並列処理の開始もブロックされる．&lt;/p&gt;
+
+&lt;p&gt;最終的な実装は以下のようになる．&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-go&#34;&gt;package main
+
+import (
+        &amp;quot;fmt&amp;quot;
+        &amp;quot;sync&amp;quot;
+        &amp;quot;time&amp;quot;
+        &amp;quot;runtime&amp;quot;
+)
+
+func heavy(i int) {
+        fmt.Println(i)
+        time.Sleep(5 * time.Second)
+}
+
+func main() {
+        var wg sync.WaitGroup
+        cpus := runtime.NumCPU()
+        semaphore := make(chan int, cpus)
+        for i := 0; i &amp;lt;= 100; i++ {
+            wg.Add(1)
+            go func(i int) {
+                defer wg.Done()
+                semaphore &amp;lt;- 1
+                heavy(i)
+                &amp;lt;-semaphore
+            }(i)
+        }
+        wg.Wait()
+}
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;h2 id=&#34;マルチコアで実行する:9e9b903938f825eaad6b5d0607a91478&#34;&gt;マルチコアで実行する&lt;/h2&gt;
+
+&lt;p&gt;最後にちょっとCPU関連で別の話題．現状，goroutineのスケジューラはマルチコアを最適に使うようになっていないらしい（&lt;a href=&#34;http://golang.org/doc/faq#Why_GOMAXPROCS&#34;&gt;&amp;ldquo;Why does using GOMAXPROCS &amp;gt; 1 sometimes make my program slower?&amp;rdquo;&lt;/a&gt;）．そのため，デフォルトの設定では使用するCPUのコア数は1になっている．&lt;/p&gt;
+
+&lt;p&gt;これを変更するには，runtimeパッケージの&lt;code&gt;GOMAXPROCS()&lt;/code&gt;を使う，もしくは環境変数 (&lt;code&gt;GOMAXPROCS&lt;/code&gt;) を設定する．&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-go&#34;&gt;func GOMAXPROCS(n int) int
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;利用可能なCPUを全て使って処理を実行するには，以下のようにする．&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-go&#34;&gt;cpus := runtime.NumCPU()
+runtime.GOMAXPROCS(cpus)
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;将来的には，スケジューラがいい感じにしてくれるっぽい．&lt;/p&gt;
+
+&lt;h3 id=&#34;参考:9e9b903938f825eaad6b5d0607a91478&#34;&gt;参考&lt;/h3&gt;
+
+&lt;ul&gt;
+&lt;li&gt;&lt;a href=&#34;http://jxck.hatenablog.com/entry/20130414/1365960707&#34;&gt;Go の並行処理 - Block Rockin’ Code&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a href=&#34;http://d.hatena.ne.jp/sfujiwara/20091201/1259681707&#34;&gt;GOMAXPROCS でマルチコアCPUを有効に使う - 酒日記 はてな支店&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a href=&#34;http://www.goinggo.net/2014/01/concurrency-goroutines-and-gomaxprocs.html&#34;&gt;Going Go Programming: Concurrency, Goroutines and GOMAXPROCS&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a href=&#34;http://stackoverflow.com/questions/17853831/what-is-the-gomaxprocs-default-value&#34;&gt;runtime - what is the GOMAXPROCS default value - Stack Overflow&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a href=&#34;http://deeeet.com/writing/2014/07/29/ghr/&#34;&gt;高速に自作パッケージをGithubにリリースするghrというツールをつくった&lt;/a&gt;&lt;/li&gt;
+&lt;/ul&gt;
+</description>
+    </item>
+    
+    <item>
+      <title>高速に自作パッケージをGithubにリリースするghrというツールをつくった</title>
+      <link>http://deeeet.com/writing/2014/07/29/ghr/</link>
+      <pubDate>Tue, 29 Jul 2014 00:00:00 +0000</pubDate>
+      
+      <guid>http://deeeet.com/writing/2014/07/29/ghr/</guid>
+      <description>
+
+&lt;p&gt;&lt;a href=&#34;https://github.com/tcnksm/ghr&#34;&gt;tcnksm/ghr・Github&lt;/a&gt;&lt;/p&gt;
+
+&lt;p&gt;&lt;code&gt;ghr&lt;/code&gt;を使えば，1コマンドでGithubにリリースページの作成とそこへのパッケージのアップロードが可能になる．複数パッケージのアップロードは並列で実行される．&lt;/p&gt;
+
+&lt;h2 id=&#34;デモ:01596050dc09dbf47cc7250edf4170a2&#34;&gt;デモ&lt;/h2&gt;
+
+&lt;p&gt;以下は簡単な動作例．&lt;/p&gt;
+
+&lt;p&gt;&lt;img src=&#34;http://deeeet.com/images/ghr.gif&#34; class=&#34;image&#34;&gt;&lt;/p&gt;
+
+&lt;p&gt;上のデモでは，&lt;code&gt;v0.1.0&lt;/code&gt;タグでリリースを作成し，&lt;code&gt;pkg/dist/v0.1.0&lt;/code&gt;以下の6つのファイルを並列でアップロードしている（&lt;code&gt;ghr&lt;/code&gt;を&lt;code&gt;ghr&lt;/code&gt;でリリースしている）．1ファイルあたり，2.0M程度なのでまあま速いかと．アップロード結果は，&lt;a href=&#34;https://github.com/tcnksm/ghr/releases/tag/v0.1.0&#34;&gt;ここ&lt;/a&gt;で見られる．&lt;/p&gt;
+
+&lt;h2 id=&#34;背景:01596050dc09dbf47cc7250edf4170a2&#34;&gt;背景&lt;/h2&gt;
+
+&lt;p&gt;&lt;a href=&#34;http://deeeet.com/writing/2014/07/23/github-release/&#34;&gt;&amp;ldquo;Go言語のツールをクロスコンパイルしてGithubにリリースする&amp;rdquo;&lt;/a&gt;&lt;/p&gt;
+
+&lt;p&gt;上で書いたように&lt;code&gt;curl&lt;/code&gt;使って頑張ってAPIを叩いていたが，やっぱシェルスクリプトは嫌だし，アップロードが遅い．&lt;/p&gt;
+
+&lt;p&gt;Githubへのリリースを行う専用ツールで&lt;a href=&#34;https://github.com/aktau/github-release&#34;&gt;aktau/github-release&lt;/a&gt;というのもあるが，オプションが多くて，&lt;code&gt;curl&lt;/code&gt;を使うのと大差ない．Descriptionなどは後でページから編集した方がよい．&lt;/p&gt;
+
+&lt;p&gt;とういことで，シンプルなインターフェース，かつ高速にリリース可能なものをつくった．&lt;/p&gt;
+
+&lt;h2 id=&#34;使い方:01596050dc09dbf47cc7250edf4170a2&#34;&gt;使い方&lt;/h2&gt;
+
+&lt;p&gt;事前準備として&lt;a href=&#34;https://github.com/settings/applications&#34;&gt;GithubのAPI Token&lt;/a&gt;を環境変数にセットしておく．&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-bash&#34;&gt;$ export GITHUB_TOKEN=&amp;quot;....&amp;quot;
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;あとは，プロジェクトのディレクトリで以下を実行するだけ．&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-bash&#34;&gt;$ ghr &amp;lt;tag&amp;gt; &amp;lt;package&amp;gt;
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;例えば，上のデモでは，以下を実行している．&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-bash&#34;&gt;$ ghr v0.1.0 pkg/dist/v0.1.0
+--&amp;gt; Uploading: pkg/dist/v0.1.0/ghr_0.1.0_darwin_386.zip
+--&amp;gt; Uploading: pkg/dist/v0.1.0/ghr_0.1.0_darwin_amd64.zip
+--&amp;gt; Uploading: pkg/dist/v0.1.0/ghr_0.1.0_linux_386.zip
+--&amp;gt; Uploading: pkg/dist/v0.1.0/ghr_0.1.0_linux_amd64.zip
+--&amp;gt; Uploading: pkg/dist/v0.1.0/ghr_0.1.0_windows_386.zip
+--&amp;gt; Uploading: pkg/dist/v0.1.0/ghr_0.1.0_windows_amd64.zip
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;ディレクトリを指定すれば，そのディレクトリ以下の全てのファイルが，ファイルを指定すれば，そのファイルのみがアップロードされる．&lt;/p&gt;
+
+&lt;p&gt;Go言語プロジェクトの場合は，&lt;a href=&#34;https://github.com/mitchellh/gox&#34;&gt;mitchellh/gox&lt;/a&gt;で並列クロスコンパイルすれば，もっと幸せになる．&lt;/p&gt;
+
+&lt;h2 id=&#34;インストール:01596050dc09dbf47cc7250edf4170a2&#34;&gt;インストール&lt;/h2&gt;
+
+&lt;p&gt;OSXの場合は，[Homebrew]()でインストールできる．&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-bash&#34;&gt;$ brew tap tcnksm/ghr
+$ brew install ghr
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;他のプラットフォームの場合は，&lt;a href=&#34;https://github.com/tcnksm/ghr/releases&#34;&gt;リリースページ&lt;/a&gt;からパッケージをダウンロードして，&lt;code&gt;$PATH&lt;/code&gt;の通ったところに配置する．&lt;/p&gt;
+
+&lt;h2 id=&#34;実装:01596050dc09dbf47cc7250edf4170a2&#34;&gt;実装&lt;/h2&gt;
+
+&lt;p&gt;Go言語で実装している．&lt;/p&gt;
+
+&lt;p&gt;並列アップロードはgoroutineを使って以下のように書いている．&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-go&#34;&gt;var errorLock sync.Mutex
+var wg sync.WaitGroup
+errors := make([]string, 0)
+
+for _, path := range files {
+    wg.Add(1)
+    go func(path string) {
+        defer wg.Done()
+
+        fmt.Printf(&amp;quot;--&amp;gt; Uploading: %15s\n&amp;quot;, path)
+        if err := UploadAsset(info, path); err != nil {
+            errorLock.Lock()
+            defer errorLock.Unlock()
+            errors = append(errors,
+            fmt.Sprintf(&amp;quot;%s error: %s&amp;quot;, path, err))
+        }
+    }(path)
+}
+wg.Wait()
+
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;h2 id=&#34;今後:01596050dc09dbf47cc7250edf4170a2&#34;&gt;今後&lt;/h2&gt;
+
+&lt;p&gt;シンプルなインターフェースを保ちつつ，オプションを追加していく予定．&lt;/p&gt;
+
+&lt;h2 id=&#34;まとめ:01596050dc09dbf47cc7250edf4170a2&#34;&gt;まとめ&lt;/h2&gt;
+
+&lt;p&gt;名前が&lt;a href=&#34;https://github.com/motemen/ghq&#34;&gt;motemen/ghq&lt;/a&gt;みたいになってしまったのすいません（Github用のツール，かつCLIで使うことを考慮して短い名前にすると自然と&amp;hellip;）．&lt;/p&gt;
+
+&lt;p&gt;バグや意見は，GitHubの&lt;a href=&#34;https://github.com/tcnksm/ghr/issues&#34;&gt;Issue&lt;/a&gt;もしくは，&lt;a href=&#34;https://twitter.com/deeeet&#34;&gt;@deeeet&lt;/a&gt;までお願いします．&lt;/p&gt;
+
+&lt;h3 id=&#34;参考:01596050dc09dbf47cc7250edf4170a2&#34;&gt;参考&lt;/h3&gt;
+
+&lt;ul&gt;
+&lt;li&gt;&lt;a href=&#34;http://jxck.hatenablog.com/entry/20130414/1365960707&#34;&gt;Go の並行処理 - Block Rockin’ Codes&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a href=&#34;http://deeeet.com/writing/2014/07/23/github-release/&#34;&gt;Go言語のツールをクロスコンパイルしてGithubにリリースする&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a href=&#34;http://deeeet.com/writing/2014/05/20/brew-tap/&#34;&gt;HomeBrewで自作ツールを配布する&lt;/a&gt;&lt;/li&gt;
+&lt;/ul&gt;
+</description>
+    </item>
+    
+    <item>
+      <title>GithubのGo言語プロジェクトにPull Requestを送るときのimport問題</title>
+      <link>http://deeeet.com/writing/2014/07/23/golang-pull-request/</link>
+      <pubDate>Wed, 23 Jul 2014 00:00:00 +0000</pubDate>
+      
+      <guid>http://deeeet.com/writing/2014/07/23/golang-pull-request/</guid>
+      <description>
+
+&lt;h2 id=&#34;tl-dr:c8979276b4eb8493737568f8f0b53207&#34;&gt;TL;DR&lt;/h2&gt;
+
+&lt;p&gt;fork元（オリジナル）を&lt;code&gt;go get&lt;/code&gt;してその中で作業，forkした自分のレポジトリにpushしてPull Requestを送る．&lt;/p&gt;
+
+&lt;h2 id=&#34;問題:c8979276b4eb8493737568f8f0b53207&#34;&gt;問題&lt;/h2&gt;
+
+&lt;p&gt;Github上のGo言語のプロジェクトにコミットするとき，cloneの仕方で若干ハマることがある．普通のOSSプロジェクトの場合は，forkしてそれをcloneしてpush，Pull Requestとすればよい．Go言語のプロジェクトでは，同じレポジトリの中でパッケージを分け，それをimportして使ってるものがある．そういう場合にforkしたものをそのままcloneすると，importの参照先がfork元の名前になりハマる．&lt;/p&gt;
+
+&lt;p&gt;例えば，[github.com/someone/tool]()があるとする．このレポジトリは[github.com/someone/tool/utils]()という別パッケージを持っており，mainがそれを使っているとする．つまり以下のようになっているとする．&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-go&#34;&gt;package main
+
+import (
+    &amp;quot;github.com/someone/tool/utils&amp;quot;
+)
+
+...
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;この場合に，通常のやりかたでforkしてソースを取得する．&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-bash&#34;&gt;$ go get -d github.com/you/tool/...
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;するとソースは，&lt;code&gt;$GOPATH/src/github.com/you&lt;/code&gt;に，importしてるutilsパッケージは&lt;code&gt;$GOPATH/src/github.com/someone/tool/utils&lt;/code&gt;にあるといったことがおこる．で，&lt;code&gt;$GOPATH/src/github.com/you/utils&lt;/code&gt;直しても反映されない，import書き換えないと！とかなる．&lt;/p&gt;
+
+&lt;h2 id=&#34;良さげなやりかた:c8979276b4eb8493737568f8f0b53207&#34;&gt;良さげなやりかた&lt;/h2&gt;
+
+&lt;p&gt;[@mopemope]()さんが&lt;a href=&#34;https://twitter.com/mopemope/status/491749193522761728&#34;&gt;言及していた&lt;/a&gt;り，&lt;a href=&#34;http://blog.campoy.cat/2014/03/github-and-go-forking-pull-requests-and.html&#34;&gt;&amp;ldquo;GitHub and Go: forking, pull requests, and go-getting&amp;rdquo;&lt;/a&gt;に書かれているやり方が今のところ良さそう．&lt;/p&gt;
+
+&lt;p&gt;まず，fork元（オリジナル）のソースを取得する．&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-bash&#34;&gt;$ go get -d github.com/someone/tool/...
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;作業は，&lt;code&gt;$GOPATH/src/github.com/someone/tool&lt;/code&gt;内でブランチを切って行う．&lt;/p&gt;
+
+&lt;p&gt;pushはforkした自分のレポジトリにする．&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-bash&#34;&gt;$ git remote add fork https://github.com/you/tool.git
+$ git push fork 
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;あとは，そこからPull Requestを送る．&lt;/p&gt;
+
+&lt;h2 id=&#34;他のやりかた:c8979276b4eb8493737568f8f0b53207&#34;&gt;他のやりかた&lt;/h2&gt;
+
+&lt;p&gt;forkして以下のようにcloneするというやり方も見かけた．&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-bash&#34;&gt;$ git clone https://github.com/you/tool.git $GOPATH/src/github.com/someone/tool
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;他にベストなやり方があれば教えてほしい．&lt;/p&gt;
+</description>
+    </item>
+    
+    <item>
+      <title>シェルスクリプトでGo言語のツールをクロスコンパイルしてGithubにリリースする</title>
+      <link>http://deeeet.com/writing/2014/07/23/github-release/</link>
+      <pubDate>Wed, 23 Jul 2014 00:00:00 +0000</pubDate>
+      
+      <guid>http://deeeet.com/writing/2014/07/23/github-release/</guid>
+      <description>
+
+&lt;p&gt;[@motemen]()さんの&lt;a href=&#34;http://motemen.hatenablog.com/entry/2014/06/27/xcompile-go-and-release-to-github-with-wercker&#34;&gt;&amp;ldquo;Wercker で Go のプロジェクトをクロスコンパイルし，GitHub にリリースする - 詩と創作・思索のひろば (Poetry, Writing and Contemplation)&amp;rdquo;&lt;/a&gt;を手元からやる．&lt;/p&gt;
+
+&lt;p&gt;&lt;a href=&#34;http://wercker.com/&#34;&gt;Wercker&lt;/a&gt;からリリース良いと思うけど，自分はリリースは手元で管理したい．その辺は毎回同じスクリプトでやってるのでまとめておく．なお，コードは全て&lt;a href=&#34;https://github.com/tcnksm/go-distribution-scripts&#34;&gt;tcnksm/go-distribution-scripts&lt;/a&gt;にある．&lt;/p&gt;
+
+&lt;h2 id=&#34;クロスコンパイル:d50e1766778380d9fa470908a12c3175&#34;&gt;クロスコンパイル&lt;/h2&gt;
+
+&lt;p&gt;基本は&lt;a href=&#34;https://github.com/hashicorp&#34;&gt;Hashicorp&lt;/a&gt;のやり方を真似してる．&lt;/p&gt;
+
+&lt;p&gt;まず，クロスコンパイルは&lt;a href=&#34;https://github.com/mitchellh/gox&#34;&gt;mitchellh/gox&lt;/a&gt;を使う．goxは複数プラットフォームの並列コンパイルと出力先の設定の自由度が気に入ってずっと使ってる．何よりシンプルで良い．以下のようなスクリプトを書いている．&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-bash&#34;&gt;# compile.sh
+gox \
+    -os=&amp;quot;darwin linux windows&amp;quot; \
+    -arch=&amp;quot;386 amd64&amp;quot; \
+    -output &amp;quot;pkg/{{.OS}}_{{.Arch}}/{{.Dir}}&amp;quot;
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;あとは，これらをzipでアーカイブする（&lt;a href=&#34;https://github.com/tcnksm/go-compile-scripts/blob/master/package.sh&#34;&gt;package.sh&lt;/a&gt;）．&lt;/p&gt;
+
+&lt;h2 id=&#34;githubへのリリース:d50e1766778380d9fa470908a12c3175&#34;&gt;Githubへのリリース&lt;/h2&gt;
+
+&lt;p&gt;&lt;a href=&#34;https://developer.github.com/v3/repos/releases/&#34;&gt;Github API&lt;/a&gt;を使ってリリースの作成，ファイルのアップロードを行う．werkcerはこれらをstepとしてGithubに公開しているのでそれを簡略化して使っている．&lt;/p&gt;
+
+&lt;ul&gt;
+&lt;li&gt;&lt;a href=&#34;https://github.com/wercker/step-github-create-release&#34;&gt;wercker/step-github-create-release&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a href=&#34;https://github.com/wercker/step-github-upload-asset&#34;&gt;wercker/step-github-upload-asset&lt;/a&gt;&lt;/li&gt;
+&lt;/ul&gt;
+
+&lt;p&gt;まず，リリースの作成．以下のようなスクリプトを準備する．&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-bash&#34;&gt;# github-create-release.sh
+INPUT=&amp;quot;
+{
+    \&amp;quot;tag_name\&amp;quot;: \&amp;quot;${VERSION}\&amp;quot;,
+    \&amp;quot;target_commitish\&amp;quot;: \&amp;quot;master\&amp;quot;,
+    \&amp;quot;draft\&amp;quot;: false,
+    \&amp;quot;prerelease\&amp;quot;: false
+}&amp;quot;
+
+RELEASE_RESPONSE=$(
+    curl --fail -X POST https://api.github.com/repos/${OWNER}/${REPO}/releases \
+        -H &amp;quot;Accept: application/vnd.github.v3+json&amp;quot; \
+        -H  &amp;quot;Authorization: token ${GITHUB_TOKEN}&amp;quot; \
+        -H &amp;quot;Content-Type: application/json&amp;quot; \
+        -d &amp;quot;${INPUT}&amp;quot;)
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;&lt;code&gt;$OWNER&lt;/code&gt;はGithubのユーザ名，&lt;code&gt;$REPO&lt;/code&gt;はレポジトリ名，&lt;code&gt;$GITHUB_TOKEN&lt;/code&gt;はGithub APIのAPI Token（&lt;a href=&#34;https://github.com/settings/applications&#34;&gt;ここ&lt;/a&gt;から取得できる）を指定する．&lt;/p&gt;
+
+&lt;p&gt;これで&lt;code&gt;$VERSION&lt;/code&gt;のリリースが作られる．&lt;/p&gt;
+
+&lt;p&gt;バイナリのアップロードを行う際にリリースのIDが必要になる．これはリリースを作成した際のレスポンスから得られる．&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-bash&#34;&gt;echo $RELEASE_RESPONSE | jq &amp;quot;.id&amp;quot; 
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;あとは，作成したリリースにファイルをぶっ込んでいく．&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-bash&#34;&gt;# github-upload-asset.sh
+ARCHIVE_NAME=$(basename ${ARCHIVE})
+CONTENT_TYPE=$(file --mime-type -b ${ARCHIVE})
+
+curl --fail -X POST https://uploads.github.com/repos/${OWNER}/${REPO}/releases/${RELEASE_ID}/assets?name=${ARCHIVE_NAME} \
+    -H &amp;quot;Accept: application/vnd.github.v3+json&amp;quot; \
+    -H &amp;quot;Authorization: token ${GITHUB_TOKEN}&amp;quot; \
+    -H &amp;quot;Content-Type: ${CONTENT_TYPE}&amp;quot; \
+    --data-binary @&amp;quot;${ARCHIVE}&amp;quot;
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;&lt;code&gt;$ARCHIVE&lt;/code&gt;はアップロードしたいファイルのパスを指定する．for文でリリースしたいファイルを回せばよい．&lt;/p&gt;
+</description>
+    </item>
+    
+    <item>
+      <title>高速にGo言語のCLIツールをつくるcli-initというツールをつくった</title>
+      <link>http://deeeet.com/writing/2014/06/22/cli-init/</link>
+      <pubDate>Sun, 22 Jun 2014 00:00:00 +0000</pubDate>
+      
+      <guid>http://deeeet.com/writing/2014/06/22/cli-init/</guid>
+      <description>
+
+&lt;p&gt;&lt;a href=&#34;https://github.com/tcnksm/cli-init&#34;&gt;tcnkms/cli-init・GitHub&lt;/a&gt;&lt;/p&gt;
+
+&lt;p&gt;&lt;code&gt;cli-init&lt;/code&gt;を使えば，Go言語コマンドラインツール作成時のお決まりパターンをテンプレートとして自動生成し，コア機能の記述に集中することができる．&lt;/p&gt;
+
+&lt;h2 id=&#34;デモ:612d206084563119b46d0520bccb9b69&#34;&gt;デモ&lt;/h2&gt;
+
+&lt;p&gt;以下は簡単な動作例．&lt;/p&gt;
+
+&lt;p&gt;&lt;img src=&#34;http://deeeet.com/images/cli-init.gif&#34; class=&#34;image&#34;&gt;&lt;/p&gt;
+
+&lt;p&gt;上のデモでは，&lt;code&gt;add&lt;/code&gt;と&lt;code&gt;list&lt;/code&gt;，&lt;code&gt;delete&lt;/code&gt;というサブコマンドをもつ&lt;code&gt;todo&lt;/code&gt;アプリケーションを生成している．生成結果は，&lt;a href=&#34;https://github.com/tcnksm/sample-cli-init&#34;&gt;tcnksm/sample-cli-init&lt;/a&gt;にある．&lt;/p&gt;
+
+&lt;h2 id=&#34;背景:612d206084563119b46d0520bccb9b69&#34;&gt;背景&lt;/h2&gt;
+
+&lt;p&gt;Go言語で作られたコマンドラインツールを見ていると，&lt;a href=&#34;https://github.com/codegangsta/cli&#34;&gt;codegangsta/cli&lt;/a&gt;というパッケージがよく使われている．&lt;/p&gt;
+
+&lt;p&gt;これは，コマンドラインツールのインターフェースを定義するためのライブラリで，これを使えば，サブコマンドをもつコマンドラインツールを簡単につくることができる（Usageを自動で生成してくれたり，bash補完関数をつくれたりするという便利機能もある）．&lt;/p&gt;
+
+&lt;p&gt;これを使って，自分もGo言語でコマンドラインツールをいくか作ってみた（e.g., &lt;a href=&#34;http://deeeet.com/writing/2014/06/15/dmux/&#34;&gt;Dockerとtmuxを連携するdmuxというツールをつくった&lt;/a&gt;）．で，自分で書いたり，他のプロジェクトを参考にしたりすると，codegangsta/cliを使ったプロジェクトは同様のパターンで記述されていることに気づいた．&lt;/p&gt;
+
+&lt;p&gt;このパターンを毎回記述するのはダルいので，それを自動生成することにした．&lt;/p&gt;
+
+&lt;h2 id=&#34;使い方:612d206084563119b46d0520bccb9b69&#34;&gt;使い方&lt;/h2&gt;
+
+&lt;p&gt;使い方は以下．&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-bash&#34;&gt;$ cli-init [options] application
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;例えば上のデモの場合は以下のようにしている．&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-bash&#34;&gt;$ cli-init -s add,list,delete todo
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;&lt;code&gt;-s&lt;/code&gt;でサブコマンドを指定し，最後に作りたいコマンドラインアプケーションの名前を指定するだけ．&lt;/p&gt;
+
+&lt;h2 id=&#34;生成されるファイル:612d206084563119b46d0520bccb9b69&#34;&gt;生成されるファイル&lt;/h2&gt;
+
+&lt;p&gt;例えば，上記のコマンドでは以下のファイルが生成される．&lt;/p&gt;
+
+&lt;ul&gt;
+&lt;li&gt;todo.go&lt;/li&gt;
+&lt;li&gt;commands.go&lt;/li&gt;
+&lt;li&gt;version.go&lt;/li&gt;
+&lt;li&gt;README.md&lt;/li&gt;
+&lt;li&gt;CHANGELOG.md&lt;/li&gt;
+&lt;/ul&gt;
+
+&lt;p&gt;まず，&lt;strong&gt;todo.go&lt;/strong&gt;の中身は以下．&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-go&#34;&gt;func main() {
+    app := cli.NewApp()
+    app.Name = &amp;quot;todo&amp;quot;
+    app.Version = Version
+    app.Usage = &amp;quot;&amp;quot;
+    app.Author = &amp;quot;tcnksm&amp;quot;
+    app.Email = &amp;quot;nsd22843@gmail.com&amp;quot;
+    app.Commands = Commands
+    app.Run(os.Args)
+}
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;ここには，&lt;code&gt;main()&lt;/code&gt;関数が生成され，その中でアプリケーションの基本的な情報が記述される．&lt;code&gt;Author&lt;/code&gt;や&lt;code&gt;Email&lt;/code&gt;は&lt;code&gt;.gitconfig&lt;/code&gt;，&lt;code&gt;Version&lt;/code&gt;は&lt;strong&gt;version.go&lt;/strong&gt;の値が使われる．&lt;code&gt;Usage&lt;/code&gt;の中身だけ自分で記述する．&lt;/p&gt;
+
+&lt;p&gt;次に，&lt;strong&gt;commands.go&lt;/strong&gt;には，サブコマンドの定義が記述される．例えば，サブコマンド&lt;code&gt;list&lt;/code&gt;に対しては，以下が生成される．&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-go&#34;&gt;var commandList = cli.Command{
+    Name:  &amp;quot;list&amp;quot;,
+    Usage: &amp;quot;&amp;quot;,
+    Description: `
+`,
+    Action: doList,
+}
+
+func doList(c *cli.Context) {
+}
+
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;&lt;code&gt;Usage&lt;/code&gt;と&lt;code&gt;Description&lt;/code&gt;，そして，&lt;code&gt;doList()&lt;/code&gt;関数（&lt;code&gt;list&lt;/code&gt;の実際の挙動）だけ自分で記述する．他のオプションなどは，&lt;a href=&#34;https://github.com/codegangsta/cli#cligo&#34;&gt;codegangsta/cliのREADME&lt;/a&gt;を参照．&lt;/p&gt;
+
+&lt;p&gt;あとは，&lt;strong&gt;README.md&lt;/strong&gt;と&lt;strong&gt;CHANGELOG.md&lt;/strong&gt;のテンプレートも生成される．&lt;/p&gt;
+
+&lt;h2 id=&#34;インストール:612d206084563119b46d0520bccb9b69&#34;&gt;インストール&lt;/h2&gt;
+
+&lt;p&gt;Go言語がインストールされていることを前提にしている．&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-bash&#34;&gt;$ go get -d github.com/tcnksm/cli-init
+$ cd $GOPATH/src/github.com/tcnksm/cli-init
+$ make install
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;h2 id=&#34;まとめ:612d206084563119b46d0520bccb9b69&#34;&gt;まとめ&lt;/h2&gt;
+
+&lt;p&gt;たいしたことはしていない．基本は，&lt;a href=&#34;https://github.com/codegangsta/cli&#34;&gt;codegangsta/cli&lt;/a&gt;で記述するべきこと，パターンに沿ってファイルを生成しているだけ．それだけだが，かなり記述量を減らすことができる．&lt;/p&gt;
+
+&lt;p&gt;バグや意見は，GitHubの&lt;a href=&#34;https://github.com/tcnksm/cli-init/issues&#34;&gt;Issue&lt;/a&gt;もしくは，&lt;a href=&#34;https://twitter.com/deeeet&#34;&gt;@deeeet&lt;/a&gt;までお願いします．&lt;/p&gt;
+
+&lt;h3 id=&#34;あわせて読みたい:612d206084563119b46d0520bccb9b69&#34;&gt;あわせて読みたい&lt;/h3&gt;
+
+&lt;ul&gt;
+&lt;li&gt;&lt;a href=&#34;http://deeeet.com/writing/2014/05/19/gox/&#34;&gt;&amp;ldquo;複数プラットフォームにGoアプリケーションを配布する&amp;rdquo;&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a href=&#34;http://deeeet.com/writing/2014/05/20/brew-tap/&#34;&gt;&amp;ldquo;HomeBrewで自作ツールを配布する&amp;rdquo;&lt;/a&gt;&lt;/li&gt;
+&lt;/ul&gt;
+</description>
+    </item>
+    
+    <item>
+      <title>hikarie.goでLTしてきた&#43;Hashicorpのクールなツール配布</title>
+      <link>http://deeeet.com/writing/2014/06/17/hikarie-go1/</link>
+      <pubDate>Tue, 17 Jun 2014 00:00:00 +0000</pubDate>
+      
+      <guid>http://deeeet.com/writing/2014/06/17/hikarie-go1/</guid>
+      <description>&lt;script async class=&#34;speakerdeck-embed&#34; data-id=&#34;540e7720d83f013190131630294e6fbc&#34; data-ratio=&#34;1.77777777777778&#34; src=&#34;http://speakerdeck.com/assets/embed.js&#34;&gt;&lt;/script&gt;
+
+&lt;p&gt;&lt;a href=&#34;https://speakerdeck.com/tcnksm/fu-shu-puratutohuomunigoyan-yu-falseturuwopei-bu-suru-number-hikarie-go&#34;&gt;&amp;ldquo;複数プラットフォームにGo言語のツールを配布する&amp;rdquo;&lt;/a&gt;&lt;/p&gt;
+
+&lt;p&gt;&lt;a href=&#34;http://connpass.com/event/6579/&#34;&gt;hikarie.go&lt;/a&gt;でLTをしてきた．hikarie.goは&lt;a href=&#34;http://go-tour-jp.appspot.com/#1&#34;&gt;A Tour of Go&lt;/a&gt;と&lt;a href=&#34;https://github.com/goken/goken&#34;&gt;Go研&lt;/a&gt;の溝を埋めるために，&lt;a href=&#34;https://twitter.com/7yan00&#34;&gt;@7yan00&lt;/a&gt;さんと&lt;a href=&#34;https://twitter.com/yosuke_furukawa&#34;&gt;@yosuke_furukawa&lt;/a&gt;さんによって始まったイベント．今後Go言語を始めたばかりのGopher達の良い拠り所になっていきそう．&lt;/p&gt;
+
+&lt;p&gt;今回自分が話したのは，以下の記事がもとになっている．&lt;/p&gt;
+
+&lt;ul&gt;
+&lt;li&gt;&lt;a href=&#34;http://deeeet.com/writing/2014/05/19/gox/&#34;&gt;&amp;ldquo;複数プラットフォームにGoアプリケーションを配布する&amp;rdquo;&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a href=&#34;http://deeeet.com/writing/2014/05/20/brew-tap/&#34;&gt;&amp;ldquo;HomeBrewで自作ツールを配布する&amp;rdquo;&lt;/a&gt;&lt;/li&gt;
+&lt;/ul&gt;
+
+&lt;p&gt;まとめると，&lt;a href=&#34;http://unknownplace.org/archives/golang-cross-compiling.html&#34;&gt;Goはクロスコンパイルが簡単&lt;/a&gt;なので，バイナリでちゃんと配布して，自分のつくったツールを使ってもらうための敷居を下げていこう！という内容．&lt;/p&gt;
+
+&lt;p&gt;この辺のやり方は，Mitchell Hashimoto氏の&lt;a href=&#34;http://www.hashicorp.com/&#34;&gt;Hashicorp&lt;/a&gt;のやり方を参考にした．Hashicorp製のツールは基本的に公開当初からOSX，Linux，Windows，Debian，FreeBSDに向けて配布される．あれだけのツールを作っているのに，ユーザがすぐ使えるようにという視点を忘れてないところは本当に素晴らしい．Hashicorpのすごいところは，複数プラットフォームに対応する，始めから豊富なドキュメントを揃える（とくにあのVS.の項が素晴らしいと思う），といった当たり前のことを当然のようにやってくるところだと思う．&lt;/p&gt;
+
+&lt;p&gt;開発者としてそういうところと勝負していくには，すごいすごいと言っているだけではなく，良い部分はどんどん取り入れていかないといけないと思う（もちろんバイナリ配布はモバイルアプリの配布と同じようにどんどんアップデートしにくいなど考慮することは多いが）．得に自分はCLIツールをつくるのが好きで，Hashicorp製のツールはインターフェースや設定ファイルのあり方など参考になることがとても多い．&lt;/p&gt;
+
+&lt;p&gt;Go言語でいくつかツールはつくってみたけど，まだまだ書き方とかなってなくてクソなので，もっと精進していきたい．&lt;/p&gt;
+
+&lt;p&gt;最後に，発表の機会をつくっていただいた&lt;a href=&#34;https://twitter.com/7yan00&#34;&gt;@7yan00&lt;/a&gt;さんと&lt;a href=&#34;https://twitter.com/yosuke_furukawa&#34;&gt;@yosuke_furukawa&lt;/a&gt;さん，ありがとうございました！&lt;/p&gt;
+</description>
+    </item>
+    
+    <item>
+      <title>Go言語のコードレビュー</title>
+      <link>http://deeeet.com/writing/2014/05/26/go-code-review/</link>
+      <pubDate>Mon, 26 May 2014 00:00:00 +0000</pubDate>
+      
+      <guid>http://deeeet.com/writing/2014/05/26/go-code-review/</guid>
+      <description>
+
+&lt;p&gt;SoundCloudが2年半ほどGo言語を利用したプロダクトを本番で運用した知見を&lt;a href=&#34;http://www.gophercon.com/&#34;&gt;GopherCon&lt;/a&gt;で発表していた（&lt;a href=&#34;http://peter.bourgon.org/go-in-production/&#34;&gt;&amp;ldquo;Go: Best Practices for Production Environments&amp;rdquo;&lt;/a&gt;）．その中で&lt;a href=&#34;https://code.google.com/p/go-wiki/wiki/CodeReviewComments&#34;&gt;&amp;ldquo;CodeReviewComments&lt;/a&gt;というGoogleでのGo言語のコードレビューにおいてよくあるコメントをまとめたサイトが紹介されていた．&lt;/p&gt;
+
+&lt;p&gt;最近Go言語を書くようになり，使えそうなのでざっと抄訳してみた．&lt;a href=&#34;http://www.amazon.co.jp/%E3%83%AA%E3%83%BC%E3%83%80%E3%83%96%E3%83%AB%E3%82%B3%E3%83%BC%E3%83%89-%E2%80%95%E3%82%88%E3%82%8A%E8%89%AF%E3%81%84%E3%82%B3%E3%83%BC%E3%83%89%E3%82%92%E6%9B%B8%E3%81%8F%E3%81%9F%E3%82%81%E3%81%AE%E3%82%B7%E3%83%B3%E3%83%97%E3%83%AB%E3%81%A7%E5%AE%9F%E8%B7%B5%E7%9A%84%E3%81%AA%E3%83%86%E3%82%AF%E3%83%8B%E3%83%83%E3%82%AF-Theory-practice-Boswell/dp/4873115655&#34;&gt;&amp;ldquo;リーダブルコード&amp;rdquo;&lt;/a&gt;的な視点も含まれており，Go以外の言語でも使えそう．&lt;/p&gt;
+
+&lt;ul&gt;
+&lt;li&gt;&lt;a href=&#34;http://golang.org/cmd/gofmt/&#34;&gt;gofmt&lt;/a&gt;でコードの整形をすること&lt;/li&gt;
+&lt;li&gt;&lt;a href=&#34;http://golang.org/doc/effective_go.html#commentary&#34;&gt;コメント&lt;/a&gt;は文章で書くこと．&lt;code&gt;godoc&lt;/code&gt;がいい感じに抜き出してくれる．対象となる関数（変数）名で初めて，ピリオドで終わること&lt;/li&gt;
+&lt;/ul&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-go&#34;&gt;// A Request represents a request to run a command.
+type Request struct { ...
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-go&#34;&gt;// Encode writes the JSON encoding of req to w.
+func Encode(w io.Writer, req *Request) { ...
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;ul&gt;
+&lt;li&gt;外から参照されるトップレベルの識別子にはコメントを書くべき&lt;/li&gt;
+&lt;li&gt;通常の&lt;a href=&#34;http://golang.org/doc/effective_go.html#errors&#34;&gt;エラー処理&lt;/a&gt;に&lt;code&gt;panic&lt;/code&gt;を使わないこと．errorと複数の戻り値を使うこと&lt;/li&gt;
+
+&lt;li&gt;&lt;p&gt;エラー文字列は他の出力で利用されることが多いので，（固有名詞や頭字語でない限り）大文字で始めたり，句読点で終わったりしないこと&lt;/p&gt;
+
+&lt;ul&gt;
+&lt;li&gt;例えば，&lt;code&gt;fmt.Errorf(&amp;quot;Something bad&amp;quot;)&lt;/code&gt;のように大文字で始めるのではなく，&lt;code&gt;fmt.Errorf(&amp;quot;something bad&amp;quot;)&lt;/code&gt;のようにしておくことで，&lt;code&gt;log.Print(&amp;quot;Reading %s: %v&amp;quot;, filename, err)&lt;/code&gt;としても，文の途中に大文字が入るようなことがなくなる&lt;/li&gt;
+&lt;/ul&gt;&lt;/li&gt;
+
+&lt;li&gt;&lt;p&gt;エラーの戻り値を&lt;code&gt;_&lt;/code&gt;で破棄しないこと．関数がエラーを返すなら，関数が成功したかをチェックすること．エラーハンドリングをして，どうしようもないときに&lt;code&gt;panic&lt;/code&gt;とする&lt;/p&gt;&lt;/li&gt;
+
+&lt;li&gt;&lt;p&gt;パッケージのインポートは空行を入れることでグループとしてまとめるとよい&lt;/p&gt;&lt;/li&gt;
+&lt;/ul&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-go&#34;&gt;import (
+    &amp;quot;fmt&amp;quot;
+    &amp;quot;hash/adler32&amp;quot;
+    &amp;quot;os&amp;quot;
+
+    &amp;quot;appengine/user&amp;quot;
+    &amp;quot;appengine/foo&amp;quot;
+        
+    &amp;quot;code.google.com/p/x/y&amp;quot;
+    &amp;quot;github.com/foo/bar&amp;quot;
+)    
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;ul&gt;
+&lt;li&gt;&lt;code&gt;.&lt;/code&gt;によるパッケージのインポートはテストで使える
+
+&lt;ul&gt;
+&lt;li&gt;例えば，以下のように依存の問題で，テストしたいパッケージ名が使えない場合に使える&lt;/li&gt;
+&lt;/ul&gt;&lt;/li&gt;
+&lt;/ul&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-go&#34;&gt;package foo_test
+
+import (
+    . &amp;quot;foo&amp;quot;
+    &amp;quot;bar/testutil&amp;quot;  // &amp;quot;foo&amp;quot;をimportしている
+)
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;（上の場合，&lt;code&gt;bar/testutil&lt;/code&gt;が&lt;code&gt;foo&lt;/code&gt;パッケージをインポートしているため，テストファイルは&lt;code&gt;foo&lt;/code&gt;パッケージにはなれない．&lt;code&gt;.&lt;/code&gt;をつかって&lt;code&gt;foo&lt;/code&gt;をインポートすると，このテストファイルが&lt;code&gt;foo&lt;/code&gt;パッケージであるかのように見なすことができる．ただし，このようなケースを除いて&lt;code&gt;.&lt;/code&gt;をつかったインポートは可読性が落ちるため使うべきではない）&lt;/p&gt;
+
+&lt;ul&gt;
+&lt;li&gt;通常の処理はなるべく浅いネストで記述すること．最初にエラー処理をネストして記述すること．これにより可読性が高まる．例えば，&lt;/li&gt;
+&lt;/ul&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-go&#34;&gt;if err != nil {
+    // エラー処理
+} else {
+    // 通常処理
+}
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;のように書くのではなく，以下のようにする．&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-go&#34;&gt;if err != nil {
+    // エラー処理
+    return // or continue, etc.
+}
+// 通常処理       
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;ul&gt;
+&lt;li&gt;&amp;ldquo;URL&amp;rdquo;や&amp;rdquo;NATO&amp;rdquo;といった頭字語は大文字もしくは小文字で一貫して記述すること
+
+&lt;ul&gt;
+&lt;li&gt;例えば，&amp;rdquo;URL&amp;rdquo;は&amp;rdquo;URL&amp;rdquo;もしくは&amp;rdquo;url&amp;rdquo;とすること，つまり&amp;rdquo;urlPony&amp;rdquo;か&amp;rdquo;URLPony&amp;rdquo;とする&lt;/li&gt;
+&lt;/ul&gt;&lt;/li&gt;
+&lt;li&gt;1行の文字数に厳格な決まりはないが，長過ぎるのは避けるべき．同様に，読みやすさを犠牲にしてまで行を短くしようとするのも避けるべき．コメントは見やすさを考慮して80文字以内に抑えるべきである&lt;/li&gt;
+&lt;li&gt;複数の単語から成る名前をつけるときはアンダースコアを使わずに，MixedCapsまたはmixedCapsのように単語の先頭だけ大文字を用いる．外部から参照されない定数は，mixedCapsとし，最初の単語の先頭を小文字にする&lt;/li&gt;
+&lt;li&gt;関数の戻り値に同じ型が2つ以上含まれる，もしくはコンテキストから返り値が推測できないような場合は戻り値に名前をつけるとよい．例えば，&lt;/li&gt;
+&lt;/ul&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-go&#34;&gt;func (f *Foo) Location() (float64, float64, error)
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;と書くより，以下のように名前をつけたほうが分かりやすい&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-go&#34;&gt;func (f *Foo) Location() (lat, long float64, err error)
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;ul&gt;
+&lt;li&gt;数行程度の小さな関数であれば，戻り値に名前は必要ない．中規模な関数であれば，戻り値には明示的に名前をつけるべき&lt;/li&gt;
+&lt;li&gt;&lt;a href=&#34;http://golang.org/doc/effective_go.html#commentary&#34;&gt;パッケージのコメント&lt;/a&gt;は，空行なしでパッケージ名のすぐ上にかくこと&lt;/li&gt;
+&lt;/ul&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-go&#34;&gt;// Package math provides basic constants and mathematical functions.
+package math
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-go&#34;&gt;/*
+Package template implements data-driven templates for generating textual
+output such as HTML.
+....
+*/
+package template
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;ul&gt;
+&lt;li&gt;&lt;a href=&#34;http://golang.org/doc/effective_go.html#package-names&#34;&gt;パッケージ名&lt;/a&gt;でパッケージの内部を参照することになるので，その内部でパッケージ名を使った変数名などをつくらなくてよい
+
+&lt;ul&gt;
+&lt;li&gt;例えば，&lt;code&gt;chubby&lt;/code&gt;という名前のパッケージを作ってる場合に，&lt;code&gt;ChubbyFile&lt;/code&gt;という型は必要ない．このパッケージを使うユーザは&lt;code&gt;chubby.ChubbyFile&lt;/code&gt;などと書くことになる．代わりに&lt;code&gt;File&lt;/code&gt;とすれば，&lt;code&gt;chubby.File&lt;/code&gt;とシンプルになり，可読性も落ちない&lt;/li&gt;
+&lt;/ul&gt;&lt;/li&gt;
+&lt;li&gt;メソッドのレシーバの名前は，それ自体を反映したものとすること
+
+&lt;ul&gt;
+&lt;li&gt;普通は型名の省略形とする（例えば，&amp;rdquo;Client&amp;rdquo;なら&amp;rdquo;c&amp;rdquo;や&amp;rdquo;cl&amp;rdquo;）&lt;/li&gt;
+&lt;li&gt;&amp;ldquo;me&amp;rdquo;や&amp;rdquo;this&amp;rdquo;，&amp;rdquo;self&amp;rdquo;といった一般的な名前は使うべきではない&lt;/li&gt;
+&lt;li&gt;一貫した名前を使うこと．例えば，一度&amp;rdquo;c&amp;rdquo;としたら，他の関数でも&amp;rdquo;c&amp;rdquo;をつかうこと．&amp;rdquo;cl&amp;rdquo;としない&lt;/li&gt;
+&lt;/ul&gt;&lt;/li&gt;
+&lt;li&gt;Goが初めての場合は，メソッドのレシーバを値型にするのか，ポインタ型にするのかを判断するのは難しい．迷った場合はポインタ型にすればよいが，小さな変更の少ないStructや基本型の値の場合は効率的な視点で値型にするのがよい．以下にいくつかのルールを列挙する．
+
+&lt;ul&gt;
+&lt;li&gt;もしレシーバがmapや関数，chanであれば，ポインタを使わないこと&lt;/li&gt;
+&lt;li&gt;もしレシーバがsliceでメソッドがそれをresliceやreallocateしないのであれば，ポインタを使わないこと&lt;/li&gt;
+&lt;li&gt;もしメソッドがレシーバに変更を加えるのであれば，ポインタを使うこと&lt;/li&gt;
+&lt;li&gt;もしレシーバが大きなstructやarrayであれば，ポインタを使うこと&lt;/li&gt;
+&lt;li&gt;もしレシーバがarrayやsliceでその要素がポインタであれば，ポインタを使うのがよい&lt;/li&gt;
+&lt;li&gt;最後に，迷ったらポインタを使うこと&lt;/li&gt;
+&lt;/ul&gt;&lt;/li&gt;
+&lt;li&gt;テストがこけるときには，何が悪いのか，入力は何か，期待した結果は何か，実際の結果は何かを出力するべき
+
+&lt;ul&gt;
+&lt;li&gt;例えば，典型的なGoのテストはこける際に以下のような出力をする&lt;/li&gt;
+&lt;/ul&gt;&lt;/li&gt;
+&lt;/ul&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-go&#34;&gt;if got != tt.want {
+    t.Errorf(&amp;quot;Foo(%q) = %d; want %d&amp;quot;, tt.in, got, tt.want)    // or Fatalf, if test can&#39;t test anything more past this point
+}
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;（順番は&lt;code&gt;実際の値!=期待値&lt;/code&gt;で，&lt;code&gt;Errorf&lt;/code&gt;の出力も同じ順番になっている．いくつかのテストフレームワークは，この逆で書くことを奨励しているが，Goの場合はこの順番とする）&lt;/p&gt;
+
+&lt;ul&gt;
+&lt;li&gt;ヘルパー関数を使い，異なる入力に対するテストをする場合は，その呼び出しを異なる&lt;code&gt;TestFoo&lt;/code&gt;関数でラップすれば，その名前でテストが落ちる．例えば以下のようにする&lt;/li&gt;
+&lt;/ul&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-go&#34;&gt; func TestSingleValue(t *testing.T) { testHelper(t, []int{80}) }
+ func TestNoValues(t *testing.T) { testHelper(t, []int{}) }
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;（とにかく，将来コードをデバッグするひとへ丁寧な出力を提示するのは書き手に責任がある）&lt;/p&gt;
+
+&lt;ul&gt;
+&lt;li&gt;記述量が多い場合は，&lt;a href=&#34;https://code.google.com/p/go-wiki/wiki/TableDrivenTests&#34;&gt;Table Driven Test&lt;/a&gt;を使うことを考えるとよい&lt;/li&gt;
+&lt;li&gt;変数名は，短いほうがよい．得にスコープが狭い場合などは短くする．例えば，&lt;code&gt;lineCount&lt;/code&gt;より&lt;code&gt;c&lt;/code&gt;，&lt;code&gt;sliceIndex&lt;/code&gt;より&lt;code&gt;i&lt;/code&gt;が好ましい．以下に基本的なルールを列挙する
+
+&lt;ul&gt;
+&lt;li&gt;変数がその宣言から離れた場所で使われるのであれば，説明的な名前にする&lt;/li&gt;
+&lt;li&gt;グローバル変数は，説明的な名前にする&lt;/li&gt;
+&lt;li&gt;メソッドレシーバは，1，2文字の短い名前にする&lt;/li&gt;
+&lt;li&gt;ループ変数は1文字（&lt;code&gt;i&lt;/code&gt;や&lt;code&gt;r&lt;/code&gt;）の短い名前にする&lt;/li&gt;
+&lt;/ul&gt;&lt;/li&gt;
+&lt;/ul&gt;
+
+&lt;h2 id=&#34;soundcloundの場合:3770ffff5a3eb742f7c6715987fc23cb&#34;&gt;SoundCloundの場合&lt;/h2&gt;
+
+&lt;p&gt;SoundCloudは上を少し改良して利用している．&lt;/p&gt;
+
+&lt;ul&gt;
+&lt;li&gt;曖昧な場合や可読性が大きく高まる場合を除いて，名前付き返り値は使わないこと&lt;/li&gt;
+&lt;li&gt;必要な場合（&lt;code&gt;new(int)&lt;/code&gt;や&lt;code&gt;make(chan int)&lt;/code&gt;）や事前に割り当てるサイズが分かっている場合（&lt;code&gt;make(map[int]string, n)&lt;/code&gt;や&lt;code&gt;make([]int, 0, 256)&lt;/code&gt;）を除いて，&lt;code&gt;make&lt;/code&gt;や&lt;code&gt;new&lt;/code&gt;を使わないこと&lt;/li&gt;
+&lt;li&gt;番兵（sentinel value）には，&lt;code&gt;bool&lt;/code&gt;や&lt;code&gt;interface{}&lt;/code&gt;よりも&lt;code&gt;struct{}&lt;/code&gt;を使うこと
+
+&lt;ul&gt;
+&lt;li&gt;例えば，&lt;code&gt;map[string]struct{}&lt;/code&gt;や&lt;code&gt;chan struct{}&lt;/code&gt;&lt;/li&gt;
+&lt;/ul&gt;&lt;/li&gt;
+&lt;li&gt;パラメータが多く，1行が長くなる場合は，改行すること．例えば，&lt;/li&gt;
+&lt;/ul&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-go&#34;&gt;func process(dst io.Writer, readTimeout,
+    writeTimeout time.Duration, allowInvalid bool,
+        max int, src &amp;lt;-chan util.Job) {
+    // ...
+}
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;とするのではなく，以下のようにする．&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-go&#34;&gt;func process(
+    dst io.Writer,
+    readTimeout, writeTimeout time.Duration,
+    allowInvalid bool,
+    max int,
+    src &amp;lt;-chan util.Job,
+) {
+    // ...
+}
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;同様に以下のように要素を割り当てる場合も，&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-go&#34;&gt;f := &amp;amp;Foo{} // or, even worse: new(Foo)
+f.Site = &amp;quot;zombo.com&amp;quot;
+f.Out = os.Stdout
+f.Dest.Key = &amp;quot;gophercon&amp;quot;
+f.Dest.Value = 2014
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;とするのではなく，以下のようにする．&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-go&#34;&gt;f := foo.New(foo.Config{ 
+    Site: &amp;quot;zombo.com&amp;quot;, 
+    Out:  os.Stdout, 
+    Dest: conference.KeyPair{ 
+    Key:   &amp;quot;gophercon&amp;quot;,
+    Value: 2014,
+    },
+})
+&lt;/code&gt;&lt;/pre&gt;
+</description>
+    </item>
+    
+    <item>
+      <title>複数プラットフォームにGoアプリケーションを配布する</title>
+      <link>http://deeeet.com/writing/2014/05/19/gox/</link>
+      <pubDate>Mon, 19 May 2014 00:00:00 +0000</pubDate>
+      
+      <guid>http://deeeet.com/writing/2014/05/19/gox/</guid>
+      <description>
+
+&lt;p&gt;&lt;a href=&#34;https://github.com/tcnksm/jj_&#34;&gt;tcnksm/jj&lt;/a&gt;&lt;/p&gt;
+
+&lt;p&gt;最近試しにGo言語でCLIアプリケーションを作成した．&lt;a href=&#34;https://github.com/joelthelion/autojump&#34;&gt;joelthelion/autojump&lt;/a&gt;をシンプルにしただけのツールで，ディレクトリを保存して，どこからでもその保存したディレクトリへの移動を可能にする．&lt;/p&gt;
+
+&lt;p&gt;Goの環境さえあれば，このようなGo言語のアプリケーションの配布はとても簡単で，インストールは以下のようにするだけでよい．&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-bash&#34;&gt;$ go get github.com/tcnksm/jj_
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;これだけではなく，&lt;a href=&#34;http://unknownplace.org/archives/golang-cross-compiling.html&#34;&gt;Goはクロスコンパイルが簡単&lt;/a&gt;で，様々なプラットフォーム向けにバイナリを生成することができる．つまり，Goがインストールされていない環境に対しても簡単にツールを配布することができる．&lt;/p&gt;
+
+&lt;p&gt;&lt;a href=&#34;http://www.packer.io&#34;&gt;Packer&lt;/a&gt;などの最近のHashicorp制のツールは，Go言語で書かれており，OSX，Linux，Windows，FreeBSDなど様々なプラットフォーム向けにそれらを配布している．レポジトリを見てると，その辺をいい感じに自動化している．それらを参考にして，今回作成したツールを複数プラットフォーム向けに配布してみた．&lt;/p&gt;
+
+&lt;h2 id=&#34;tl-dr:682b7366441346737f24f4ca27fd2d8d&#34;&gt;TL;DR&lt;/h2&gt;
+
+&lt;p&gt;以下のようにOXSとLinux，そしてWindowsのそれぞれ386とamd64に対してツールを配布する（まだ不安定なので使わないでください）．&lt;/p&gt;
+
+&lt;p&gt;&lt;a href=&#34;https://bintray.com/tcnksm/jj/jj/0.1.0/view/files&#34;&gt;Download&lt;/a&gt;&lt;/p&gt;
+
+&lt;p&gt;やったことは，&lt;/p&gt;
+
+&lt;ul&gt;
+&lt;li&gt;&lt;a href=&#34;https://github.com/mitchellh/gox&#34;&gt;gox&lt;/a&gt;でクロスコンパイル&lt;/li&gt;
+&lt;li&gt;&lt;a href=&#34;https://bintray.com/&#34;&gt;bintray&lt;/a&gt;からバイナリの配布&lt;/li&gt;
+&lt;li&gt;スクリプトによる自動化&lt;/li&gt;
+&lt;/ul&gt;
+
+&lt;p&gt;ソースは全て，&lt;a href=&#34;https://github.com/tcnksm/jj_&#34;&gt;tcnksm/jj&lt;/a&gt;のscripts以下にある．&lt;/p&gt;
+
+&lt;h2 id=&#34;なぜgoを使い始めたか:682b7366441346737f24f4ca27fd2d8d&#34;&gt;なぜGoを使い始めたか&lt;/h2&gt;
+
+&lt;p&gt;まず，簡単になぜGoを使い始めたか．理由は下のエントリと同じ．&lt;/p&gt;
+
+&lt;ul&gt;
+&lt;li&gt;&lt;a href=&#34;http://codegangsta.io/blog/2013/07/21/creating-cli-applications-in-go/&#34;&gt;On Distributing Command line Applications: Why I switched from Ruby to Go - Code Gangsta&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a href=&#34;http://mitchellh.com/abandoning-rubygems&#34;&gt;Abandoning RubyGems | Mitchell Hashimoto&lt;/a&gt;&lt;/li&gt;
+&lt;/ul&gt;
+
+&lt;p&gt;今まで簡単な便利コマンドラインツールは，Rubyを使ってさらっとつくってきた．他のひとも使えそうなものはRubyGemsで配布するようにつくった．しかし，いざチームの人に使ってもらう段階になると，そもそも自分の周りがジャバなので，&lt;code&gt;gem&lt;/code&gt;って何？となり，Rubyのインストールから初めてもらうということが起こった．&lt;/p&gt;
+
+&lt;p&gt;自分なら&lt;code&gt;ruby-build&lt;/code&gt;や&lt;code&gt;ruby-install&lt;/code&gt;でさらっと入れるが，Ruby使ったことないひとにとってはインストールさえも障壁が高い．その壁を超えてまで使ってくれるひとは実は少ない．&lt;/p&gt;
+
+&lt;p&gt;それはもったいない．たいしたツールしか作れないのであれば，せめて導入の障壁だけでも下げたい．使い手の環境にあったバイナリをつくって，はいどうぞ！としたい．Go言語の良さは，&lt;code&gt;goroutine&lt;/code&gt;とかいろいろあるだろうが，自分の中では，このクロスコンパイルのやりやすさが一番大きい．&lt;/p&gt;
+
+&lt;h2 id=&#34;クロスコンパイル:682b7366441346737f24f4ca27fd2d8d&#34;&gt;クロスコンパイル&lt;/h2&gt;
+
+&lt;p&gt;GO言語のクロスコンパイルはとても簡単で，以下のようにするだけでOSXでlinuxのamd64向けのバイナリをつくることができる．&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-bash&#34;&gt;$ GOOS=linux GOARCH=amd64 go build hello.go
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;複数プラットフォーム向けにクロスコンパイルする場合は，&lt;a href=&#34;https://github.com/mitchellh/gox&#34;&gt;mitchellh/gox&lt;/a&gt;を使うともっと簡単にできる．Goxを使う利点は以下が挙げられる．&lt;/p&gt;
+
+&lt;ul&gt;
+&lt;li&gt;シンプル&lt;/li&gt;
+&lt;li&gt;複数プラットフォームの並列ビルド&lt;/li&gt;
+&lt;li&gt;複数パッケージの並列ビルド&lt;/li&gt;
+&lt;/ul&gt;
+
+&lt;h3 id=&#34;準備:682b7366441346737f24f4ca27fd2d8d&#34;&gt;準備&lt;/h3&gt;
+
+&lt;p&gt;まず，goxをインストールする．&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;$ go get github.com/mitchellh/gox
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;次にクロスコンパイル用のツールをインストールする．&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;$ gox -build-toolchain
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;h3 id=&#34;使い方:682b7366441346737f24f4ca27fd2d8d&#34;&gt;使い方&lt;/h3&gt;
+
+&lt;p&gt;使い方は，&lt;code&gt;go build&lt;/code&gt;と同じで，コンパイルしたいパッケージのディレクトリで以下を実行するだけ．&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-bash&#34;&gt;$ gox
+--&amp;gt;      darwin/386: github.com/mitchellh/gox
+--&amp;gt;    darwin/amd64: github.com/mitchellh/gox
+--&amp;gt;       linux/386: github.com/mitchellh/gox
+...
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;何も指定しなければ，OSX，Linux，Windows，FreeBSD，そしてOpenBSDのそれぞれ386とamd64のバイナリが作成される．&lt;/p&gt;
+
+&lt;p&gt;今回は，OXSとLinux，Windowsの386とamd64に対してクロスコンパイルを実行する．これらを&lt;code&gt;-os&lt;/code&gt;，&lt;code&gt;-arch&lt;/code&gt;で指定するだけ．&lt;/p&gt;
+
+&lt;p&gt;自動化するために以下のようなスクリプトを書いておく．&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-bash&#34;&gt;#!/bin/bash
+
+XC_ARCH=${XC_ARCH:-386 amd64}
+XC_OS=${XC_OS:-linux darwin windows}
+
+rm -rf pkg/
+gox \
+    -os=&amp;quot;${XC_OS}&amp;quot; \
+    -arch=&amp;quot;${XC_ARCH}&amp;quot; \
+    -output &amp;quot;pkg/{{.OS}}_{{.Arch}}/{{.Dir}}&amp;quot;
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;出力先は，&lt;code&gt;-output&lt;/code&gt;で指定できる．フォーマットは，go templateに従う．&lt;/p&gt;
+
+&lt;h2 id=&#34;バイナリ配布:682b7366441346737f24f4ca27fd2d8d&#34;&gt;バイナリ配布&lt;/h2&gt;
+
+&lt;p&gt;バイナリの置き場には，最近よくみる&lt;a href=&#34;https://bintray.com/&#34;&gt;bintray&lt;/a&gt;を使う．レポジトリ単位での複数パッケージ，バージョニングによる配置が可能．バイナリだけでなく，debやrpmパッケージ，mavenなどに対応している．もちろん無料．&lt;/p&gt;
+
+&lt;p&gt;{%img &lt;a href=&#34;https://bintray.com/docs/help/repository_diagram.png&#34;&gt;https://bintray.com/docs/help/repository_diagram.png&lt;/a&gt; %}&lt;/p&gt;
+
+&lt;p&gt;bintrayが良いと感じたのは，REST APIで操作できるところ．自動化がしやすい．例えばアップロードはcURLを使って以下のようにできる．&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-bash&#34;&gt;$ curl -T &amp;lt;FILE.EXT&amp;gt; -utcnksm:&amp;lt;API_KEY&amp;gt; https://api.bintray.com/content/tcnksm/jj/jj/&amp;lt;VERSION_NAME&amp;gt;/&amp;lt;FILE_TARGET_PATH&amp;gt;
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;h3 id=&#34;準備-1:682b7366441346737f24f4ca27fd2d8d&#34;&gt;準備&lt;/h3&gt;
+
+&lt;p&gt;binaryにバイナリをアップロードするには以下の設定が必要．&lt;/p&gt;
+
+&lt;ul&gt;
+&lt;li&gt;レポジトリの作成&lt;/li&gt;
+&lt;li&gt;API Keyの取得&lt;/li&gt;
+&lt;/ul&gt;
+
+&lt;p&gt;Githubとの連携も可能なので，READMEやCHANGELOGを紐づけておくと親切．&lt;/p&gt;
+
+&lt;h3 id=&#34;アップロード:682b7366441346737f24f4ca27fd2d8d&#34;&gt;アップロード&lt;/h3&gt;
+
+&lt;p&gt;これも自動化する．事前に複数のバイナリやその他のファイルをzipで固めて&lt;code&gt;pkg/dist&lt;/code&gt;以下に配置しておく．&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-bash&#34;&gt;VERSION=0.1.0
+for ARCHIVE in ./pkg/dist/*; do
+    ARCHIVE_NAME=$(basename ${ARCHIVE})
+
+    echo Uploading: ${ARCHIVE_NAME}
+    curl \
+        -T ${ARCHIVE} \
+        -utcnksm:${BINTRAY_API_KEY} \
+        &amp;quot;https://api.bintray.com/content/tcnksm/jj/jj/${VERSION}/${ARCHIVE_NAME}&amp;quot;
+done
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;これだけで，適切なバージョニングをしつつバイナリをホストしてくれる．バージョンに関しては，Packerとかだと&lt;code&gt;version.go&lt;/code&gt;を準備してそれから読み取るなどしている．&lt;/p&gt;
+
+&lt;p&gt;クロスコンパイル用の&lt;code&gt;compile.sh&lt;/code&gt;，zipで固める&lt;code&gt;dist.sh&lt;/code&gt;，アップロードするための&lt;code&gt;upload.sh&lt;/code&gt;を準備して，それらを一気に実行するようにしておけば便利．&lt;/p&gt;
+
+&lt;h3 id=&#34;参考:682b7366441346737f24f4ca27fd2d8d&#34;&gt;参考&lt;/h3&gt;
+
+&lt;ul&gt;
+&lt;li&gt;&lt;a href=&#34;https://bintray.com/docs/api.html&#34;&gt;Bintray REST API&lt;/a&gt;&lt;/li&gt;
+&lt;/ul&gt;
+</description>
+    </item>
+    
+    <item>
+      <title>Martini(&#43;Ginkgo)をWerckerでCIしてHerokuにデプロイ</title>
+      <link>http://deeeet.com/writing/2014/04/23/martini/</link>
+      <pubDate>Wed, 23 Apr 2014 00:00:00 +0000</pubDate>
+      
+      <guid>http://deeeet.com/writing/2014/04/23/martini/</guid>
+      <description>
+
+&lt;p&gt;&lt;div class=&#34;vc&#34;&gt;&lt;iframe src=&#34;http://player.vimeo.com/video/79487342&#34; width=&#34;500&#34; height=&#34;270&#34; frameborder=&#34;0&#34; webkitallowfullscreen mozallowfullscreen allowfullscreen&gt;&lt;/iframe&gt;&lt;/div&gt; &lt;p&gt;&lt;a href=&#34;http://vimeo.com/79487342&#34;&gt;Martini Demo&lt;/a&gt; from &lt;a href=&#34;http://vimeo.com/user22705255&#34;&gt;Martini&lt;/a&gt; on &lt;a href=&#34;https://vimeo.com&#34;&gt;Vimeo&lt;/a&gt;.&lt;/p&gt;&lt;/p&gt;
+
+&lt;p&gt;&lt;a href=&#34;http://thechangelog.com/117/&#34;&gt;#117: Go, Martini and Gophercasts with Jeremy Saenz - The Changelog&lt;/a&gt;&lt;/p&gt;
+
+&lt;p&gt;を聴いていて，Sinatra風のGoの軽量Webフレームワークである&lt;a href=&#34;http://martini.codegangsta.io/&#34;&gt;Martini&lt;/a&gt;というのを知った．上に貼ったデモを見るとほとんどSinatraで良い感じ．Goはしばらく触ってなかったし，最近のGo事情を知るためにMartiniを触りつついろいろ試してみた．&lt;/p&gt;
+
+&lt;p&gt;あとCIサービスの&lt;a href=&#34;http://wercker.com/&#34;&gt;Wercker&lt;/a&gt;も良さそうだなと思いつつ触ってなかったので，この機会に使ってみた．&lt;/p&gt;
+
+&lt;p&gt;やってみたのは，&lt;/p&gt;
+
+&lt;ul&gt;
+&lt;li&gt;[Martini]()で簡単なGo Web Applicationの作成&lt;/li&gt;
+&lt;li&gt;&lt;a href=&#34;http://onsi.github.io/ginkgo/&#34;&gt;Ginkgo&lt;/a&gt;を使ってBDDテスト&lt;/li&gt;
+&lt;li&gt;[Wercker]()でCI&lt;/li&gt;
+&lt;li&gt;&lt;a href=&#34;https://github.com/kr/heroku-buildpack-go&#34;&gt;Go Heroku buildpack&lt;/a&gt;でHerokuにデプロイ&lt;/li&gt;
+&lt;/ul&gt;
+
+&lt;p&gt;今回のソースコードは全て以下にある&lt;/p&gt;
+
+&lt;p&gt;&lt;a href=&#34;https://github.com/tcnksm/sample-martini&#34;&gt;tcnksm/sample-martini&lt;/a&gt;&lt;/p&gt;
+
+&lt;h2 id=&#34;martini:d72a986c282cfb53d1fee286c30866b4&#34;&gt;Martini&lt;/h2&gt;
+
+&lt;p&gt;パッケージをインストールしておく&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-bash&#34;&gt;$ go get github.com/go-martini/martini
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;例えば，以下のように書ける．ものすごくシンプル．&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-go&#34;&gt;// server.go
+package main
+
+import &amp;quot;github.com/go-martini/martini&amp;quot;
+
+func main() {
+    m := martini.Classic()
+    m.Get(&amp;quot;/&amp;quot;, top)
+    m.Run()
+}
+
+func top(params martini.Params) (int, string) {
+    return 200, &amp;quot;Hello!&amp;quot;
+}
+
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;以下で起動する．&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-bash&#34;&gt;$ go run server.go
+$ curl http://localhost:3000
+Hello !
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;&lt;a href=&#34;https://github.com/codegangsta/gin&#34;&gt;codegangsta/gin&lt;/a&gt;を使うと更新の度に自動でビルドしなおしてくれるため，ブラウザを更新するだけでよくなる．&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-bash&#34;&gt;$ go get github.com/codegangsta/gin
+$ gin run server.go
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;RackのMiddleware的な書き方もできる．OAuthやセッション機能などのMiddlewareは&lt;a href=&#34;https://github.com/martini-contrib&#34;&gt;Martini Contrib&lt;/a&gt;で別パッケージとして管理されている．&lt;/p&gt;
+
+&lt;h2 id=&#34;go-heroku-buildpack:d72a986c282cfb53d1fee286c30866b4&#34;&gt;Go Heroku Buildpack&lt;/h2&gt;
+
+&lt;p&gt;Go用のHerokuのBuildpackは既にある．&lt;/p&gt;
+
+&lt;p&gt;&lt;a href=&#34;https://github.com/kr/heroku-buildpack-go&#34;&gt;kr/heroku-buildpack-go&lt;/a&gt;&lt;/p&gt;
+
+&lt;p&gt;Herokuアプリを作成する際にこれを指定する．&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-bash&#34;&gt;$ heroku create -b https://github.com/kr/heroku-buildpack-go.git
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;HerokuでGo Web Applicationを動かすには，&lt;code&gt;Procfile&lt;/code&gt;と依存パッケージの管理が必要になる．&lt;/p&gt;
+
+&lt;h3 id=&#34;procfile:d72a986c282cfb53d1fee286c30866b4&#34;&gt;Procfile&lt;/h3&gt;
+
+&lt;p&gt;Herokuに&lt;code&gt;web&lt;/code&gt;プロセスがどのコマンドを叩くかを知らせるために&lt;code&gt;Procfile&lt;/code&gt;を準備する必要がある．&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-bash&#34;&gt;$ echo &amp;quot;web: $(basename `pwd`)&amp;quot; &amp;gt; Procfile
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;h3 id=&#34;godep:d72a986c282cfb53d1fee286c30866b4&#34;&gt;Godep&lt;/h3&gt;
+
+&lt;p&gt;&lt;a href=&#34;https://github.com/tools/godep&#34;&gt;tools/godep&lt;/a&gt;を使うとパッケージの依存関係を管理できる．&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-bash&#34;&gt;$ go get github.com/kr/godep
+$ godep save
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;これで依存関係のリストが&lt;code&gt;Godeps/Godeps.json&lt;/code&gt;に書き込まれ，&lt;code&gt;Godeps/_workspace&lt;/code&gt;以下にソースコードがぶっ込まれる．&lt;/p&gt;
+
+&lt;h3 id=&#34;デプロイ:d72a986c282cfb53d1fee286c30866b4&#34;&gt;デプロイ&lt;/h3&gt;
+
+&lt;p&gt;あとはいつも通りにデプロイするだけ．&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-bash&#34;&gt;$ git push heroku master
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;HeokuへのGo Web Applicationのデプロイは&lt;a href=&#34;http://mmcgrana.github.io/2012/09/getting-started-with-go-on-heroku.html&#34;&gt;&amp;ldquo;Getting Started with Go on Heroku&amp;rdquo;&lt;/a&gt;が詳しい．&lt;/p&gt;
+
+&lt;h2 id=&#34;ginkgo:d72a986c282cfb53d1fee286c30866b4&#34;&gt;Ginkgo&lt;/h2&gt;
+
+&lt;p&gt;&lt;a href=&#34;http://onsi.github.io/ginkgo/&#34;&gt;Ginkgo&lt;/a&gt;は，Go用のBDD Testingフレームワーク．Matcherライブラリには&lt;a href=&#34;http://onsi.github.io/gomega/&#34;&gt;Gomega&lt;/a&gt;を使う．&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-bash&#34;&gt;$ go get github.com/onsi/ginkgo/ginkgo
+$ go get github.com/onsi/gomega
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;初期化する．&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-bash&#34;&gt;$ ginkgo bootstrap
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;例えば，上のMartiniのテストは以下のように書ける．&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-go&#34;&gt;package main
+
+import (
+    . &amp;quot;github.com/onsi/ginkgo&amp;quot;
+    . &amp;quot;github.com/onsi/gomega&amp;quot;
+)
+
+var _ = Describe(&amp;quot;Sample&amp;quot;, func() {
+    Context(&amp;quot;top()&amp;quot;, func() {
+        It(&amp;quot;return 200 Status&amp;quot;, func() {
+            RequestToRoot(&amp;quot;GET&amp;quot;, top)
+            Expect(recorder.Code).To(Equal(200))
+            Expect(recorder.Body).To(ContainSubstring(&amp;quot;Hello&amp;quot;))
+         })
+     })
+})
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;ほとんどRSpecのように書ける．RSpecほどではないが，Matcherも基本的なものは揃っている．&lt;/p&gt;
+
+&lt;p&gt;MartiniとGinkgoとの連携は&lt;a href=&#34;http://blog.wercker.com/2014/02/06/RethinkDB-Gingko-Martini-Golang.html&#34;&gt;&amp;ldquo;Getting started with RethinkDB, Ginkgo and Martini on wercker&amp;rdquo;&lt;/a&gt;が詳しい．&lt;/p&gt;
+
+&lt;h2 id=&#34;wercker:d72a986c282cfb53d1fee286c30866b4&#34;&gt;Wercker&lt;/h2&gt;
+
+&lt;p&gt;Werckerの使い方は，&lt;a href=&#34;http://blog.mah-lab.com/2014/01/08/rails-wercker-heroku-deploy/&#34;&gt;&amp;ldquo;Githubのプライベートリポジトリでも無料で使えるCI，Werckerを使ってrails newからHerokuのデプロイまでやってみる&amp;rdquo;&lt;/a&gt;が詳しい．基本はこの通りにやれば連携可能．&lt;/p&gt;
+
+&lt;p&gt;&lt;code&gt;wercker.yml&lt;/code&gt;はレポジトリを登録すると，自動でGo専用のものが生成され，そのまま使える．&lt;/p&gt;
+
+&lt;p&gt;テストが通ったらHerokuにデプロイするようにするには，HerokuのApp keyとApplicationを登録し，以下を&lt;code&gt;wercker.yml&lt;/code&gt;に追記するだけ．&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-ruby&#34;&gt;...
+deploy:
+  steps:
+      - heroku-deploy
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;ものすごく簡単．&lt;/p&gt;
+
+&lt;h2 id=&#34;まとめ:d72a986c282cfb53d1fee286c30866b4&#34;&gt;まとめ&lt;/h2&gt;
+
+&lt;p&gt;とりあえず，ざっとやりたいことをやってみた．いろいろな言語にあるツールがどんどんGoに移植されてるなーと感じた．また，あらゆる言語のバックグラウンドをもった開発者がGoを触っていて，各言語の良い部分が集約されそうで期待が高まってきた．&lt;/p&gt;
+
+&lt;p&gt;さっとつくるときはSinatra使うだろうけど，MartiniでWeb Applicationを書いてみるのは楽しかった．Martiniの作者も話してたけど，バグレポートの際にいろいろ言われつつも良いコメントをもらってるみたいで，多分そういうことなんだろうと思う．&lt;/p&gt;
+
+&lt;p&gt;DockerやSerfとかを触っていると，やっぱコードレベルで中身を理解したいので，これを機にもっとGoを書いていこうと思う．&lt;/p&gt;
+
+&lt;h3 id=&#34;参考:d72a986c282cfb53d1fee286c30866b4&#34;&gt;参考&lt;/h3&gt;
+
+&lt;ul&gt;
+&lt;li&gt;&lt;a href=&#34;http://thechangelog.com/117/&#34;&gt;#117: Go, Martini and Gophercasts with Jeremy Saenz - The Changelog&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a href=&#34;http://pivotallabs.com/announcing-ginkgo-and-gomega-bdd-style-testing-for-golang/&#34;&gt;Announcing Ginkgo and Gomega: BDD-Style Testing for Golang - Pivotal Labs&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a href=&#34;http://blog.wercker.com/2014/02/06/RethinkDB-Gingko-Martini-Golang.html&#34;&gt;Getting started with RethinkDB, Ginkgo and Martini on wercker&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a href=&#34;http://blog.mah-lab.com/2014/01/08/rails-wercker-heroku-deploy/&#34;&gt;Githubのプライベートリポジトリでも無料で使えるCI，Werckerを使ってrails newからHerokuのデプロイまでやってみる | mah365&lt;/a&gt;&lt;/li&gt;
+&lt;/ul&gt;
+</description>
+    </item>
+    
+  </channel>
+</rss>

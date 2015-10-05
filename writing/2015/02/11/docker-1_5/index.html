@@ -1,0 +1,184 @@
+<!doctype html>
+<html>
+  <head>
+    <meta http-equiv="content-type" content="text/html; charset=utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    
+    <title>Docker 1.5の変更点 | SOTA</title>
+    
+    <link href="https://fonts.googleapis.com/css?family=Lato%3a900" rel="stylesheet" type="text/css">
+    <link rel="stylesheet" href="/css/main.css">
+    <link rel="shortcut icon" href="/favicon.png" type="image/x-icon" />
+    <link href="http://deeeet.com//index.xml" rel="alternate" type="application/rss+xml" title="" />
+    <meta name="title" content="http://deeeet.com/writing/2015/02/11/docker-1_5/">
+    <link rel="canonical" href="http://deeeet.com/writing/2015/02/11/docker-1_5/">
+    
+    <meta property="og:title" content="Docker 1.5の変更点"/>
+    <meta property="og:url" content="http://deeeet.com/writing/2015/02/11/docker-1_5/"/>
+  </head>
+  
+  <body>
+    <section class="site-nav">
+      <header>
+        <nav id="navigation">
+          <ul class="menu">
+            <li><a href="https://github.com/tcnksm/talks">Talks</a></li>
+            <li><a href="https://tcnksm.exposure.co/">Photos</a></li>
+          </ul>
+
+          <a class="name" href="/">SOTA</a>
+        </nav>        
+      </header>
+    </section>
+    
+
+
+<article>
+  <div class="container">
+    <header>
+      <div class="meta">
+        <time pubdate datetime="2015-02-11" title="2015-02-11">February 11, 2015</time>
+      </div>
+      <h1 class="title">Docker 1.5の変更点</h1>
+    </header>
+    
+    <section>
+      
+
+<ul>
+<li><a href="https://groups.google.com/forum/#!topic/docker-dev/nzKREJKqxe4">Docker 1.5.0-rc1</a></li>
+<li><a href="http://blog.docker.com/2015/02/docker-1-5-ipv6-support-read-only-containers-stats-named-dockerfiles-and-more/">Docker 1.5: IPv6 support, read-only containers, stats, “named Dockerfiles” and more | Docker Blog</a></li>
+</ul>
+
+<p>Docker 1.5が出た．IPv6のサポートや<code>stats</code>コマンドによるコンテナのメトリクス表示などが追加された．ユーザ的に一番嬉しいのはDockerfileの名前を自由に決められるようになったことだろうと思う．</p>
+
+<p>今までDockerfileは<code>Dockefile</code>という名前しか受け付けなかった，というかまともに動かなかった．やりようはあって，標準入力からぶっ込むことはできた．例えば<code>base</code>とう名前のDockerfileを作って以下のように<code>build</code>を実行することができた．</p>
+
+<pre><code class="language-bash">$ docker build -t tcnksm/test - &lt; base
+</code></pre>
+
+<p>しかし，<code>ADD</code>もしくは<code>COPY</code>インストラクションを使っている場合に，そのソースはURLでないといけないという制限があった．ソースにローカルのファイルを指定していると，<code>build</code>のコンテキストが伝わらず<code>no such file or directory</code>エラーが発生するという面白い状況だった．</p>
+
+<p>1.5からは<code>-f</code>オプションが追加され，<code>Dockerfile</code>という名前以外のDockerfileを指定することができるようになった．</p>
+
+<pre><code class="language-bash">$ docker build -t tcnksm/test -f base .
+</code></pre>
+
+<p><code>ADD</code>や<code>COPY</code>インストラクションのソースにローカルファイルを指定していてもちゃんと動く．</p>
+
+<p>しかし，今までのようにカレントディレクトリの<code>Dockerfile</code>をビルドすることに慣れていると，ハマるところがある．カレントディレクトリ以外のDockerfileをビルドするときは，その<code>build</code>の起点となるディレクトリをちゃんと指定する必要がある．例えば，<code>files</code>ディレクトリ内の<code>base</code>という名前のDocekerfileをその外からビルドするときは，以下のようにする．</p>
+
+<pre><code class="language-bash">$ docker build -t tcnksm/test -f files/base files
+</code></pre>
+
+<p>末尾の<code>files</code>をいつも通りに<code>.</code>にすると<code>ADD</code>や<code>COPY</code>インストラクションで<code>no such file or directory</code>エラーが発生する．</p>
+
+<h3 id="dockerhub:ee7141f33dbe50d084d337c2bd1b1f56">DockerHub</h3>
+
+<p>ではDockerHubのAutomated buildはどうか．現時点（2015年2月11日）では<code>Dockerfile</code>という名前以外は受け付けていない．ので，今まで通りにディレクトリごとにDockerifileを準備する必要がある．</p>
+
+<p>ただ，自分はディレクトリごとにDockerfileを分けるという慣習には適応しすぎているので，もうこのままでも良いかなって気持ちはある&hellip;</p>
+
+<h2 id="その他の変更:ee7141f33dbe50d084d337c2bd1b1f56">その他の変更</h2>
+
+<p>他にもいくつか自分的に気になった機能をいくつか．</p>
+
+<h3 id="read-onlyコンテナ:ee7141f33dbe50d084d337c2bd1b1f56">Read-onlyコンテナ</h3>
+
+<p><code>run</code>に<code>--read-only</code>オプションがつき，コンテナのファイルシステムを書き込み不可にすることができるようになった．</p>
+
+<pre><code class="language-bash">$ docker run --read-only busybox sh -c 'echo test &gt; /etc/test.conf'
+sh: can't create /etc/test.conf: Read-only file system
+</code></pre>
+
+<p>この場合，書き込みは<code>volume</code>領域のみに行える．</p>
+
+<pre><code class="language-bash">$ docker run --read-only -v `pwd`/volume:/volume busybox sh -c 'echo test &gt; /volume/test.conf'
+</code></pre>
+
+<p>これはセキュリティとコンテナのステートレスの推進が目的だと思う．</p>
+
+<h3 id="stats:ee7141f33dbe50d084d337c2bd1b1f56">Stats</h3>
+
+<p><code>stats</code>コマンドが追加され，リアルタイムでコンテナのCPUやメモリ，ネットワークI/Oなどを確認できるようになった．</p>
+
+<pre><code class="language-bash">$ docker run -d --name redis -p 6379 crosbymichael/redis
+$ docker stats redis
+# CONTAINER           CPU %               MEM USAGE/LIMIT       MEM %               NET I/O
+# redis               0.46%               10.23 MiB/1.961 GiB   0.51%               1.266 KiB/648 B
+</code></pre>
+
+<p>ざっと確認するには使える．ただ，メトリクス収集をまともにやるなら<a href="https://github.com/google/cadvisor">google/cadvisor</a>の方が筋が良いのでこっち使うと思う．</p>
+
+<h3 id="ホストのpid:ee7141f33dbe50d084d337c2bd1b1f56">ホストのPID</h3>
+
+<p><code>--net=host</code>のように<code>--pid=host</code>を指定するとするとホストのPIDのnamespaceが使われるようになる．</p>
+
+<pre><code class="language-bash">$ docker run --pid=host busybox ps
+</code></pre>
+
+<h3 id="dockerイメージのスペック:ee7141f33dbe50d084d337c2bd1b1f56">Dockerイメージのスペック</h3>
+
+<p>またリリースアナウンスには，Dockerイメージのスペックを作り始めたことが触れられている．</p>
+
+<ul>
+<li><a href="https://github.com/docker/docker/blob/master/image/spec/v1.md">Docker Image Specification v1.0.0</a></li>
+</ul>
+
+<p>これは<a href="https://github.com/coreos/rocket">CoreOS/Rocket</a>と<a href="https://github.com/appc/spec">App Container</a>の登場の影響によるものだと推測できる．その辺については次回詳しく書く．</p>
+
+      <div class="social">
+  
+  
+  <a href="https://twitter.com/share" class="twitter-share-button" data-via="deeeet" data-count="none">Tweet</a>
+  
+  
+</div>
+
+    </section>
+
+    <footer>
+      <address>
+        
+        <img src="/images/bio.jpeg"/>
+        
+        <p>Written by <strong><a rel="author" href="https://twitter.com/deeeet" title="Taichi Nakashima" target="_blank">Taichi Nakashima</a></strong><br>
+          <span class="muted">A Tokyo based PaaS engineer. Please contact me via twitter.</span>
+        </p>
+      </address>
+
+    </footer>
+
+  </div>
+</article>
+
+<script type="text/javascript" src="//ajax.googleapis.com/ajax/libs/jquery/1.7.2/jquery.min.js"></script>
+<script type="text/javascript" src="/js/main.js"></script>
+
+<script>!function(d,s,id){var js,fjs=d.getElementsByTagName(s)[0],p=/^http:/.test(d.location)?'http':'https';if(!d.getElementById(id)){js=d.createElement(s);js.id=id;js.src=p+'://platform.twitter.com/widgets.js';fjs.parentNode.insertBefore(js,fjs);}}(document, 'script', 'twitter-wjs');</script>
+
+
+<script type="text/javascript">var HN=[];HN.factory=function(e){return function(){HN.push([e].concat(Array.prototype.slice.call(arguments,0)))};},HN.on=HN.factory("on"),HN.once=HN.factory("once"),HN.off=HN.factory("off"),HN.emit=HN.factory("emit"),HN.load=function(){var e="hn-button.js";if(document.getElementById(e))return;var t=document.createElement("script");t.id=e,t.src="//hn-button.herokuapp.com/hn-button.js";var n=document.getElementsByTagName("script")[0];n.parentNode.insertBefore(t,n)},HN.load();</script>
+
+
+  <script>
+  (function(i,s,o,g,r,a,m){i['GoogleAnalyticsObject']=r;i[r]=i[r]||function(){
+  (i[r].q=i[r].q||[]).push(arguments)},i[r].l=1*new Date();a=s.createElement(o),
+  m=s.getElementsByTagName(o)[0];a.async=1;a.src=g;m.parentNode.insertBefore(a,m)
+  })(window,document,'script','//www.google-analytics.com/analytics.js','ga');
+
+  ga('create', 'UA-45390253-1', 'auto');
+  ga('send', 'pageview');
+
+</script>
+
+
+
+<script>
+  $(document).ready(function() {
+  
+  $('p:has(img)').css('text-align', 'center');
+  $('iframe').css('style', 'display: block; margin: 0px auto;');
+  });
+</script>
+

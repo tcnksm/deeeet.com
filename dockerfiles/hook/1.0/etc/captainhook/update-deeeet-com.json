@@ -1,7 +1,0 @@
-{
-    "scripts": [
-        {
-            "command":"/usr/local/bin/update-container.sh"
-        }
-    ]
-}

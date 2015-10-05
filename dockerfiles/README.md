@@ -1,8 +1,16 @@
-Dockerfiles deeeet.com
+Dockerfile deeeet.com base
 ====
 
-These are dockerfiles for [deeeet.com](http://deeeet.com/).
+[tcnksm/deeeet-com-base Repository | Docker Hub Registry - Repositories of Docker Images](https://registry.hub.docker.com/u/tcnksm/deeeet-com-base/)
 
-- [tcnksm/deeeet-com-base](https://github.com/tcnksm/deeeet.com/tree/master/dockerfiles/base)
-- [tcnksm/deeeet-com-lb](https://github.com/tcnksm/deeeet.com/tree/master/dockerfiles/lb)
-- [tcnksm/deeeet-com-hook](https://github.com/tcnksm/deeeet.com/tree/master/dockerfiles/hook)
+Base Dockerfile for [deeeet.com](http://deeeet.com/). The site is built by [Hugo](http://gohugo.io/) and servered by nginx. 
+
+## Tags
+
+`tcnksm/deeeet-com-base` image supports below tags. Link is its `Dockerfile`. 
+
+- [`latest`,`1.0` (1.0/Dockerfile)](https://github.com/tcnksm/deeeet.com/blob/master/dockerfiles/base/1.0/Dockerfile)
+
+## Author
+
+[tcnksm](https://github.com/tcnksm)

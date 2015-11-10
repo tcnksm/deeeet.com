@@ -1,6 +1,5 @@
 +++
 date = "2015-11-10T15:53:31+09:00"
-draft = true
 title = "Go言語と暗号技術（AESからTLS）"
 +++
 

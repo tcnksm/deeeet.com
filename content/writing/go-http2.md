@@ -1,6 +1,5 @@
 +++
-date = "2015-11-16T21:30:18+09:00"
-draft = true
+date = "2015-11-19T01:30:18+09:00"
 title = "Go言語とHTTP2"
 +++
 
@@ -8,7 +7,7 @@ title = "Go言語とHTTP2"
 
 2015年の5月に[RFC](http://www.rfc-editor.org/rfc/rfc7540.txt)が出たばかりのHTTP2が2016年の2月に[リリース予定](https://github.com/golang/go/milestones)のGo1.6で早くも利用可能になることになっている．HTTP2の勉強も兼ねてGo言語におけるHTTP2実装を追ってみる．
 
-以下ではまず実際にHTTPサーバを動かしChromeで接続してみる．次に現状コードがどのように管理されているかを追う．最後に実際にコードを動かしながらHTTP2の各種機能を追う．なお参照するコードはすべて以下のバージョンを利用している（まだWIPなのでコードなどは今後変わる可能性があるので注意）．
+以下ではまず実際にHTTP2サーバを動かしChromeで接続してみる．次に現状コードがどのように管理されているかを追う．最後に実際にコードを動かしながらHTTP2の各種機能を追う．なお参照するコードはすべて以下のバージョンを利用している（まだWIPなのでコードなどは今後変わる可能性があるので注意）．
 
 ```bash
 $ go version
@@ -22,7 +21,9 @@ HTTP/2に関してはスライドやブログ記事，Podcastなど非常に豊�
 
 ## 実際に使ってみる
 
-最小限のコードでHTTP2サーバーの起動と確認を行う．ブラウザにはChromeを利用する．まず最新のGoをソースからビルドする（ビルドにはGo1.5.1を利用する）．以下では2015年11月16日時点の最新を利用した．
+最小限のコードでHTTP2サーバーを起動しChromeで接続してみる．
+
+まず最新のGoをソースからビルドする（ビルドにはGo1.5.1を利用する）．以下では2015年11月16日時点の最新を利用した．
 
 ```bash
 $ git clone --depth=1 https://go.googlesource.com/go ~/.go/latest
@@ -30,7 +31,7 @@ $ export GOROOT_BOOTSTRAP=~/.go/1.5.1
 $ cd ~/.go/latest/src && ./make.bash
 ```
 
-現時点でGoにおけるHTTP2はOver TLSが前提になっている．そのためサーバー証明書が必要になる（なければ事前に`openssl`コマンドや`crypto/x509`パッケージなどを使って自己署名証明書をつくる）．
+現時点でGoにおけるHTTP2はover TLSが前提になっている．そのためサーバー証明書と鍵が必要になる（なければ事前に`openssl`コマンドや`crypto/x509`パッケージなどを使って自己署名証明書をつくる）．
 
 コードは以下．
 
@@ -50,15 +51,17 @@ func main() {
 }
 ```
 
-証明書と鍵を読み込んで`ListenAndServeTLS`を呼ぶだけ．HTTP2のために特別なことをする必要はない．クライアントがHTTP2に対応していれば勝手にHTTP2にネゴシエートされる．起動して接続すると以下のように「Protocol: HTTP/2.0」が確認できる（Chrome拡張の[HTTP/2 and SPDY indicator](https://chrome.google.com/webstore/detail/http2-and-spdy-indicator/mpbpobfflnpcgagjijhmgnchggcjblin?hl=ja)が反応しているのも確認できる）．
+証明書と鍵を読み込んで`ListenAndServeTLS`を呼ぶだけ．HTTP2のために特別なことをする必要はない．クライアントがHTTP2に対応していれば勝手にHTTP2が使われる．起動して接続すると以下のように「Protocol: HTTP/2.0」が確認できる（Chrome拡張の[HTTP/2 and SPDY indicator](https://chrome.google.com/webstore/detail/http2-and-spdy-indicator/mpbpobfflnpcgagjijhmgnchggcjblin?hl=ja)が反応しているのも確認できる）．
 
 <img src="/images/http2.png" class="image">
 
 ## コードの行方
 
-HTTP2のコードの行方はどうなっているのか? もともとは[bradfitz](https://github.com/bradfitz)氏により[bradfitz/http2](https://github.com/bradfitz/http2)で実装が進められていた．そして[golang.org/x/net/http2](https://godoc.org/golang.org/x/net/http2)に移動した．ちなみにGo1.5以前でもこちらのパッケージを使えばHTTP2を[使うことはできる](http://www.integralist.co.uk/posts/http2.html#10)．
+現在HTTP2のコードはどのように管理されているのか? もともとは[bradfitz](https://github.com/bradfitz)氏により[bradfitz/http2](https://github.com/bradfitz/http2)で実装が進められていた．そして[golang.org/x/net/http2](https://godoc.org/golang.org/x/net/http2)に移動した．ちなみにGo1.5以前でもこちらのパッケージを使えばHTTP2を[使うことはできる](http://www.integralist.co.uk/posts/http2.html#10)．
 
-最新のGoのコードにはどのようにマージされたのか? まずヘッダ圧縮の[HPACK](https://tools.ietf.org/html/rfc7541)は`http2/hpack`という名前でサブディレクトリに別パッケージとして実装されている．これは`src/vendor`以下にvendoringされている．`http2`も同様にvendoringされているだけかと思ったが，こちらは`net/http`パッケージに`h2_bundle.go`という1つのファイルとして組み込まれている．
+この`http2`パッケージの位置付けはローレベルなHTTP2の実装であり普通のひとは触ることがない．Go1.6では普通のひとが触るハイレベルなインターフェースは今まで通りの`net/http`となる．
+
+では最新のGoのコードにはどのようにマージされたのか? まずヘッダ圧縮の[HPACK](https://tools.ietf.org/html/rfc7541)は`http2/hpack`という名前でサブディレクトリに別パッケージとして実装されている．これは`src/vendor`以下にvendoringされている．`http2`も同様にvendoringされているだけかと思ったが，こちらは`net/http`パッケージに`h2_bundle.go`という1つのファイルとして組み込まれている．
 
 具体的な経緯は[http -> http2 -> http import cycle](https://groups.google.com/forum/#!topic/golang-dev/8Qjr03xf07U)を読むとわかるが，単純にvendoringすると`net/http`->`http2`と`http2`->`net/http`というimport cycleが起こってしまう．これは上の例で示したようにAPIの変更なしにHTTP2を有効にするというゴールを達成するためには避けられない．
 
@@ -80,7 +83,9 @@ $ bundle golang.org/x/net/http2 net/http http2
 
 ### フレームとストリーム
 
-HTTP1.xではリクエスト/レスポンスのフォーマットにテキストが利用されてきた．HTTP2ではフレームと呼ばれるバイナリのフォーマットが利用される．これにより転送量の低減を実現している．フレームには[いくつかのタイプがある](https://tools.ietf.org/html/rfc7540#section-6)．例えばHTTP1.xのヘッダにあたるHEADERS，HTTP1.xのBody部にあたるDATAなどがある．フレームは以下のようなフォーマットで表現される（cf. [4.HTTP Frames](https://tools.ietf.org/html/rfc7540#section-4)）．
+HTTP1.xではリクエスト/レスポンスのフォーマットにテキストが利用されてきた．HTTP2ではフレームと呼ばれるバイナリのフォーマットが利用される．これにより転送量の低減を実現している．
+
+フレームには[いくつかのタイプが定義されている](https://tools.ietf.org/html/rfc7540#section-6)．例えばHTTP1.xのヘッダにあたるHEADERS，HTTP1.xのBody部にあたるDATAなどがある．フレームは以下のようなフォーマットで表現される（cf. [4.HTTP Frames](https://tools.ietf.org/html/rfc7540#section-4)）．
 
 ```bash
 +-----------------------------------------------+
@@ -184,7 +189,7 @@ e.WriteField(hpack.HeaderField{
 fmt.Printf("Encoded: %x (%d) \n", buf.Bytes(), len(buf.Bytes()))
 ```
 
-同じヘッダに対して2度Encodeを実行する．まず1度目は動的テーブルにエントリがないため14バイトにしかならない．もしテーブルにエントリがない場合は，動的テーブルにそれが追加され，2度目の実行時は1バイトに圧縮される．
+同じヘッダに対して2度Encodeを実行する．まず1度目は動的テーブルにエントリがないため14バイトにしかならない．もしテーブルにエントリがない場合は，動的テーブルにそれが追加される．そして2度目の実行時はそのテーブルが参照され1バイトに圧縮される．
 
 ### 優先度制御
 
@@ -244,9 +249,9 @@ Go言語ではどうなっているのか．Server Pushを行うときはPUSH_PR
 
 ## まとめ
 
-GoのHTTP2の実装を追ってみた．Server Pushを覗いた基本的な機能は実装されており，かつGo1.5以前と同じインターフェースで利用できることがわかった．
+Go1.6に予定されているHTTP2の実装を追ってみた．Server Pushのハイレベルなインターフェースを除いた基本的な機能は実装されている．そしてGo1.5以前と同じインターフェースで利用できることがわかった．
 
-GoのHTTP2をすぐに使うのか? と聞かれるとまだ議論が必要であると感じた．少なくとも現時点ではTLS終端はアプリケーションの前段のnginxにある．最初はnginxなどで利用することから始めると思う．
+Go言語のHTTP2をすぐに使うのか? と聞かれるとまだ議論が必要であると感じた．少なくとも現時点ではTLS終端はアプリケーションの前段のnginxにある．最初はnginxなどで利用することから始めると思う．
 
 PaaSを運用している立場からみると状況はもう少し複雑になる．例えばGoogle App EngineのようにTLSとHTTP2は全てGoogleのサーバーが面倒見るからその上のアプリケーションは何もしなくてもHTTP2が有効になりますと言うこともできる（cf. [Full Speed Ahead with HTTP/2 on Google Cloud Platform](http://googlecloudplatform.blogspot.jp/2015/10/Full-Speed-Ahead-with-HTTP2-on-Google-Cloud-Platform.html)）．その一方でServer Pushなどはアプリケーションごとにコントロールしたいかもしれない．そういう場合にどのようにハンドルするべきなのかなど考えることは多い．
 

@@ -1,7 +1,7 @@
 #!/bin/bash
 
 echo "----> Remove draft"
-cd public && git ls-files --others --exclude-standard | xargs rm
+cd public && git ls-files --others --exclude-standard | xargs rm && cd ..
 
 echo "----> Run Hugo"
 hugo

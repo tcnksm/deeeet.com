@@ -9,7 +9,7 @@
     {{ with .Site.Params.google_font }}<link href="https://fonts.googleapis.com/css?family={{ . }}" rel="stylesheet" type="text/css">{{ end }}
     <link rel="stylesheet" href="/css/main.css">
     <link rel="shortcut icon" href="/favicon.png" type="image/x-icon" />
-    <link href="{{ .Site.BaseUrl }}/index.xml" rel="alternate" type="application/rss+xml" title="{{ .Site.Params.inc.title }}" />
+    <link href="{{ .Site.BaseURL }}/index.xml" rel="alternate" type="application/rss+xml" title="{{ .Site.Params.inc.title }}" />
     <meta name="title" content="{{ .Permalink }}">
     <link rel="canonical" href="{{ .Permalink }}">
     

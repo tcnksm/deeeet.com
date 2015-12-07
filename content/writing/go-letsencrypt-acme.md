@@ -1,6 +1,5 @@
 +++
 date = "2015-12-01T23:18:42+09:00"
-draft = true
 title = "Go言語でLet's EncryptのACMEを理解する"
 +++
 
@@ -10,21 +9,21 @@ title = "Go言語でLet's EncryptのACMEを理解する"
 
 Let's EncryptのベースのプロトコルであるACMEを理解する．
 
-まずACMEをベースとしたCAである[boulder](https://github.com/letsencrypt/boulder/)をローカルで動かす．次にACMEのGo言語クライアントライブラリである[ericchiang/letsencrypt](https://github.com/ericchiang/letsencrypt)（非公式）を使い実際にboulderと喋りながら証明書発行を行い，コードとともにACMEが具体的にどのようなことしているのかを追う．
+まずACMEをベースとしたCAである[boulder](https://github.com/letsencrypt/boulder/)をローカルで動かす．次にACMEのGo言語クライアントライブラリである[ericchiang/letsencrypt](https://github.com/ericchiang/letsencrypt)（非公式）を使い実際にboulderと喋りながら証明書発行を行い，コードとともにACMEが具体的にどのようなものなのかを追う．
 
 ## はじめに
 
-証明書というのは面倒なもの，少なくともカジュアルなものではない，というイメージが強い．それは有料であることや認証局（CA）ごとに申請方法が異なるために自動化がやりにくいなどといったことに起因している（と思う）．そのようなイメージに反して近年登場する最新の技術/プロトコルはTLSを前提にしているものが少なくない（e.g., HTTP2）．
+証明書というのは面倒なもの，少なくともカジュアルなものではない，というイメージが強い．それは有料であることや自動化しにくいなどといったことに起因している（と思う）．そのようなイメージに反して近年登場する最新の技術/プロトコルはTLSを前提にしているものが少なくない（e.g., HTTP2）．
 
 このような背景の中で登場したのがLet's Encryptと呼ばれるCAである．Let's Encryptは上で挙げたような問題（煩雑さ）を解決しようとしており，無料・自動・オープンを掲げている（cf. ["Let's Encrypt を支える ACME プロトコル"](http://jxck.hatenablog.com/entry/letsencrypt-acme)）．最近（2015年12月3日）Public Betaが[アナウンスされ](https://letsencrypt.org/2015/12/03/entering-public-beta.html)すでに1日に70kの証明証が発行され始めており（cf. [Let's Encrypt Stats](https://letsencrypt.org/stats/)）大きな期待が寄せられている．特に自分は仕事で多くのドメインを扱うのでLet's Encryptは使ってくぞ！という意識がある．
 
-Let's EncryptはDV証明書を発行することができるCAである．DV証明書とはドメインの所有を確認して発行されるタイプの証明書である．Let's Encryptの大きな特徴の1つに自動化が挙げられる．申請からドメインの所有の確認，証明書発行までは全てコマンドラインで完結させることができる．そしてこのフローはLet's Encrypt以外のCAでも利用できるように標準化が[進められている](https://github.com/ietf-wg-acme/acme/)．これはAutomated Certificate Management Environment（ACME）プロトコルと呼ばれる（ちなみにLet's encryptの証明証の有効期限は90日である．これはセキュリティ強化の面もあるが自動化の促進という面もある（cf. [Why ninety-day lifetimes for certificates?](https://letsencrypt.org/2015/11/09/why-90-days.html)））．
+Let's EncryptはDV証明書を発行することができるCAである．DV証明書とはドメインの所有を確認して発行されるタイプの証明書である．Let's Encryptの大きな特徴の1つに自動化が挙げられる．申請からドメインの所有の確認，証明書発行までは全てコマンドラインで完結させることができる．そしてこのフローはLet's Encrypt以外のCAでも利用できるように[標準化が進められている](https://github.com/ietf-wg-acme/acme/)．これはAutomated Certificate Management Environment（ACME）プロトコルと呼ばれる（ちなみにLet's encryptの証明証の有効期限は90日である．これはセキュリティ強化の面もあるが自動化の促進という面もある（cf. [Why ninety-day lifetimes for certificates?](https://letsencrypt.org/2015/11/09/why-90-days.html)））．
 
 Let's Encryptは専用のACMEクライアントを提供している（[letsencrypt](https://github.com/letsencrypt/letsencrypt)）．基本はこれを使えば証明書の発行や，Apacheやnginxの設定ファイルの書き換え(!)などができる（やりすぎ感が気にくわないと感じるひとが多いようでsimple alternativeがいくつか登場している...）．
 
 それだけではなくACMEベースのCA（つまりLet's encrypt）は[Boulder](https://github.com/letsencrypt/boulder/)とう名前でOSSベースで開発されている（Go言語で実装されている）．つまりBoulderを使えば誰でもACMEをサポートしたCAになることができる．
 
-本記事ではおそらく将来的には意識しないでよくなる（であろう）ACMEプロトコルがどのようなものかを理解する．boulderをローカルで動かし（`Dockerfile`が提供されている），非公式であるがGo言語のACMEクライアント[ericchiang/letsencrypt](https://github.com/ericchiang/letsencrypt)を使って実際にACMEを喋ってみる．
+本記事ではおそらく将来的には意識しないでよくなる（であろう）ACMEプロトコルがどのようなものかを理解する．boulderをローカルで動かし（`Dockerfile`が提供されている），非公式であるがGo言語のACMEクライアント[ericchiang/letsencrypt](https://github.com/ericchiang/letsencrypt)を使ってACMEを喋ってみる．
 
 なおACMEはまだ仕様策定中なので以下の説明は変更される可能性がある．
 
@@ -46,7 +45,7 @@ $ ./test/run-docker.sh
 
 [ACME spec draft](https://github.com/ietf-wg-acme/acme/)
 
-ACMEとは「クライアントのドメインの所有を確認して証明書を発行する」ためのプロトコルであった．これをさらに細かくブレイクダウンすると以下の操作から構成されることになる．
+ACMEとは「クライアントのドメインの所有を確認して証明書を発行する」ためのプロトコルであった．これをさらに細かくブレイクダウンすると以下の操作から構成される．
 
 - 各操作を行うためのURIを知る（directory）
 - クライアントの登録を行う（new-registration）
@@ -229,7 +228,7 @@ log.Println("[INFO] Complete challenge!")
 
 new-certificationは新しい証明書の発行を行う．
 
-まず`.csr`ファイルを作成する．`.csr`の作成は`openssl`コマンドなどでも可能だがここでは全てをGo言語で行う．Go言語で証明書を操作するには`x509`パッケージを使えばよい（詳しくは[Go言語と暗号技術（AESからTLS）](http://deeeet.com/writing/2015/11/10/go-crypto/)）．コードは以下．RSAを使う．
+まず`.csr`ファイルを作成する．`.csr`の作成は`openssl`コマンドなどでも可能だがここではGo言語で作成する．Go言語で証明書を操作するには`x509`パッケージを使えばよい（詳しくは[Go言語と暗号技術（AESからTLS）](http://deeeet.com/writing/2015/11/10/go-crypto/)）．コードは以下．RSAを使う．
 
 ```go
 certKey, err := rsa.GenerateKey(rand.Reader, 2048)
@@ -363,6 +362,7 @@ log.Println("[INFO] Verified !")
 - [A Let's Encrypt Client for Go](https://ericchiang.github.io/go/tls/lets/encrypt/letsencrypt/2015/11/13/a-letsencrypt-client-for-go.html) ([ericchiang/letsencrypt](https://github.com/ericchiang/letsencrypt))
 - [Let's Encrypt & ACME Overview (hbstyle-2015-1112)](https://speakerdeck.com/rrreeeyyy/lets-encrypt-and-acme-overview-hbstyle-2015-1112)
 - [Using Lets Encrypt](https://lolware.net/2015/10/27/letsencrypt_go_live.html) (RubyでACMEを喋りたい場合に参考になる)
-- [JSON Web Signature (JWS)](http://openid-foundation-japan.github.io/draft-ietf-jose-json-web-signature-14.ja.html)
+- [Using H2O with Let's Encrypt](http://blog.kazuhooku.com/2015/12/using-h2o-with-lets-encrypt.html)
+- [GoでOAuth2/OpenIDとJOSE (JWA/JWT/JWK/JWS/JWE)](http://hde-advent-2015.hatenadiary.jp/entry/2015/12/02/095643)
 
 

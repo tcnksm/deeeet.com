@@ -10,7 +10,7 @@ cover_image = "gophercon2016.jpg"
 
 [発表スライド](http://go-talks.appspot.com/github.com/tcnksm/talks/2016/07/gophercon/gophercon.slide#1)を見てもらえばわかるが特に新しい話をしたわけではない．日本のミートアップなどで話したこと，ブログに書いたことを英語にしただけにすぎない（ただ実演デモをするという挑戦はした）．
 
-「大御所たちと肩を並べて喋る機会を逃すのはもったいない」（ちなみに当日のLTは僕の次が[Robert Griesemer](https://twitter.com/robertgriesemer)氏でその次が[Brad Fitzpatrick](https://twitter.com/bradfitz)氏だった！），「日本のGo界隈にこんなやつおるでってのを知ってもらいたい」というモチベーションで発表した．あとなんとなく自分の中でここでぶっ込まないと一生逃げると思ったのもある．
+「大御所たちと同じステージで喋る機会を逃すのはもったいない」（ちなみに当日のLTは僕の次が[Robert Griesemer](https://twitter.com/robertgriesemer)氏でその次が[Brad Fitzpatrick](https://twitter.com/bradfitz)氏だった！），「日本のGo界隈にこんなやつおるでってのを知ってもらいたい」というモチベーションで発表した．あとなんとなく自分の中でここでぶっ込まないと一生逃げると思ったのもある（通常セッションにしろやって話だが50分喋る良いネタがなかった..）．
 
 ## 流れ
 

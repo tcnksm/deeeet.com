@@ -1,5 +1,5 @@
 +++
-date = "2016-08-29T20:56:39+09:00"
+date = "2016-08-30T09:56:39+09:00"
 title = "GolangでAmazon EchoのSmart Home Skillを書く"
 +++
 

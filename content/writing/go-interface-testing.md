@@ -3,7 +3,7 @@ date = "2016-10-25T09:26:51+09:00"
 title = "Golangにおけるinterfaceをつかったテスト技法"
 +++
 
-最近何度か聞かれたので自分がGolangでCLIツールやAPIサーバーを書くときに実践してるinterfaceを使ったテスト手法について簡単に書いておく．まずはinterfaceを使ったテストの基本について説明し最後に自分が実践している簡単なテクニックをいくつか紹介する．
+最近何度か聞かれたので自分がGolangでCLIツールやAPIサーバーを書くときに実践してるinterfaceを使ったテスト技法について簡単に書いておく．まずはinterfaceを使ったテストの基本について説明し次に自分が実践している簡単なテクニックをいくつか紹介する．
 
 なおGolangのテストの基本については [@suzuken](https://twitter.com/suzu_v) さんによる[「みんなのGo言語」](https://www.amazon.co.jp/dp/477418392X) の6章が最高なので今すぐ買ってくれ！
 
@@ -17,14 +17,14 @@ title = "Golangにおけるinterfaceをつかったテスト技法"
 
 テストという観点からみた場合のinterfaceの利点は何か？ interfaceを使えば「実際の実装」を気にしないで「振る舞い」を渡すことができる．つまり実装の切り替えが可能になる．interfaceを使うことでいわゆる[モック](https://en.wikipedia.org/wiki/Mock_object)が実現できる．
 
-## どこをinterfaceにするのか
+## どこをinterfaceにするのか？
 
-interfaceはモックポイントと思えば良い．外界とやりとりを行う境界をinterfaceにする．外界との境界とは例えばDBとやりとりを行う部分や外部APIにリクエストを投げるClientである．他にも考えられるがとりあえずここをinterfaceにする．
+interfaceはモックポイントと思えば良い．外界とやりとりを行う境界をinterfaceにする，が基本．外界との境界とは例えばDBとやりとりを行う部分や外部APIにリクエストを投げるClientである．他にも考えられるがとりあえずここをinterfaceにする．
 
 
 ## 実例
 
-以下では簡単なAPIサーバーを書くとしてinterfaceによるテスト手法の説明を行う．このAPサーバーはDBとしてRedisを使うとする．
+以下では簡単なAPIサーバーを書くとしてinterfaceによるテスト手法の説明を行う．このAPサーバーはDBとしてRedisを使うとする．なおコードは全てpseudoである．
 
 まずはDBのinterfaceを定義する．
 
@@ -54,20 +54,19 @@ func NewRedis() (DB, error)
 
 ここで重要なのは実際の実装である`Redis`を返すのではなくinterfaceの`DB`を返すこと．サーバー側ではこのinterfaceを使う．
 
-次にサーバーの実装は以下のようにする．
+サーバーの実装は以下のようにする．
 
 ```golang
 type Server struct {
      DB DB
 }
 
-func (s *Server) Start() error {
-}
+func (s *Server) Start() error
 ```
 
 `Server`はinterfaceの`DB`を持ち内部の実装（例えばhandlerなど）ではこのinterfaceを利用する．
 
-main関数は以下のように書ける．
+main関数は以下のように書ける（main関数には他にもflagの処理や設定ファイルを読み込みそれを各コンストラクタに渡すという処理が考えられる）．
 
 ```golang
 func main() {
@@ -86,9 +85,7 @@ func main() {
 }
 ```
 
-（main関数には他にもflagの処理や設定ファイルを読み込みそれを各コンストラクタに渡すという処理が考えられる）
-
-では`Server`のテストはどうすれば良いか？例えば今であればDockerを使ってしまえば簡単に実際のRedisを準備できるかもしれない．それができない，容易ではない場合はモックを考える．以下のように`DB` interfaceを満たすモック実装を準備する．
+では`Server`のテストはどうすれば良いか？例えば今であればDockerを使いRedisを準備することを考えるかもしれない．それが容易ではない場合，もしくは外部依存のないテストを書きたい場合はモックを考える．以下のように`DB` interfaceを満たすモック実装を準備する．
 
 ```golang
 type TestDB struct {
@@ -97,6 +94,8 @@ type TestDB struct {
 func (d *TestDB) Get(key string) string 
 func (d *TestDB) Set(key, value string) error 
 ```
+
+具体的な実装は書いてないが例えばフェイクの値やフェイクの`error`を返すようにする（これを考えることもより良い実装につながると思う）．
 
 これを利用すれば`Server`のテストは以下のように書ける．
 
@@ -122,7 +121,7 @@ func TestServer(t *testing.T) {
 
 毎回全てのテストをモックにすれば良いわけではない．ちゃんと実際の実装によるテストも必要である．自分はこの切り替えに環境変数を使う．環境変数を使うのはCIとの相性が良いからである．
 
-例えば以下のようなコンストラクタを準備する．
+例えば以下のようなコンストラクタを`*_test.go`に準備する．
 
 ```golang
 
@@ -130,7 +129,7 @@ const (
      EnvTestDSN = "TEST_DSN"
 )
 
-func testDB(t *testing.T) (DB, func()) {
+func NewTestDB(t *testing.T) (DB, func()) {
      dsn := os.Getenv(EnvTestDSN)
      if len(den) == 0 {
            t.Log("Use TestDB")
@@ -149,9 +148,9 @@ func testDB(t *testing.T) (DB, func()) {
 }
 ```
 
-環境変数として接続情報（`DSN`）が与えられた場合は実際の実装である`PosgreSQL`を返す．与えられない場合はモックの実装を返す．
+環境変数として接続情報（`DSN`）が与えられた場合は実際の実装である`PosgreSQL`を返し実際のDBでテストし．与えられない場合はモックの実装でテストを行う．
 
-ちなみに2つ目の返り値はDBをcleanupするための関数で呼び出し側では`defer`と一緒に使う（例えばDockerなどでephemeralなデータストアを使う場合）．
+ちなみに2つ目の返り値はDBをCleanupするための関数で呼び出し側では`defer`と一緒に使う（例えばDockerなどでEphemeralなデータストアを使う場合にデータを消してまっさらな状態に戻す）．
 
 ## 外部パッケージの一部をinterfaceとして切り出す
 

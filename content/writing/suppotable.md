@@ -47,15 +47,6 @@ Debugf("Num CPU: %d", runtime.NumCPU())
 
 ### Proxy
 
-Goの`net/http`パッケージのClientはデフォルトで環境変数（`http_proxy`と`https_proxy`）を参照するし自分でClientを定義したとしても同じようにする．複雑なネットワーク環境の中にいるユーザを相手にしていると結局Proxyが問題の原因になってることが多い．そのため以下のようにProxy情報も基本はデバッグで出力されるようにしておく．
-
-```golang
-proxy := "no"
-if proxyURL, _ := http.ProxyFromEnvironment(request); proxyURL != nil {
-    proxy = proxyURL.String()
-}
-Debugf("request proxy: %s", proxy)
-```
 
 ### Mask
 

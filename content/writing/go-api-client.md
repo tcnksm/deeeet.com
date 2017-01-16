@@ -72,7 +72,7 @@ importのように関連するフィールドでグールピングして記述�
 func NewClient(urlStr, username, password string, logger *log.Logger) (*Client, error) 
 ```
 
-コンストラクタ内では必須の情報が与えられているか，その値は期待するものかをチェックし，そうでなければエラーを返す（以下では`pkg/errros`を使っている）．
+コンストラクタ内では必須の情報が与えられているか，その値は期待するものかをチェックし，そうでなければエラーを返す（以下では`pkg/errors`を使っている）．
 
 ```golang
 if len(username) == 0 {

@@ -52,7 +52,7 @@ gcloud alpha container node-pools create “${NODE_POOL}” \
 
 次に各インスタンスにNVIDIA GPUのDriverを準備する必要がある．全てのインスタンスにログインしてインストールを実行するわけにはいかないので[Daemonset](https://kubernetes.io/docs/concepts/workloads/controllers/daemonset/)を使う．
 
-GKEでは[Container-Optimized OS](https://cloud.google.com/container-optimized-os/)がデフォルトのOSとして使われるがそのためのDriverのインストーラーは[GoogleCloudPlatform/cos-gpu-installer](https://github.com/GoogleCloudPlatform/cos-gpu-installer)プロジェクトにある．[GoogleCloudPlatform/container-engine-accelerators](https://github.com/GoogleCloudPlatform/container-engine-accelerators)プロジェクトで準備されているDaemonsetを使えば全NodePoolに対してDriverのインストールが行える．GKE 1.8の場合は以下を実行すれば良い．
+GKEでは[Container-Optimized OS](https://cloud.google.com/container-optimized-os/)（COS）がデフォルトのOSとして使われるがそのためのDriverのインストーラーは[GoogleCloudPlatform/cos-gpu-installer](https://github.com/GoogleCloudPlatform/cos-gpu-installer)プロジェクトにある．[GoogleCloudPlatform/container-engine-accelerators](https://github.com/GoogleCloudPlatform/container-engine-accelerators)プロジェクトで準備されているDaemonsetを使えば全NodePoolに対してDriverのインストールが行える．GKE 1.8の場合は以下を実行すれば良い．
 
 ```bash
 $ kubectl create -f https://raw.githubusercontent.com/GoogleCloudPlatform/container-engine-accelerators/k8s-1.8/device-plugin-daemonset.yaml
@@ -64,6 +64,8 @@ GKE 1.9の場合は以下を実行する．
 $ kubectl create -f https://raw.githubusercontent.com/GoogleCloudPlatform/container-engine-accelerators/k8s-1.9/daemonset.yaml
 ```
 
+なおCOSだけではなく実験的にUbuntu用のDaemonsetインストーラーも準備されている（[参考](https://github.com/GoogleCloudPlatform/container-engine-accelerators/blob/master/nvidia-driver-installer/ubuntu/daemonset.yaml)）．
+
 ### NVIDIA Device Pluginを有効にする
 
 最後にNVIDIA [Device Plugin](https://kubernetes.io/docs/concepts/cluster-administration/device-plugins/)を有効にする．Device PluginはKubernetes 1.8から導入された機能である．Device PluginによりGPUやFPGAsといったVendor specificな初期化や設定が必要なリソースをKubernetesのコアのコードを変更なしに利用できるようにする．
@@ -73,6 +75,12 @@ Daemonsetで各NodePoolにインストールするとはまずDevice Pluginは[E
 次にDevice Pluginは各ノードのDeviceの状態を監視し変更があればKubeletに通知を行う．そしてContainerが作成されるときにはDevice specificなオペレーションを実行しContainerでそのDeviceを利用するためのステップをKubeletに通達する．例えばNvidia GPUの場合はノードにインストールされた必要なDriverのライブラリをContainerにMountする（Device Plugin以前は自分で必要なホストディレクトリをMountする必要があった）．
 
 GKE 1.8の場合は先のDaemonsetを有効にすればDevice Pluginも同時に有効になる．GKE1.9の場合はGPUが積まれた場合にAddonとして自動で有効になる（[参考](https://github.com/GoogleCloudPlatform/container-engine-accelerators/tree/master/cmd/nvidia_gpu)）．
+
+GCP以外の環境であればNVIDIA公式が提供するDevice Plugin．[NVIDIA/k8s-device-plugin](https://github.com/NVIDIA/k8s-device-plugin)が利用できる（これには[nvidia-docker 2.0](https://github.com/NVIDIA/nvidia-docker)が必要である）．Kubernetes 1.8の場合は以下を実行すれば良い．
+
+```bash
+$ kubectl create -f https://raw.githubusercontent.com/NVIDIA/k8s-device-plugin/v1.8/nvidia-device-plugin.yml
+```
 
 ### PodをGPUにスケジューリングする
 

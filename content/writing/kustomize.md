@@ -3,12 +3,11 @@ title: "KustomizeでKubernetes YAMLを管理する"
 date: 2018-07-10T09:34:18+09:00
 ---
 
-
-[Kubernetes YAMLの壁](https://deeeet.com/writing/2018/01/10/kubernetes-yaml/)で述べたようにKubernetesのYAMLをどう管理するかは悩ましい問題だ．
+[Kubernetes YAMLの壁](https://deeeet.com/writing/2018/01/10/kubernetes-yaml/)で述べたようにKubernetesのYAML管理はKubernetesユーザにとって長年の課題だ．コミュニティでは様々なツールが議論されてきた．先日[SIG-CLI](https://github.com/kubernetes/community/tree/master/sig-cli)から登場した[kustomize](https://github.com/kubernetes-sigs/kustomize)は将来的に`kubectl`に統合される前提で開発されている+他のツールと比べても非常に筋が良い（と感じている）．本記事ではkustomizeが登場した背景とKustomizeを使って何ができるのかをまとめる．
 
 ## Declarativeであること
 
-Declarative ConfigurationはKubernetesの重要な機能の一つだ．KubernetesユーザはKubernetes APIに対してあるべきDesiredな状態を宣言（Declare）しKubernetesはその状態になるように動き続ける．例えばユーザが「Podを5つ動かす」という状態を宣言するとKubernetesはそれを受け「Podが5つ動いている状態」を維持するように動く．
+Declarative ConfigurationはKubernetesの重要な機能の一つだ．KubernetesユーザはKubernetes APIに対してあるべきDesiredな状態を宣言（Declare）することでKubernetesはその状態になるように動き続ける．例えばユーザが「Podを5つ動かす」という状態を宣言するとKubernetesはそれを受け「Podが5つ動いている状態」を維持するように動く．
 
 Declarative configurationの逆のアプローチがImperative configurationだ．ユーザは一連の動作を全て指示する．例えばPodを5つ立てたいならその状態になるために必要な動作を1つ1つ指示する．Imperative configurationは理解しやすい，「これをして，これをして...」と書くだけでありDeclarativeの複雑なSyntaxを理解する必要はない．Declarative configurationが強力なのは「あるべき状態」を伝えられることだ．Kubernetesはそのあるべき状態を理解できるのでユーザのインタラクションと独立してその状態へ「自律的に」動くことができる．つまり問題や障害があっても自分でそれを直すことができる（Self-healing）．より詳しくは[Level Triggering and Reconciliation in Kubernetes](https://hackernoon.com/level-triggering-and-reconciliation-in-kubernetes-1f17fe30333d)を読むと良い．
 
@@ -24,23 +23,23 @@ Declarative Configurationの大きな利点の一つはGitでバージョン管�
 
 ## YAML管理の問題
 
-近年の多くのOSSツールはKubernetesにデプロイするためのYAMLファイルが一緒に提供されている．テストでそれを使う場合はそのまま利用すれば良いことが多いが会社などで利用する場合は環境に合わせたカスタマイズが必要である．例えばCPUやメモリを使いすぎないように適切なResource Limit/Requestを設定したり内部ツールのためにLabelやAnnotationを別途付与する必要がある．
+近年の多くのOSSツールはKubernetesにデプロイするためのYAMLファイルが一緒に提供されていることが多い．試すだけならそのまま利用すれば良いことが多いが会社などで実際に導入する場合は環境に合わせたカスタマイズが必要である．例えばCPUやメモリを使いすぎないように適切なResource Limit/Requestを設定したり内部ツールのためにLabelやAnnotationを別途付与する必要がある．
 
 また本番環境だけではなく開発環境用のYAMLファイルも準備するのも普通であるが，多くの場合それらの設定は同じにはならない．例えばResource limitは開発環境では少なめに設定するのが普通だと思う．
 
 既存の`kubectl`コマンドのみを使うのであれば愚直に共通の設定を含んだ複数のYAMLファイルを管理するしかない．共通部分の設定変更に漏れが生じることは避けられないしUpstreamのYAMLファイルの変更の追従も難しい．
 
-[Kubernetes YAMLの壁](https://deeeet.com/writing/2018/01/10/kubernetes-yaml/)で紹介したHelmなどを使えばこの問題をある程度解決できるが，HelmのTemplate機構だと変更したいYAMLのフィールドが変数として公開されている必要がある... 
+[Kubernetes YAMLの壁](https://deeeet.com/writing/2018/01/10/kubernetes-yaml/)で紹介したHelmなどを使えばこの問題をある程度解決できる．しかしHelmはデファクトではないのでそもそもHelm Chartが存在していない場合は自分でそれを書かないといけない．またHelmのTemplate機構では変更したいYAMLのフィールドが変数として公開されていないといけない．そのためChartが公開されていてもForkが必要な場合がある...
 
 ## Kustomize
 
-これらの問題を解決するために登場したのが[kustomize](https://github.com/kubernetes-sigs/kustomize)である．`kustomize`は[SIG-CLI](https://github.com/kubernetes/community/tree/master/sig-cli)のサブプロジェクトであり将来的には`kubectl`に統合される前提で開発されている（Goにおける`vgo`のような開発スタイル）．上で述べた問題などは[KEP](https://github.com/kubernetes/community/blob/master/keps/sig-cli/0008-kustomize.md)や[公式ブログ](https://kubernetes.io/blog/2018/05/29/introducing-kustomize-template-free-configuration-customization-for-kubernetes/)で詳細に紹介されている．
+これらの問題を解決するために登場したのが[kustomize](https://github.com/kubernetes-sigs/kustomize)である．`kustomize`は[SIG-CLI](https://github.com/kubernetes/community/tree/master/sig-cli)のサブプロジェクトであり将来的には`kubectl`に統合される前提で開発されている（Goにおける`vgo`のような開発スタイル）．より詳細な背景や既存の問題点を理解するには[KEP](https://github.com/kubernetes/community/blob/master/keps/sig-cli/0008-kustomize.md)や[公式ブログ](https://kubernetes.io/blog/2018/05/29/introducing-kustomize-template-free-configuration-customization-for-kubernetes/)を読むのが良い．
 
 `Kustomize`はYAMLファイルのDeclarative管理を推し進めReusabilityとCustomizabilityを高めるツールである．
 
 ## Kustomizeの使い方
 
-基本はGithubのREADMEやExampleを読むのが一番良いのでここでは簡単に概要だけをまとめる．
+基本はGithubの[README](https://github.com/kubernetes-sigs/kustomize/blob/v1.0.3/README.md)や[Example](https://github.com/kubernetes-sigs/kustomize/tree/v1.0.3/examples)を読むのが一番良い．
 
 ### kustomization ファイルを使う
 

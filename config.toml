@@ -1,7 +1,7 @@
 baseurl = "https://deeeet.com"
 title = "SOTA"
 languageCode = "ja-jp"
-copyright = "Copyright (C) 2013-2015 Taichi Nakashima All Right Reserved."
+copyright = "Copyright (C) 2013-2019 Taichi Nakashima All Right Reserved."
 
 contentdir = "content"
 layoutdir = "layouts"
@@ -18,7 +18,7 @@ pygmentsuseclasses = true
 [author]
     name = "Taichi Nakashima"
     image = "bio.jpeg"
-    bio = "SRE/BSE at Mercari, Inc.. Please contact me via twitter."
+    bio = "Microservices Platform Team at Mercari, Inc.. Please contact me via twitter."
     
 [params]
     cover_image = "cover-201412.jpg"

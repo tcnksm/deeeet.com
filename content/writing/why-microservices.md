@@ -1,6 +1,6 @@
 ---
 title: "なぜMicroservicesか?"
-date: 2019-04-10T13:10:19+09:00
+date: 2019-05-20T13:10:19+09:00
 ---
 
 現職においてMonolithアーキテクチャからMicroservicesアーキテクチャへの移行とその基盤の構築に関わって2年近くが経った．未だ道半ばであるがこれまでの経験や日々のインプットをもとにいろいろ書いておこうという気持ちになった．本記事ではそもそもMicroservicesアーキテクチャとは何かを整理し，なぜやるべきか?・なぜ避けるべきかを整理する．
@@ -76,10 +76,9 @@ Microservicesは上述したメリットに対するデメリットが多い．M
 
 ## Misconception
 
-Microservicesではそれぞれのチームが自分たちのRequirementsやWorkloadに最も適した技術や言語（やフレームワーク）を自由に選択できるという利点がある，と言われる．しかしこれは完全なる自由を意味しない．完全な自由は逆に生産性の低下を引き起こす．そうではなく，共通レイヤー（基盤）の上にExtensibilityを許可するといったことが必要になる．ObservabilityやMonitoring，セキュリティや認証・認可，CI/CDといった直接ビジネス的な価値を出さないCross-cutting concernには統一的な方法があるべきである．そしてこれらはそれぞれの開発チームではなく専用の基盤チームが取り組む必要がある（[Design Microservice Architectures the Right Way](https://youtu.be/j6ow-UemzBc)，[10 Tips for failing badly at Microservices](https://youtu.be/X0tjziAQfNQ)）
+Microservicesではそれぞれのチームが自分たちのRequirementsやWorkloadに最も適した技術や言語（やフレームワーク）を自由に選択できるという利点がある，と言われる．しかしこれは完全なる自由を意味しない．完全な自由は逆に生産性の低下を引き起こす．そうではなく，共通レイヤー（基盤）の上にExtensibilityを許可するといったことが必要になる．ObservabilityやMonitoring，セキュリティや認証・認可，CI/CDといった直接ビジネス的な価値を出さないCross-cutting concernには統一的な方法があるべきである．そしてこれらはそれぞれの開発チームではなく専用の基盤チームが取り組むべきである．開発チームはビジネス的な価値に注力し，基盤チームはその開発チームのProductivityに注力する（[Design Microservice Architectures the Right Way](https://youtu.be/j6ow-UemzBc)，[10 Tips for failing badly at Microservices](https://youtu.be/X0tjziAQfNQ)）
 
-「MicrservicesでPolygrotは避けるべき」なのはこの共通レイヤー（基盤）の構築のコストに直結するからである．専用のライブラリやツールの提供やドキュメントの整備やサポートなど1つの言語のエコシステムを作るには多大なコストがかかる．特にMicroservicesの初期は統一化のための模索が必要だが複数の言語やフレームの乱立はこの障壁になる．これはGoogleやNetflixなどを見ればわかると思う．あの組織規模でもメインで使われる言語は限定されている．利用する言語は組織の大きさ（基盤にさけるリソース）やMicroservicesの成熟度によって増やしていくのが良いと思う．
-
+「MicrservicesでPolygrotは避けるべき」なのはこの共通レイヤー（基盤）の構築のコストに直結するからである．専用のライブラリやツールの提供やドキュメントの整備やサポートなど1つの言語のエコシステムを作るには多大なコストがかかる．特にMicroservicesの初期は統一化のための模索が必要だが複数の言語やフレームの乱立は障壁になる．これはGoogleやNetflixなどを見ればわかると思う．あの組織規模でもメインで使われる言語は限定されている．利用する言語は組織の大きさ（基盤にさけるリソース）やMicroservicesの成熟度によって増やしていくのが良いと思う．
 
 ## References
 

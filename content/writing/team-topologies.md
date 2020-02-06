@@ -13,15 +13,15 @@ DevOps consultantとして技術と組織の両面からDevOpsの支援を行な
 
 ## Team-first Thinking
 
-本書に限らず多くのところで述べられているように「小さく長期的に安定した」なチームを作ることは非常に大切である（例えば [How Twilio scaled its engineering structureとか](https://increment.com/teams/how-twilio-scaled-its-engineering-structure/)[How to build a startup engineering team](https://increment.com/teams/how-to-build-a-startup-engineering-team/)など）
+本書に限らず多くのところで述べられているように「小さく長期的に安定した」なチームを作ることは非常に大切である（例えば [How Twilio scaled its engineering structure](https://increment.com/teams/how-twilio-scaled-its-engineering-structure/)や[How to build a startup engineering team](https://increment.com/teams/how-to-build-a-startup-engineering-team/)など）
 
-「小さな」は本書では具体的には5-9人である．この人数の根拠として[Dunbar’s Number](https://en.m.wikipedia.org/wiki/Dunbar%27s_number)を使っている．Dunbar NumberはDunbarが提唱した人間が安定的な社会関係を維持できるとされる人数の認知的な上限である．簡単に言うと何人までは互いに信頼でき，何人までは覚えていられるか？という人数のラインを示している．これをMicroservicesの組織の形態でよく使われてるSpotifyのチームの形（[Scaling Agile @ Spotify](https://blog.crisp.se/wp-content/uploads/2012/11/SpotifyScaling.pdf)）に落とし込むとSquadが8-10人，Tribeが50-150人，Divisionが150-人となりチームの粒度はそのグルーピングの限度の指標に利用できる．またコミュニケーションのリンクの数からも「小さな」が良いことは理解できる（以下はチームの人数とそこでのコミュニケーションのパスの数 ．12人でも既に66もある．[Two-Pizza Teams: The Science Behind Jeff Bezos' Rule](https://blog.nuclino.com/two-pizza-teams-the-science-behind-jeff-bezos-rule)）
+「小さな」は本書では具体的には5-9人である．この人数の根拠として[Dunbar's Number](https://en.m.wikipedia.org/wiki/Dunbar%27s_number)を使っている．Dunbar's NumberはDunbarが提唱した人間が安定的な社会関係を維持できるとされる人数の認知的な上限である．簡単に言うと何人までは互いに信頼でき，何人までは覚えていられるか？という人数のラインを示している．これをMicroservicesの組織の形態でよく使われてるSpotifyのチームの形（[Scaling Agile @ Spotify](https://blog.crisp.se/wp-content/uploads/2012/11/SpotifyScaling.pdf)）に落とし込むとSquadが8-10人，Tribeが50-150人，Divisionが150-人となりチームの粒度やそのグルーピングの限度の指標に利用できる．またコミュニケーションのリンクの数からも「小さな」が良いことは理解できる（以下はチームの人数とそこでのコミュニケーションのパスの数 ．12人でも既に66もある．[Two-Pizza Teams: The Science Behind Jeff Bezos' Rule](https://blog.nuclino.com/two-pizza-teams-the-science-behind-jeff-bezos-rule)）
 
 ![https://blog.nuclino.com/files/227d9349-2588-4845-a420-3f4eb6c61fdc/team-members-links.png](https://blog.nuclino.com/files/227d9349-2588-4845-a420-3f4eb6c61fdc/team-members-links.png)
 
 「長期的に安定」するべきはのは，チームとは互いに信頼し合い働き方や考え方を一致させて初めて高いパフォーマンスを出せる（[Tuckman's stages of group development](https://en.m.wikipedia.org/wiki/Tuckman%27s_stages_of_group_development)）ものであり，それには時間がかかるためである．プロジェクトの度にチームがコロコロ変わっていてはチームとしてのゲル化は進まずパフォーマンスも上がらない．逆に高いパフォーマンスのチームを分けたりするとProductivityは一気に落ちる．
 
-「長期で安定した」チームを持つことで初めてOwnershipについて考えることができるようになる．Ownershipとは「Continuity of care」を持つことであり，チームはそれによって段階的に長期にものを考えることができるようになる．目の前の問題を解決する段階から，数ヶ月先のこと考えて実験を行う段階へ向かうことができるようになる．NetflixがどのようにOwnershipを育てているかについて語っている[Mistakes and Discoveries While Cultivating Ownership](https://youtu.be/ddOGmao_cnA)ではOwnershipのLevelを定義しており，目指すべきところ（かつLeadershipがメンバーに持たせるのは）は「Vision」であるとしている．「Vision」はまさに長期で目指すべきところを考えることに他ならない（これをさらに組織全体でTribeレベルでもできてるのがSpotify [Breaking Hierarchy - How Spotify Enables Engineer Decision Making](https://youtu.be/gTXEXcGvnKk) ）．長期でVisionを持つことは直前の問題解決の意思決定に直結する．より良いサービスはその積み重ねで生まれる．
+「長期で安定した」チームを持つことで初めてOwnershipについて考えることができるようになる．Ownershipとは「Continuity of care」を持つことであり，チームはそれによって段階的に長期にものを考えることができるようになる．目の前の問題を解決する段階から，数ヶ月先のこと考えて実験を行う段階へ向かうことができるようになる．NetflixがどのようにOwnershipを育てているかについて語っている[Mistakes and Discoveries While Cultivating Ownership](https://youtu.be/ddOGmao_cnA)ではOwnershipのLevelを定義しており，目指すべきところ（かつLeadershipがメンバーに持たせるのは）は「Vision」であるとしている．「Vision」はまさに長期で目指すべきところを考えることに他ならない（これをさらに組織全体でTribeレベルでもできてるのがSpotify [Breaking Hierarchy - How Spotify Enables Engineer Decision Making](https://youtu.be/gTXEXcGvnKk) ）．長期でVisionを持つことは直前の問題解決の意思決定にも直結する（例えば3ヶ月後にxをする予定だから今はyに時間をかけずに単純なzという手法を使おうと思うことができる）．
 
 ![https://user-images.githubusercontent.com/1256183/73893817-09957f80-48be-11ea-889b-a160fe8faaf5.png](https://user-images.githubusercontent.com/1256183/73893817-09957f80-48be-11ea-889b-a160fe8faaf5.png)
 
@@ -29,9 +29,7 @@ DevOps consultantとして技術と組織の両面からDevOpsの支援を行な
 
 ![https://user-images.githubusercontent.com/1256183/73893894-43ff1c80-48be-11ea-874d-df8618d01e95.jpeg](https://user-images.githubusercontent.com/1256183/73893894-43ff1c80-48be-11ea-874d-df8618d01e95.jpeg)
 
-さらにそのチームの責任が大きすぎないか，認知負荷が高すぎないか？も意識する必要がある．1つのチームが多くの責任を持ちすぎると認知負荷がチームのキャパシティを超え始める．そうなるとDeliveryのスピードは遅くなり他のチームのボトルネックになりメンバーのモチベーションや熟達（Mastery）にも影響を与え始めてしまう．組織は既存のメンバーの認知不可を超えてソフトウェアのサブシステムを増やしてはいけない．
-
-![https://user-images.githubusercontent.com/1256183/73894016-8d4f6c00-48be-11ea-93a0-0cc4dafde782.jpeg](https://user-images.githubusercontent.com/1256183/73894016-8d4f6c00-48be-11ea-93a0-0cc4dafde782.jpeg) 
+さらにそのチームの責任が大きすぎないか，認知負荷が高すぎないか？も意識する必要がある．1つのチームが多くの責任を持ちすぎると認知負荷がチームのキャパシティを超え始める．そうなるとDeliveryのスピードは遅くなり他のチームのボトルネックになりメンバーのモチベーションや技術の熟達（Mastery）にも影響を与え始めてしまう（技術領域のExpertiseが広く浅くなる）．組織は既存のメンバーの認知不可を超えてソフトウェアのサブシステムを増やしてはいけない．
 
 ## Fundamental Team Topologies
 

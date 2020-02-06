@@ -21,7 +21,7 @@ DevOps consultantとして技術と組織の両面からDevOpsの支援を行な
 
 「長期的に安定」するべきはのは，チームとは互いに信頼し合い働き方や考え方を一致させて初めて高いパフォーマンスを出せる（[Tuckman's stages of group development](https://en.m.wikipedia.org/wiki/Tuckman%27s_stages_of_group_development)）ものであり，それには時間がかかるためである．プロジェクトの度にチームがコロコロ変わっていてはチームとしてのゲル化は進まずパフォーマンスも上がらない．逆に高いパフォーマンスのチームを分けたりするとProductivityは一気に落ちる．
 
-「長期で安定した」チームを持つことで初めてOwnershipについて考えることができるようになる．Ownershipとは「Continuity of care」を持つことであり，チームはそれによって段階的に長期にものを考えることができるようになる．目の前の問題を解決する段階から，数ヶ月先のこと考えて実験を行う段階へ向かうことができるようになる．NetflixがどのようにOwnershipを育てているかについて語っている[Mistakes and Discoveries While Cultivating Ownership](https://youtu.be/ddOGmao_cnA)ではOwnershipのLevelを定義しており，目指すべきところ（かつLeadershipがメンバーに持たせるのは）は「Vision」であるとしている．「Vision」はまさに長期で目指すべきところを考えることに他ならない（これをさらに組織全体でTribeレベルでもできてるのがSpotify [Breaking Hierarchy - How Spotify Enables Engineer Decision Making](https://youtu.be/gTXEXcGvnKk) ）．
+「長期で安定した」チームを持つことで初めてOwnershipについて考えることができるようになる．Ownershipとは「Continuity of care」を持つことであり，チームはそれによって段階的に長期にものを考えることができるようになる．目の前の問題を解決する段階から，数ヶ月先のこと考えて実験を行う段階へ向かうことができるようになる．NetflixがどのようにOwnershipを育てているかについて語っている[Mistakes and Discoveries While Cultivating Ownership](https://youtu.be/ddOGmao_cnA)ではOwnershipのLevelを定義しており，目指すべきところ（かつLeadershipがメンバーに持たせるのは）は「Vision」であるとしている．「Vision」はまさに長期で目指すべきところを考えることに他ならない（これをさらに組織全体でTribeレベルでもできてるのがSpotify [Breaking Hierarchy - How Spotify Enables Engineer Decision Making](https://youtu.be/gTXEXcGvnKk) ）．長期でVisionを持つことは直前の問題解決の意思決定に直結する．より良いサービスはその積み重ねで生まれる．
 
 ![https://user-images.githubusercontent.com/1256183/73893817-09957f80-48be-11ea-889b-a160fe8faaf5.png](https://user-images.githubusercontent.com/1256183/73893817-09957f80-48be-11ea-889b-a160fe8faaf5.png)
 
@@ -29,7 +29,7 @@ DevOps consultantとして技術と組織の両面からDevOpsの支援を行な
 
 ![https://user-images.githubusercontent.com/1256183/73893894-43ff1c80-48be-11ea-874d-df8618d01e95.jpeg](https://user-images.githubusercontent.com/1256183/73893894-43ff1c80-48be-11ea-874d-df8618d01e95.jpeg)
 
-さらにその「小さく長期的に安定した」なチームの責任が大きすぎないか，認知負荷が高すぎないか？も意識する必要がある．1つのチームが多くの責任を持ちすぎると認知負荷がチームのキャパシティを超え始める．そうなるとDeliveryのスピードは遅くなり他のチームのボトルネックになりメンバーのモチベーションや熟達（Mastery）にも影響を与え始めてしまう．組織は既存のメンバーの認知不可を超えてソフトウェアのサブシステムを増やしてはいけない．
+さらにそのチームの責任が大きすぎないか，認知負荷が高すぎないか？も意識する必要がある．1つのチームが多くの責任を持ちすぎると認知負荷がチームのキャパシティを超え始める．そうなるとDeliveryのスピードは遅くなり他のチームのボトルネックになりメンバーのモチベーションや熟達（Mastery）にも影響を与え始めてしまう．組織は既存のメンバーの認知不可を超えてソフトウェアのサブシステムを増やしてはいけない．
 
 ![https://user-images.githubusercontent.com/1256183/73894016-8d4f6c00-48be-11ea-93a0-0cc4dafde782.jpeg](https://user-images.githubusercontent.com/1256183/73894016-8d4f6c00-48be-11ea-93a0-0cc4dafde782.jpeg) 
 

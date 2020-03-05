@@ -7,7 +7,7 @@ date: 2020-03-05T10:53:25+09:00
 
 [The Agile Samurai](https://pragprog.com/book/jtrap/the-agile-samurai)の作者でありSpotifyにおいてAgile CoachとEngineerを努めた[Jonathan Rasmusson](https://twitter.com/jrasmusson)による本．本書はUnicornもしくはTech companyがどのようにチームをつくり，組織をスケールさせ，文化を作っているのかについて書いている．タイトルにUnicornとあり複数の企業を扱ってるように見えるが，基本的には作者のSpotifyにおける体験が基になっておりSpotifyの話が中心になっている．
 
-[なぜMicroservicesか?](https://deeeet.com/writing/2019/05/20/why-microservices/)ではMicroservicesの最終ゴールは組織にあると書いた．これは共通の見解（のはず）である一方で，Microservicesにおいてどのような組織構造・チーム構成を作っていくのが良いのかについて具体的な例を基に書かれたものはあまり見たことがない．自分は組織作りにまで関われているわけではないし，門外漢であるが，これまでいくかの記事，発表を見てきた中でもSpotifyはこれを非常にうまくやっているように感じていた．
+[なぜMicroservicesか?](https://deeeet.com/writing/2019/05/20/why-microservices/)ではMicroservicesの最終ゴールは組織にあると書いた．これは共通の見解（のはず）である一方で，Microservicesにおいてどのような組織構造・チーム構成を作っていくのが良いのかについて具体的な例を基に書かれたものはあまり見たことがない．自分は組織作りにまで関われているわけではないし，専門でもないが，これまでいくかの記事，発表を見てきた中でもSpotifyはこれを非常にうまくやっているように感じていた．
 
 Spotifyがどのようなチームや組織を作っているかについては[Scaling Agile @ Spotify](https://blog.crisp.se/wp-content/uploads/2012/11/SpotifyScaling.pdf)という2012年に公開されたブログが一番有名であると思う．そこではメインのコンセプトであるSquadやTribe，Guildという概念が紹介されている．また2019年にはその組織やエンジニアリング文化について紹介する20分の動画も公開されており（Spotify Engineering Culture [part1](https://youtu.be/Yvfz4HGtoPc)・[part2](https://youtu.be/vOt4BbWLWQw)）2012年からのアップデートがわかる．もう一つ自分が感銘を受けたのが[Breaking Hierarchy - How Spotify Enables Engineer Decision Making](https://youtu.be/gTXEXcGvnKk)というQCon New York 2019の発表で，そこではいかに組織のヒエラルキーをぶっ壊してエンジニアやチームに意思決定を促しているかについて紹介されている．
 
@@ -19,7 +19,7 @@ SpotifyのようなUnicornではいかに組織を拡大していくかが大き
 
 ![Screen Shot 2020-03-05 at 9 49 38](https://user-images.githubusercontent.com/1256183/75936972-f8449080-5ec6-11ea-8344-c67f9fe7b722.png)
 
-まず一番基礎となる単位がSquadである．Squadは8人以下のメンバーで構成され，Mission vs. Projectで詳しく紹介するようにそれぞれにMissionが与えられMini-startupのように動けるように設計されている．Squadは自己組織化されており，何をどのようにつくるかという意思決定や，開発からリリース，運用までなるべく自分たちで完結できるようになっている．Squadが最も重要な単位でありその他のTribeやChapterはこれを補助するためだけに存在してる（この辺は[Team topologies](https://deeeet.com/writing/2020/02/06/team-topologies/)のTeam first thinkingと同じ）．
+まず一番基礎となる単位がSquadである．Squadは8人以下のメンバーで構成され，Mission vs. Projectで詳しく紹介するようにそれぞれにMissionが与えられMini-startupのように動けるように設計されている．Squadは自己組織化されており，何をどのようにつくるかという意思決定や，開発からリリース，運用までなるべく自分たちで完結できるようになっている．Squadが最も重要な単位でありその他のTribeやChapterはこれを補助するためだけに存在してる（この辺は[Team topologies](https://deeeet.com/writing/2020/02/06/team-topologies/)のTeam first thinkingと同じ）．Squadは結構CVとかにも書かれているし結構一般的に使われているっぽい．
 
 同様のMissionをもったSquadをまとめたのがTribeである．例えば，App Integration Squad（Facebookなどのアプリケーションとの連携を行なう）やHome Consumer Electronics Squad（家電との連携を行なう）などをまとめてPartner and Platform Eeperience Tribeを構成する．Tribeは[Dunbar’s Number](https://en.m.wikipedia.org/wiki/Dunbar%27s_number)を基に40人から150人で構成され，Squadと同様にMissionを持つ．Tribeの利点は同様の課題を持ったSquadをまとめることでアイディアやコードなどを共有しやすくなることにある．自律性を保つためにSquadは協力はし合うが依存は少なくしている，Tribe間は更に依存はなくしている．
 

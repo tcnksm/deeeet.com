@@ -19,7 +19,7 @@ SpotifyのようなUnicornではいかに組織を拡大していくかが大き
 
 ![Screen Shot 2020-03-05 at 9 49 38](https://user-images.githubusercontent.com/1256183/75936972-f8449080-5ec6-11ea-8344-c67f9fe7b722.png)
 
-まず一番基礎となる単位がSquadである．Squadは8人以下のメンバーで構成され，Mission vs. Projectで詳しく紹介するようにそれぞれにMissionが与えられMini-startupのように動けるように設計されている．Squadは自己組織化されており，何をどのようにつくるかという意思決定や，開発からリリース，運用までなるべく自分たちで完結できるようになっている．Squadが最も重要な単位でありその他のTribeやChapterはこれを補助するためだけに存在してる（この辺は[Team topologies](https://deeeet.com/writing/2020/02/06/team-topologies/)のTeam first thinkingと同じ）．Squadは結構CVとかにも書かれているし結構一般的に使われているっぽい．
+まず一番基礎となる単位がSquadである．Squadは8人以下のメンバーで構成され，Mission vs. Projectで詳しく紹介するようにそれぞれにMissionが与えられMini-startupのように動けるように設計されている．Squadは自己組織化されており，何をどのようにつくるかという意思決定や，開発からリリース，運用までなるべく自分たちで完結できるようになっている．Squadが最も重要な単位でありその他のTribeやChapterはこれを補助するためだけに存在してる（この辺は[Team topologies](https://deeeet.com/writing/2020/02/06/team-topologies/)のTeam first thinkingと同じ）．SquadはCVとかにも書かれているし結構一般的に使われているっぽい．
 
 同様のMissionをもったSquadをまとめたのがTribeである．例えば，App Integration Squad（Facebookなどのアプリケーションとの連携を行なう）やHome Consumer Electronics Squad（家電との連携を行なう）などをまとめてPartner and Platform Eeperience Tribeを構成する．Tribeは[Dunbar’s Number](https://en.m.wikipedia.org/wiki/Dunbar%27s_number)を基に40人から150人で構成され，Squadと同様にMissionを持つ．Tribeの利点は同様の課題を持ったSquadをまとめることでアイディアやコードなどを共有しやすくなることにある．自律性を保つためにSquadは協力はし合うが依存は少なくしている，Tribe間は更に依存はなくしている．
 

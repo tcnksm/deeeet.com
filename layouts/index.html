@@ -1,9 +1,11 @@
 {{ partial "header.html" . }}
 
-<!-- <div class="blog-cover" style="background-image:url(/images/{{ .Site.Params.cover_image }});"></div> -->
-
 <article class="container">
-  {{ range .Data.Pages }}
-  {{ .Render "summary"}}
+  {{ range first 15 .Site.RegularPages }}
+    {{ .Render "summary"}}
   {{ end }}
+
+  <div class="container">
+    {{ partial "footer.html" . }}
+  </div>
 </article>

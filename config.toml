@@ -1,20 +1,16 @@
 baseurl = "https://deeeet.com"
 title = "SOTA"
 languageCode = "ja-jp"
-copyright = "Copyright (C) 2013-2019 Taichi Nakashima All Right Reserved."
+copyright = "Copyright (C) 2013-2020 Taichi Nakashima All Right Reserved."
 
-contentdir = "content"
-layoutdir = "layouts"
-publishdir = "public"
+contentDir = "content"
+layoutDir = "layouts"
+publishDir = "public"
 pygmentsuseclasses = true
 
 [permalinks]
     writing = "/writing/:year/:month/:day/:filename/"
-    talking = "/talking/:year/:month/:day/:filename/"
     
-[indexes]
-    category = "categories"
-
 [author]
     name = "Taichi Nakashima"
     image = "bio.jpeg"
@@ -22,7 +18,6 @@ pygmentsuseclasses = true
     
 [params]
     cover_image = "cover-201412.jpg"
-    talking_cover_image = "talk.jpg"
     twitter = "deeeet"
     github = "tcnksm"
     google_font = "Lato:900"
@@ -33,5 +28,3 @@ pygmentsuseclasses = true
         
     [params.analytics]
         googleid = "UA-45390253-1"
-
-

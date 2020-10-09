@@ -4,13 +4,13 @@
 $font-title: "Inter";
 
 /* Bodytext font */
-$font: "HelveticaNeue-Light", "Helvetica Neue Light", "Helvetica Neue", "Helvetica", "Arial", "Lucida Grande", "sans-serif";
+$font: "Inter", "sans-serif";
 
 /* Font for headings */
-$fontheadings: "HelveticaNeue-Light", "Helvetica Neue Light", "Helvetica Neue", "Helvetica", "Arial", "Lucida Grande", "sans-serif";
+$fontheadings: "Inter", "sans-serif";
 
 /* Text colors */
-$text: #555 !default;
+$text: #000 !default;
 $textmuted: #848484;
 $accent: #2077b2;
 
@@ -20,6 +20,6 @@ $accent: #2077b2;
 @import "base";
 @import "nav";
 @import "article";
-@import "icons";
 @import "syntax";
+@import "icons";
 @import "responsive";

@@ -1,11 +1,3 @@
 <div class="social">
-  {{ if isset .Params "en" }}
-  {{ if .Site.Params.sharing.hn }}
-  <a href="https://news.ycombinator.com/submit" class="hn-button">Vote on Hacker News</a>
-  {{ end }}
-  {{ else }}
-  {{ if .Site.Params.sharing.twitter }}
   <a href="https://twitter.com/share" class="twitter-share-button" data-via="deeeet" data-count="none">Tweet</a>
-  {{ end }}
-  {{ end }}
 </div>

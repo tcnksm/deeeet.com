@@ -14,13 +14,13 @@ pygmentsuseclasses = true
 [author]
     name = "Taichi Nakashima"
     image = "bio.jpeg"
-    bio = "Microservices Platform Team at Mercari, Inc.. Please contact me via twitter."
+    bio = "Microservices Platform Team at Mercari, Inc.."
     
 [params]
     cover_image = "cover-201412.jpg"
     twitter = "deeeet"
     github = "tcnksm"
-    google_font = "Lato:900"
+    google_font = "Inter"
 
     [params.sharing]
         twitter =true

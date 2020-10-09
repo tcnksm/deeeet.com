@@ -10,6 +10,7 @@ Design is written by [sass](http://sass-lang.com/). After editting it, run the f
 ```bash
 $ gem install sass
 $ sass scss/main.scss static/css/main.css
+$ sass scss/en/main.scss static/css/en/main.css
 ```
 
 ## Author

@@ -88,30 +88,22 @@ article {
     }
 
     h1 {
-        font-size: 32px;
+        font-size: 50px;
+        font-style: italic;
         font-weight:900;
-        margin:0.5em 0 1em;
+        margin:10px 0 20px;
     }
 
     h2 {
-        font-size: 25px;
+        font-size: 30px;
 		font-weight: 700;
-        color: $text;
-        border-bottom: 1px solid #e5e5e5;
-        margin-top: 60px;
-        margin-bottom: 30px;
-		position: relative;
-        padding-bottom: 10px;
+        margin:10px 0 15px;
 	}
 
     h3 {
-        font-size: 22px;
-        color: $text;
+        font-size: 25px;
         font-weight: 700;
-        margin-top: 40px;
-        margin-bottom: 20px;
-		position: relative;
-        padding-bottom: 10px;
+        margin:10px 0 10px;
     }
     
     hr {
@@ -144,8 +136,11 @@ article {
 
 
     .title {
-        margin:0.2em 0;
-        font-weight:bold;
+        margin:0.2em 0 0.5em;
+        font-size:70px;
+        color:$text;
+        font-style: normal;
+        font-weight:900;
 
         a {
             border:0;

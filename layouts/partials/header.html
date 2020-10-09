@@ -7,8 +7,8 @@
     
     <title>{{ .Title }} | {{ .Site.Title }}</title>
     
-    {{ with .Site.Params.google_font }}<link href="https://fonts.googleapis.com/css?family={{ . }}" rel="stylesheet" type="text/css">{{ end }}
-    <link rel="stylesheet" href="/css/main.css">
+    <link href="https://fonts.googleapis.com/css?family={{ $.Site.Params.google_font }}" rel="stylesheet" type="text/css">
+    {{ if isset .Params "en" }}<link rel="stylesheet" href="/css/en/main.css">{{ else }}<link rel="stylesheet" href="/css/main.css">{{ end }}
     <link rel="shortcut icon" href="/favicon.png" type="image/x-icon" />
     <link href="{{ .Site.BaseURL }}/index.xml" rel="alternate" type="application/rss+xml" title="{{ .Site.Params.inc.title }}" />
     <meta name="title" content="{{ .Permalink }}">

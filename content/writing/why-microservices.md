@@ -5,7 +5,7 @@ date: 2019-05-20T13:10:19+09:00
 
 現職においてMonolithアーキテクチャからMicroservicesアーキテクチャへの移行とその基盤の構築に関わって2年近くが経った．未だ道半ばであるがこれまでの経験や日々のインプットをもとにいろいろ書いておこうという気持ちになった．本記事ではそもそもMicroservicesアーキテクチャとは何かを整理し，なぜやるべきか?・なぜ避けるべきかを整理する．
 
-## Microservices?
+# Microservices?
 
 Microservicesアーキテクチャとは「Single purpose，High cohesion，そしてLoosly Couploedなサービスを組み合わせてシステムを構築する」アーキテクチャ手法である．それぞれの原則をまとめると以下のようになる．
 
@@ -25,7 +25,7 @@ Microservicesアーキテクチャをモデル化するときはこれら3つを
 
 コードの行数が少ないから・細かなタスクを扱うからMicroserviceではない．Microservicesアーキテクチャのゴールはできる限り多くの小さなサービスを持たないことである．また新しいテクノロジーを使っているからMicroserviceではない．Kubernetes上のコンテナとして動いているからMicroserviceではない．
 
-## Why Microservices?
+# Why Microservices?
 
 「Microservicesは組織論」と言われるようにMicroservicesアーキテクチャの究極的な成果物は新たな組織図である．新たなアーキテクチャに基づく新たなチームの編成，組織の再構成を狙うのが大きな目的である（逆コンウェイの戦略，[Inverse Conway Maneuver](https://www.thoughtworks.com/radar/techniques/inverse-conway-maneuver)などと呼ばれる）．
 
@@ -59,7 +59,7 @@ https://github.com/warmchang/KubeCon-North-America-2018
 
 Microservicesアーキテクチャのプラクティスには「サービスごとにデータを持つこと」「データの非正規化を許容すること」「セルフサービス化」などMonolithアーキテクチャでは考えられないプラクティスが多く存在するがこれらはすべてこの「組織のパフォーマンスの最大化」につながる．Microservicesアーキテクチャを進める上で多くの意思決定を行う必要があるがこの初期衝動は常に頭においておきブレてはならない．
 
-## Why NOT Microservices?
+# Why NOT Microservices?
 
 Microservicesアーキテクチャには「いつ採用するべきか?」について正確なアルゴリズムが存在しないという大きな問題がある．私的な意見を言えば，運用まで含めて各サービスに十分な人員を当てられない・将来的に当てられる予定がない，専用の基盤を構築する余裕がないならMicroservicesはやるべきではないと思う．むしろ負担・オーバーヘッドになってしまう．要するに規模は重要なファクターである．
 
@@ -74,7 +74,7 @@ Microservicesは上述したメリットに対するデメリットが多い．M
 
 これらの問題を理解しつつそのコストを払ってでもMicroservicesアーキテクチャによる「組織のパフォーマンスの最大化」に利点を感じないといけない．
 
-## Misconception
+# Misconception
 
 Microservicesではそれぞれのチームが自分たちのRequirementsやWorkloadに最も適した技術や言語（やフレームワーク）を自由に選択できるという利点がある，と言われる．しかしこれは完全なる自由を意味しない．完全な自由は逆に生産性の低下を引き起こす．そうではなく，共通レイヤー（基盤）の上にExtensibilityを許可するといったことが必要になる．ObservabilityやMonitoring，セキュリティや認証・認可，CI/CDといった直接ビジネス的な価値を出さないCross-cutting concernには統一的な方法があるべきである．そしてこれらはそれぞれの開発チームではなく専用の基盤チームが取り組むべきである．開発チームはビジネス的な価値に注力し，基盤チームはその開発チームのProductivityに注力する（[Design Microservice Architectures the Right Way](https://youtu.be/j6ow-UemzBc)，[10 Tips for failing badly at Microservices](https://youtu.be/X0tjziAQfNQ)）
 

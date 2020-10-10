@@ -1,11 +1,25 @@
 {{ partial "header.html" . }}
-
-<article class="container">
-  {{ range first 15 .Site.RegularPages }}
-    {{ .Render "summary"}}
-  {{ end }}
-
+<section class="site-nav">
+</section>
+<article class="container">  
+</article>
+<article>
   <div class="container">
-    {{ partial "footer.html" . }}
+    <header>
+      <h1 class="title">Yo</h1>
+    </header>    
+    <section>
+      This is <a href="https://twitter.com/deeeet">Taichi Nakashima (@deeeet)</a>'s personal blog. I'm a software engineer currently working at <a href="https://about.mercari.com/en/">Mercari</a> and leading the internal platform group as tech lead. You can find me on <a href="https://twitter.com/deeeet">Twitter</a>or <a href="https://github.com/tcnksm">GitHub</a>.
+    </section>
+  </div>
+</article>
+<article>
+  <div class="container">
+    <section>
+      <h2>Posts</h2>
+    </section>
+    {{ range first 15 .Site.RegularPages }}
+    {{ .Render "summary"}}
+    {{ end }}
   </div>
 </article>

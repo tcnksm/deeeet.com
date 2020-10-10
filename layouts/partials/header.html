@@ -8,7 +8,7 @@
     <title>{{ .Title }} | {{ .Site.Title }}</title>
     
     <link href="https://fonts.googleapis.com/css?family={{ $.Site.Params.google_font }}" rel="stylesheet" type="text/css">
-    {{ if isset .Params "en" }}<link rel="stylesheet" href="/css/en/main.css">{{ else }}<link rel="stylesheet" href="/css/main.css">{{ end }}
+    {{ if isset .Params "en" }}<link rel="stylesheet" href="/css/en/main.css">{{ else }}<link rel="stylesheet" href="/css/en/main.css">{{ end }}
     <link rel="shortcut icon" href="/favicon.png" type="image/x-icon" />
     <link href="{{ .Site.BaseURL }}/index.xml" rel="alternate" type="application/rss+xml" title="{{ .Site.Params.inc.title }}" />
     <meta name="title" content="{{ .Permalink }}">
@@ -26,11 +26,4 @@
   </head>
   
   <body>
-    <section class="site-nav">
-      <header>
-        <nav id="navigation">
-          <a class="name" href="/">SOTA</a>
-        </nav>        
-      </header>
-    </section>
     

@@ -7,11 +7,11 @@ date: 2020-05-11T06:18:53+09:00
 
 （指針は[Borg, Omega, and Kubernetes](https://research.google/pubs/pub44843/)という論文にあるが「Infrastrcuture as Data（Configuration as Data）」という言葉を明確に定義した文章はない．この記事はReferencesに挙げるいくつかのPodcastにおける[@kelseyhightower](https://twitter.com/kelseyhightower)の発言や，それに反応する[@bgrant0607](https://twitter.com/bgrant0607)のTweetなどを中心に自分なりに考えをまとめているだけで，概念は変わらずとも名前などは今後変わるかもしれない）
 
-## Infrastructure as Code以前
+# Infrastructure as Script
 
 Infrastructure as Codeという言葉が登場する前はインフラのセットアップは手順書に基づくManual operation行われていた．今でこそCloudが中心となり数百のMachineを扱うのは当たり前になってきたが，オンプレ時代では今ほど大規模でもなく1つのPhysical machineを使い続けることも多く（長く使うほどコストパフォーマンスが高い）インフラはStaticなものだった．そのためManual operationでも十分といえば十分だったことも多かったと思う．もちろん専用のSoftwareの登場を待つことなくShell scriptなどで自動化を早くから進めてInfrastructure as a scriptはやられていたと思う．
 
-## Infrastructure as Code
+# Infrastructure as Code
 
 Hardware virtualizationの登場により（Virtual）Machineを立てたり消したりすることが容易になり，またそれをサービスとして提供するAWSやGCPといったCloud providerが使った分だけ課金するPay-as-you-goモデルを採用したことで（Auto-scalingなどにより）必要に応じて必要なMachineをProvisioningするようになり，インフラはよりDynamicなものになった．DynamicになったことによりインフラのセットアップやアプリケーションのDeployのReproducibility（再現性）も求められるようになった．また扱うトラフィックも大規模になりそれをさばくためのインフラも大規模になった．
 
@@ -21,7 +21,7 @@ TerraformもIaCに属するがTerrafromはVMやManaged DBのセットアップ�
 
 また従来のShell scriptによる自動化との大きな違いはDeclarativeであることだろう．ChefやTerraformのDSLでの記述としては「こうあるべき」というDesiredな状態を書くようになり，一連の動作をにImperativeに記述するShell scriptとは大きく異なる．ここで登場したDeclarative configurationは今日も使われておりInfrastructure as Dataにも繋がる．
 
-## Immutable Infrastructure
+# Immutable Infrastructure
 
 VMの立ち上げが容易になったとは言え，当時はセットアップが完了しアプリケーションが動いているMachineに新たにChefのRecipeを流し込んでSoftwareの更新を行うことは普通だった．そのためChef・Ansible時代によく言われたのは「Idemponence（冪等性）を満たせ」だった．つまりChefのRecipeを書く場合は何度も実行しても結果が同じようになるように書けという意味だ．巨大なChefのCookbookを運用した人はわかると思うが正直それは難しかった．またChefやAnsibleは1つMachineのセットアップには強いが複数のMachineのセットアップには弱く，継続的な実行が行われなとConfiguration Driftが避けられないという問題があった（Continuous Deliveryをしてないと流し漏れは発生する…自動化してても人がManualで何かを変えてしまうことはある）．
 
@@ -31,7 +31,7 @@ VMの立ち上げが容易になったとは言え，当時はセットアップ
 
 ここで登場してきたのがDockerを中心としたContainer技術である．もちろんPackerなどを使うことでアプリケーションコードごとEC2やGCEのVMイメージをつくりそれをDeployすることでImmutable infrastructureを実現することは可能である．しかし，VMと比較して起動の早さ，Registryによる配布の容易さ，そして何よりもUtilizationの高さという利点によって，Immutable DeployとしてContainerが利用されることが多くなってきた（その後のServerlessまで考えるとインフラの進化はUtilizationの改善と紐付けて考えられる）．
 
-## Reconciliation loop
+# Reconciliation Loop
 
 Containerはアプリケーションの依存関係と実行環境ごとパッケージングし，開発者からOSやMachineを抽象化する．ちゃんと作られてるContainerは1つアプリケーションと一致するので，Containerを管理する = アプリケーションを管理する，になる．これにより[これまでのMachine orientedのインフラはApplication orientedのインフラになり](https://research.google/pubs/pub44843/)，Machineをセットアップするという従来の考え方はなくなっている．このConntainerのスケジューリングのSoftwareとして，Application orientedのインフラの中心にいるのがKubernetesである．
 
@@ -39,7 +39,7 @@ Kubernetes（やBorg）が推し進めたもっとも重要な考え方は[Recon
 
 このReconciliation loop時代におけるインフラやアプリケーションの設定は，あるべきDesiredな状態を宣言（Declare）する，である．するとKubernetesはその状態になるように自律的に動き続ける．例えばユーザが「Podを5つ動かす」という状態を宣言するとKubernetesはそれを受け「Podが5つ動いている状態」を維持するように動く．
 
-## Infrastructure as Data
+# Infrastructure as Data
 
 Kubernetes上でのインフラのセットアップやアプリケーションのDeployにはInfrastructure as Code，インフラを管理するためにコード（ロジック）を書く，という感覚はない（KubernetesのYAMLがIaCと言われることもあるが自分はずっと違和感があった）．Client側にあるのは，あるべき状態が記述されたData（e.g., YAML）だけだ．その後のComputationは全てServer側でReconciliation controller loopが担っている．DataはDataであり，そこにはIf文もLoop文もない．Infrastructure as Data（IaD）とは，インフラの設定は静的な設定ファイル（YAMLやJSON）で記述し，それを動的に扱うComputationとは明確に分けるというアプローチである．
 
@@ -51,7 +51,7 @@ ConfigurationをCode（e.g., DSL）にする問題点は[Borg, Omega, and Kubern
 
 ここから得られた学びとして「ProgramicにConfigurationを管理したいという要求は避けられないのでそれを受け入れること」そしてその上で「ComputationとDataを明確に分けること」が挙げられている．これがInfrastructure as Dataへと繋がっている．
 
-## Infrastructure as Codeの今後
+# Future
 
 現状サービスの開発が全てKubernetes上で完結することはない．例えば，Kubernetes上にはStatelessアプリケーションのみを置き，StatefullアプリケーションとしてはSpannerのようなManaged DBを使うパターンは多い．またCloud resourceのアクセス制御のためにIAMの設定は必須だし，VPCを始めとするKubernetes外のネットワークの設定や，そもそもGKEを使うならそれ自体のセットアップも必要になる．このようにKubernetes外では未だにIaCが活躍する場所は多いし今後もIaC+IaDの状況は続くと思う．
 

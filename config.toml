@@ -1,7 +1,7 @@
 baseurl = "https://deeeet.com"
-title = "SOTA"
+title = "Taichi Nakashima"
 languageCode = "ja-jp"
-copyright = "Copyright (C) 2013-2020 Taichi Nakashima All Right Reserved."
+copyright = "Copyright © 2013-2020 Taichi Nakashima"
 
 contentDir = "content"
 layoutDir = "layouts"

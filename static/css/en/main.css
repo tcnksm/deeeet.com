@@ -2753,12 +2753,15 @@ article .social > div {
   display: inline-block;
   min-width: 120px;
 }
+article .container > section.index {
+  margin-bottom: 0.5em;
+}
 article .container > footer {
-  border-top: 1px solid #ddd;
-  padding-top: 1.5em;
   padding-bottom: 1.5em;
-  margin-top: 5em;
   margin-bottom: 3em;
+  color: #848484;
+  font-size: 15px;
+  text-align: center;
 }
 article address {
   margin: 0;
@@ -2833,7 +2836,7 @@ article .meta {
   color: #848484;
   font-size: 13px;
   text-transform: uppercase;
-  margin-bottom: 0.3em;
+  margin-bottom: 0.5em;
   font-weight: 400;
   letter-spacing: 1px;
 }
@@ -2843,14 +2846,14 @@ article .meta time, article .meta address {
 }
 article .meta a {
   border: 0;
-  color: #848484;
+  color: #2077b2;
 }
 article img {
   max-width: 100%;
   margin: 1em 0;
 }
 article .title {
-  margin: 0.2em 0 0.5em;
+  margin: 0.2em 0;
   font-size: 70px;
   color: #000;
   font-style: normal;
@@ -3326,9 +3329,11 @@ article .full.zoomable img.zoom {
     margin: 0 10%;
     padding: 0;
   }
+  article .container > header {
+    margin-bottom: 2em;
+  }
   article .title {
-    font-size: 2em;
-    margin-bottom: 1em;
+    font-size: 2.5em;
   }
   article .container > footer {
     margin-top: 5em;

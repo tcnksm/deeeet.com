@@ -38,9 +38,12 @@
             padding:0;
         }
 
+        .container > header {
+            margin-bottom: 2em;
+        }
+
         .title {
-            font-size:2em;
-            margin-bottom: 1em;
+            font-size:2.5em;
         }
         
         .container > footer {

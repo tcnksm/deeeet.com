@@ -18,12 +18,16 @@ article {
         }
     }
 
+    .container > section.index {
+        margin-bottom: 0.5em;
+    }
+
     .container > footer {
-        border-top:1px solid #ddd;
-        padding-top:1.5em;
         padding-bottom:1.5em;
-        margin-top:5em;
         margin-bottom:3em;
+        color:$textmuted;
+        font-size:15px;
+        text-align:center;
     }
 
     address {
@@ -114,7 +118,7 @@ article {
         color:$textmuted;
         font-size:13px;
         text-transform:uppercase;
-        margin-bottom:0.3em;
+        margin-bottom:0.5em;
         font-weight:400;
         letter-spacing:1px;
 
@@ -125,7 +129,7 @@ article {
 
         a {
             border:0;
-            color:$textmuted;
+            color:$accent;
         }
     }
 
@@ -136,7 +140,7 @@ article {
 
 
     .title {
-        margin:0.2em 0 0.5em;
+        margin:0.2em 0;
         font-size:70px;
         color:$text;
         font-style: normal;

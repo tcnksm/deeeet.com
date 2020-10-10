@@ -6,7 +6,7 @@ en: true
 
 I’ve been working as a platform engineer (platformer) for almost 5 years. In the previous company, I worked on the internal PaaS based on[ Cloud Foundry](https://www.cloudfoundry.org/) and, in the current company, I’ve been working on the[ microservices platform](https://speakerdeck.com/tcnksm/microservices-platform-on-kubernetes-at-mercari) based on[ Kubernetes](https://kubernetes.io/).
 
-If you’ve done one thing for 5 years, you will have things that you take for granted as a matter of habit and become the basis of daily decision making, which is neutral from specific technologies. In this post, I wrote down these things as practices of platform engineers who build platform for developers. The things I listed below are not special. I think you’ve heard or seen these things somewhere. These are just results from daily inputs or experiences with the team I’ve been working.
+Since it's been 5 years, I have some practices which I use for daily decision-making as a platform engineer. In this post, I introduce some of them. The things I listed below are not special and you’ve heard or seen some of these things somewhere. These come from my daily inputs or experiences with the team I’ve been working.
 
 Since they are just practices, you won’t be able to use them for 5 or 10 years and they should be updated when the trend or the world changes. This is just a record of 2020.
 

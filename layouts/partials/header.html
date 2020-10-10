@@ -19,7 +19,8 @@
     <meta property="og:type" content="{{ if .IsHome }}website{{ else }}article{{ end }}" />
     <meta property="og:site_name" content="{{ .Site.Title }}" />
     <meta property="og:description" content="{{ with .Description -}}{{ . }}{{ else -}}{{ if .IsPage }}{{ substr .Summary 0 300 }}{{ else }}{{ with .Site.Params.description }}{{ . }}{{ end }}{{ end }}{{ end }}"/>
-    {{ if isset .Params "thumbnail" }}<meta property="og:image" content="{{ .Params.thumbnail }}"/>{{ end -}}
+    {{ if isset .Params "thumbnail" }}<meta property="og:image" content="{{ .Params.thumbnail }}"/>{{ "\n    " }}{{ end -}}
+    {{ if isset .Params "thumbnail" }}<meta name="twitter:card" content="summary_large_image" />{{ "\n    " }}{{ end -}}
     <meta name="twitter:site" content="@{{ .Site.Params.twitter }}" />
 
   </head>

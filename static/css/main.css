@@ -2464,7 +2464,7 @@ td.hidden-print {
 body {
   margin: 0;
   border: 0;
-  font-family: "HelveticaNeue-Light", "Helvetica Neue Light", "Helvetica Neue", "Helvetica", "Arial", "Lucida Grande", "sans-serif";
+  font-family: "Inter", "HelveticaNeue-Light", "Helvetica Neue Light", "Helvetica Neue", "Helvetica", "Arial", "Lucida Grande", "sans-serif";
   color: #555;
   -webkit-font-smoothing: antialiased;
   text-rendering: optimizelegibility;
@@ -2486,7 +2486,7 @@ h1, h2, h3, h4, h5 {
 }
 
 h1, h2 {
-  font-family: "HelveticaNeue-Light", "Helvetica Neue Light", "Helvetica Neue", "Helvetica", "Arial", "Lucida Grande", "sans-serif";
+  font-family: "Inter", "HelveticaNeue-Light", "Helvetica Neue Light", "Helvetica Neue", "Helvetica", "Arial", "Lucida Grande", "sans-serif";
 }
 
 a {

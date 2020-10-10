@@ -1,7 +1,6 @@
 ---
 title: "Practices as a Platform Engineer"
 date: 2020-06-16T00:41:49+09:00
-draft: true
 en: true
 ---
 

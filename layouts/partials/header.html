@@ -16,6 +16,12 @@
     
     <meta property="og:title" content="{{ .Title }}"/>
     <meta property="og:url" content="{{ .Permalink }}"/>
+    <meta property="og:type" content="{{ if .IsHome }}website{{ else }}article{{ end }}" />
+    <meta property="og:site_name" content="{{ .Site.Title }}" />
+    <meta property="og:description" content="{{ with .Description -}}{{ . }}{{ else -}}{{ if .IsPage }}{{ substr .Summary 0 300 }}{{ else }}{{ with .Site.Params.description }}{{ . }}{{ end }}{{ end }}{{ end }}"/>
+    {{ if isset .Params "thumbnail" }}<meta property="og:image" content="{{ .Params.thumbnail }}"/>{{ end -}}
+    <meta name="twitter:site" content="@{{ .Site.Params.twitter }}" />
+
   </head>
   
   <body>

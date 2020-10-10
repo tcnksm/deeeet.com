@@ -20,7 +20,7 @@ pygmentsuseclasses = true
     cover_image = "cover-201412.jpg"
     twitter = "deeeet"
     github = "tcnksm"
-    google_font = "Inter"
+    google_font = "Inter:900,700,400"
 
     [params.sharing]
         twitter =true

@@ -103,6 +103,12 @@ BoundaryはまさにZero Touch Production的なツールになっていくので
 
 上でInfrastructure as Codeの狭間に本番アクセスという領域があると書いたが，Terraformでそれを実現してきたHashicorpがそこを突いてきたのはさすがという感じがする…
 
+# Breakglass
+
+同じく[Building Secure Reliable Systems](https://landing.google.com/sre/resources/foundationsandprinciples/srs-book/)の中でもBest Practicesとして紹介されているが，全く予期しない障害に備えてあらゆるチェックを通過して直接本番を触ることができる「Breakglass」の仕組みをもつもの大切．具体的な例としてはSpoitfyの[gimme](https://github.com/spotify/gimme)だったり，Merpayの[qray](https://engineering.mercari.com/blog/entry/sre-qray/)などが挙げられる．
+
+まとめると，まず普段はDebugなどに必要な最小限のViewer権限のみを持つ．変更が必要な場合はInfrastructure as Codeを管理するレポジトリにPRを送る（そして裏で動くCI/CDにより変更を実行する）．これはBackend EngineerだろうがSREだろうが変わらない．障害などが発生した場合はまずは上で紹介したClutchやBoundaryを経由した解消を試みる．それでもだめな場合は「Breakglass」の仕組みにより本番の権限を一時的に取得してオペレーションを行う．これが自分としては現状最も理想なZTPの形だと思う．
+
 # Conclusion
 
 本記事ではZero Touch Productionとは何か?についてまとめた．この記事を通して言いたかったことは，まずInfrastructure as CodeやObservabilityの発展によりそもそも本番環境への直接的なアクセスというのは限定的になっているということ．もしそれができていないならZTP以前にそれを目指すこと．次に，その上でも発生する本番環境へのアクセスのリスクを減らしていくためにZTPやその手法は良い指針になること．

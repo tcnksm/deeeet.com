@@ -651,8 +651,6 @@ blockquote {
 }
 
 blockquote p {
-  font-size: 17.5px;
-  font-weight: 300;
   line-height: 1.25;
 }
 
@@ -663,7 +661,6 @@ blockquote p:last-child {
 blockquote small {
   display: block;
   line-height: 1.428571429;
-  color: #999999;
 }
 
 blockquote small:before {
@@ -2803,14 +2800,11 @@ article ol li, article ul li {
 }
 article blockquote {
   border: 0;
-  font-size: 1.1em;
   margin: 1.2em -4em 1.2em 0;
   padding: 0;
 }
 article blockquote p {
-  font-size: 30px;
   line-height: 1.1;
-  color: #2077b2;
   font-weight: 600;
 }
 article h1 {

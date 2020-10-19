@@ -1,13 +1,13 @@
 ---
-title: "Practices for Good Terraform Module"
-date: 2020-10-15T22:03:16+09:00
-draft: true
+title: "Practices for Better Terraform Module"
+date: 2020-10-19T22:03:16+09:00
+thumbnail: https://user-images.githubusercontent.com/1256183/96457877-41c9cc00-125b-11eb-809b-c583d769a907.png
 en: true
 ---
 
-I’ve been working at the internal platform team at Mercari for 3 years. In that team, we’ve developed and provided the special Terraform module, which bootstraps required infrastructure and SaaS services for building 1 microservice, to internal developers. Now, this module is used by more than 400 services (since we create both development and production environments, actually it’s 800) and we’ve released the module more than 30 versions.
+I’ve been working at the internal platform team at Mercari for 3 years. In that team, we’ve developed and provided the special Terraform module, which bootstraps required infrastructure and SaaS services for building one microservice, to internal developers (See more details on [Terraform Ops for Microservices](https://speakerdeck.com/b4b4r07/terraform-ops-for-microservices)). Now, this module is used by more than 400 services (since we create both development and production environments, actually it’s 800) and we’ve released the module more than 30 versions.
 
-This blog post introduces some of the practices I developed while working on that Terraform module. Good, in this context means, _from the module user’s point of view_, easy to use and easy to maintain for a long period of time. This documentation is mainly about the internal Terraform module but I think you can apply this to the public module and other things like Kubernetes custom controller development and so on...  
+This blog post introduces some of the practices I developed while working on that Terraform module. "Better", in this context means, _from the module user’s point of view_, easier to use and easier to maintain for a long period of time. Since the practices are very high level, they can be applied not only for the internal Terraform module but also for the public one and other software development like [Kubernetes CRD](https://kubernetes.io/docs/concepts/extend-kubernetes/api-extension/custom-resources/) and so on...  
 
 # On Design
 
@@ -22,7 +22,7 @@ The Terraform module is an abstraction of the collection of the raw Terraform re
 ![Philosophy](https://user-images.githubusercontent.com/1256183/96132088-eafb8400-0f34-11eb-90d1-3eebabfadf38.png)
 
 
-The best modules are those that provide powerful functionality yet have a simple interface. In the book, [A Philosophy of Software Design](https://www.amazon.com/dp/B07N1XLQ7D) calls this “Deep module”. You can see the visualized notion of this above. “Deep” means they have lots of functionality hidden behind a simple interface. On the other hand, “Shallow module” is one whose interface is relatively complex in comparison to the functionality that provides (does not hide much complexity).
+The best modules are those that provide powerful functionality yet have a simple interface. In the book, [A Philosophy of Software Design](https://www.amazon.com/dp/B07N1XLQ7D) calls this "Deep module" (The word "module" is used for different context and not about Terraform module but you can think of them same). You can see the visualized notion of this above. "Deep" means they have lots of functionality hidden behind a simple interface. On the other hand, “Shallow module” is one whose interface is relatively complex in comparison to the functionality that provides (does not hide much complexity).
 
 The module’s interface represents the complexity of that module imposes to the user: the smaller and simpler the interface, the less complexity that it introduces. When designing your Terraform module, always think about the depth of it.
 
@@ -44,7 +44,7 @@ But, at the same time, it should have configuration knobs for the power users. N
 
 # On Upgrading 
 
-Upgrading is one of the most critical tasks of long-developing software. But, at the same time, it’s also the most bothering task. This is also true for the Terraform module, especially which is for the general purpose and widely used… 
+Upgrading is one of the most critical tasks of long-developing software. But, at the same time, it’s also the most bothering task. This is also true for the Terraform module, especially which is for the general purpose and widely used... It's been huge problem for our Terraform module, too.
 
 Since normally new features are added to the latest version, if you want your users to use the feature, you need to ask them to upgrade it. To make it works, upgrading must be easy as possible and less cost to users. 
 

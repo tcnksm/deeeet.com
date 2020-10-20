@@ -32,7 +32,7 @@ Waypointはこの辺りの課題を解決することを目的にしてる．Doc
 
 Waypointが言ってるBuild，Deploy，ReleaseというWorkflowがそれぞれ何かというと: 
 
-- **Build**: アプリケーションのソースコードからBuildpackなりDockerなりでデプロイ単位になるArtiifactを作ること
+- **Build**: アプリケーションのソースコードからBuildpackなりDockerなりでデプロイ単位になるArtifactを作ること
 - **Deploy**: Buildで作ったArtifactをデプロイすること
 - **Release**: デプロイした環境に実際にトラフィックを流し始めること
 

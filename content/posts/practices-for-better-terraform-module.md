@@ -7,7 +7,7 @@ en: true
 
 I’ve been working at the internal platform team at Mercari for 3 years. In that team, we’ve developed and provided the special Terraform module, which bootstraps required infrastructure and SaaS services for building one microservice, to internal developers (See more details on [Terraform Ops for Microservices](https://speakerdeck.com/b4b4r07/terraform-ops-for-microservices)). Now, this module is used by more than 400 services (since we create both development and production environments, actually it’s 800) and we’ve released the module more than 30 versions.
 
-This blog post introduces some of the practices I developed while working on that Terraform module. "Better", in this context means, _from the module user’s point of view_, easier to use and easier to maintain for a long period of time. Since the practices are very high level, they can be applied not only for the internal Terraform module but also for the public one and other software development like [Kubernetes CRD](https://kubernetes.io/docs/concepts/extend-kubernetes/api-extension/custom-resources/) and so on...  
+This blog post introduces some of the practices we developed while working on that Terraform module. "Better", in this context means, _from the module user’s point of view_, easier to use and easier to maintain for a long period of time. Since the practices are very high level, some of them can be applied not only for the internal Terraform module but also for the public one and other software development like [Kubernetes CRD](https://kubernetes.io/docs/concepts/extend-kubernetes/api-extension/custom-resources/) and so on...  
 
 # On Design
 

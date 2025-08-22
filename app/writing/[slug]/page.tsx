@@ -77,7 +77,7 @@ export default function Blog({ params }) {
             url: `${baseUrl}/writing/${post.slug}`,
             author: {
               "@type": "Person",
-              name: "My Portfolio",
+              name: "Taichi Nakashima",
             },
           }),
         }}

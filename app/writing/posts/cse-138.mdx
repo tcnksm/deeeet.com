@@ -1,0 +1,48 @@
+---
+title: "CSE 138: Distributed Systems"
+publishedAt: 2021-02-15
+---
+
+From the beginning of this year, I started to take lecture courses of [undergrad distributed systems course at UC Santa Cruz (CSE 138)](http://composition.al/CSE138-2020-03/) by [Lindsey Kuper](https://twitter.com/lindsey). It consists of 23 lectures (you can see the schedule of topics from [here](http://composition.al/CSE138-2020-03/schedule.html)) and recently I've finished all of them. I'm not a student at UCSC but due to the COVID-19 situation, all these lectures were delivered online and are available on [YouTube](https://www.youtube.com/playlist?list=PLNPUF5QyWU8O0Wd8QDh9KaM1ggsxspJ31). So I was able to take them (Read about the background of online lecture and setup of it on [Twitch plays CSE138](http://composition.al/blog/2020/03/31/twitch-plays-cse138/)).
+
+Now, nearly every application is a distributed system running on multiple machines or containers. If you structure it properly, it gives us more reliability and leads us to more scalable organizational models. But, at the same time, it's very complicated to design and build. Because of this, and as a platform engineer and SRE, "distributed system" is always one of the important topics to learn for me.
+
+There are good books to learn about distributed system like "[Designing Data-Intensive Applications"](https://dataintensive.net/) by [Martin Kleppmann](https://twitter.com/martinkl) or ["Designing Distributed Systems"](https://learning.oreilly.com/library/view/designing-distributed-systems/9781491983638/) by [Brendan Burns](https://twitter.com/brendandburns). While these are great, I wanted to explore more basic algorithms and the core theory behind. For this, one way is reading fundamental papers but I didn't know where to start... After searching on the internet, I found [Distributed Systems Course](http://www.distributedsystemscourse.com/) made by [Chris Colohan](http://www.colohan.com/) and, on this site, he recommends CSE 138. The topics are what I wanted to learn so decided to take them.
+
+In the 23 lectures, you can lean the following:
+
+- **Time and asynchrony**: Causality and happens-before, Partial orders, Total orders, Lamport clocks, Vector clocks, FIFO delivery, Causal delivery, Totally-ordered delivery, Consistent snapshots, and Chandy-Lamport snapshot algorithm
+- **Fault tolerance and replication**: Fault classification and fault models, Two generals problem, Reliable delivery, At-least-once/at-most-once/exactly-once delivery, Reliable broadcast, Primary-backup replication, and Chain replication
+- **Consistency and consensus**: FLP result, Paxos, Multi-Paxos, Eventual consistency, Strong convergence, Application-specific conflict resolution, Quorum consistency, Consistent hashing, Upper bounds, Least upper bounds, Join-semilattices, and CRDT
+- **Parallelism**: Online systems vs. offline systems, Raw data vs. derived data, and MapReduce
+
+The main papers you read are followings (each paper is described deeply in the lecture):
+
+- [Dynamo: Amazon's Highly Available Key-value Store](https://www.allthingsdistributed.com/files/amazon-dynamo-sosp2007.pdf). Giuseppe DeCandia, Deniz Hastorun et al. 2007.
+- [MapReduce: Simplified Data Processing on Large Clusters](https://static.googleusercontent.com/media/research.google.com/en//archive/mapreduce-osdi04.pdf). Jeffrey Dean and Sanjay Ghemawat.2004.
+
+The lecture is very easy to understand for me. The drawing and the examples the professor uses helps to grab the overview of the complex algorithms (e.g., Paxos). The students asked questions via Slack and she repeated it on the video and answered them. It was also very helpful (even I didn't in the Slack). I was very impressed that she opens YouTube comments and answers questions from anyone on the internet as well.
+
+[Chris Whealy](https://github.com/ChrisWhealy) opens [his lecture notes on GitHub](https://github.com/ChrisWhealy/DistributedSystemNotes). It is very well written and also helps you to understand the course.
+
+For the next, I'm thinking to take [MIT 6.824: Distributed Systems](https://pdos.csail.mit.edu/6.824/). The topic is similar to CSE138 but some is different and it introduces more recent topics. So it's very interesting, too (seems more papers I need to read before each lecture but I will try!).
+
+---
+
+The followings are other papers mentioned in the lecture (I didn't read all but I'm thinking to read later to lean more):
+
+- [Detecting Causal Relationships in Distributed Computations: In Search of the Holy Grail](https://www.vs.inf.ethz.ch/publ/papers/holygrail.pdf). Reinhard Schwarz and Friedemann Mattern. 1994 (Lecture 4, Total orders and Lamport clocks)
+- [Distributed snapshots: determining global states of distributed systems](https://dl.acm.org/doi/10.1145/214451.214456). K. Mani Chandy and Leslie Lamport. 1985 (Lecture 8, Chandy-Lamport Snapshot Algorithm)
+- [Atomic Broadcast: From Simple Message Diffusion to Byzantine Agreement](https://www.cs.huji.ac.il/~dolev/pubs/cristian85atomic.pdf). Flaviu Cristian and Houtan Aghili et al. 1994 (Lecture 10, Fault classification and fault models)
+- [Chain replication for supporting high throughput and availability](https://dl.acm.org/doi/10.5555/1251254.1251261). Robbert van Renesse and Fred B. Schneider. 2004. (Lecture 12, Chain Replication)
+- [Impossibility of distributed consensus with one faulty process](https://dl.acm.org/doi/10.1145/3149.214121). Michael J. Fischer, Nancy A. Lynch, and Michael S. Paterson. 1985 (Lecture 14, FLP Result)
+- [Paxos Made Simple](https://lamport.azurewebsites.net/pubs/paxos-simple.pdf). Leslie Lamport. 2001 (Lecture 14, Paxos)
+- [Vive La Difference: ´Paxos vs. Viewstamped Replication vs. Zab](https://www.cs.cornell.edu/fbs/publications/viveLaDifference.pdf). Robbert van Renesse, Nicolas Schiper, Fred B. Schneider. 2015 (Lecture 16, Other Consensus Protocols)
+- [A Conflict-Free Replicated JSON Datatype](https://arxiv.org/abs/1608.03960). Martin Kleppmann and Alastair R. Beresford. 2016 (Lecture 22, CRDTs)
+- [Practical Byzantine Fault Tolerance](http://pmg.csail.mit.edu/papers/osdi99.pdf). Miguel Castro and Barbara Liskov. 1999 (Lecture 23)
+- [Consensus on Transaction Commit](https://lamport.azurewebsites.net/video/consensus-on-transaction-commit.pdf). Jim Gray and Leslie Lamport. 2004 (Lecture 23)
+- [Time, Clocks, and the Ordering of Events in a Distributed System](https://lamport.azurewebsites.net/pubs/time-clocks.pdf). Leslie Lamport. 1978 (Lecture 23, Vector Clock)
+- [RADOS: A Scalable, Reliable Storage Service for Petabyte-scale Storage Clusters](https://ceph.com/wp-content/uploads/2016/08/weil-rados-pdsw07.pdf). Sage A. Weil and Andrew W. Leung et al. 2007. (Lecture 23, Replication)
+- [In Search of an Understandable Consensus Algorithm](https://raft.github.io/raft.pdf). Diego Ongaro and John Ousterhout. 2014. (Lecture 23, Consensus)
+- [Viewstamped Replication: A New Primary Copy Method to Support Highly-Available Distributed Systems](https://dl.acm.org/doi/10.1145/62546.62549). Brian M. Oki and Barbara H. Liskov. 1988 (Lecture 23, Consensus)
+- [Paxos vs Raft: Have we reached consensus on distributed consensus?](https://arxiv.org/abs/2004.05074). Heidi Howard and Richard Mortier. 2020 (Lecture 23, Consensus)

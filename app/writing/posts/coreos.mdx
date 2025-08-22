@@ -1,5 +1,5 @@
 ---
-title: 'CoreOSに入門した'
+title: "CoreOSに入門した"
 publishedAt: 2014-11-17
 ---
 
@@ -44,7 +44,7 @@ CoreOSを支える技術キーワードを挙げるとすれば以下の3つに�
 
 CoreOSは専用のパッケージマネージャーをもたない．またRubyやPythonといった言語のRuntimeも持たない．全てのアプリケーションをDockerコンテナとして動作させる．
 
-![https://coreos.com/assets/images/media/Host-Diagram.png](https://coreos.com/assets/images/media/Host-Diagram.png)
+![](https://coreos.com/assets/images/media/Host-Diagram.png)
 
 [https://coreos.com/assets/images/media/Host-Diagram.png](https://coreos.com/assets/images/media/Host-Diagram.png)
 
@@ -54,7 +54,7 @@ Dockerを使うことで上図のようにコンテナによるプロセスの�
 
 CoreOSは複数のマシンからクラスタを形成する．クラスタを形成するために，CoreOSは`etcd`という分散Key-Valuesストアを使い，各種設定をノード間で共有する（`etcd`ってのは"`/etc` distributed"という意味）．
 
-[https://coreos.com/assets/images/media/Three-Tier-Webapp.png](https://coreos.com/assets/images/media/Three-Tier-Webapp.png)
+![](https://coreos.com/assets/images/media/Three-Tier-Webapp.png)
 
 `etcd`はクラスタのサービスディスカバリーとしても利用される．クラスタのメンバーの状態などを共有し，共有情報に基づき動的にアプリケーションの設定を行う．これらを行うetcdのコアはRaftのコンセンサスアルゴリズムである．Raftについては，["Raft - The Secret Lives of Data"](http://thesecretlivesofdata.com/raft/)を見るとビジュアルにその動作を見ることができる．
 
@@ -66,7 +66,7 @@ etcdは[locksmith](https://github.com/coreos/locksmith)というクラスタの�
 
 このスケジューリングとコンテナの管理にCoreOSは`fleet`を用いる．`fleet`はクラスタ全体のinit systemとして，クラスタのプロセス管理を行う．`fleet`はこれを各マシンの`systemd`を束ねることでこれを実現している．`fleet`で管理するサービスは`systemd`のUnitファイルを改良したものを用いる．
 
-![https://coreos.com/assets/images/media/Fleet-Scheduling.png](https://coreos.com/assets/images/media/Fleet-Scheduling.png)
+![](https://coreos.com/assets/images/media/Fleet-Scheduling.png)
 
 [https://coreos.com/assets/images/media/Fleet-Scheduling.png](https://coreos.com/assets/images/media/Fleet-Scheduling.png)
 

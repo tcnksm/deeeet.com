@@ -49,7 +49,7 @@ LinkedInでは大きく2つのデータを扱っている．1つはウェブサ�
 
 KafkaはBroker（クラスタ）とProducer，Consumerという3つのコンポーネントで構成される．Producerはメッセージの配信を行いConsumerはメッセージの購読を行う．そしてKafkaのコアであるBrokerはクラスタを構成しProducerとConsumerの間でメッセージの受け渡しを行うキューとして動作する．
 
-<img src="http://kafka.apache.org/images/producer_consumer.png" />
+![](http://kafka.apache.org/images/producer_consumer.png)
 [http://kafka.apache.org/images/producer_consumer.png](http://kafka.apache.org/images/producer_consumer.png)
 
 **メッセージのやりとり**
@@ -90,7 +90,7 @@ Kafkaのデザインはこれらを解決するようになっている．
 
 まずBrokerのメッセージの保存方法に特徴がある．KafkaはTopicごとに1つ以上のPartitionという単位でメッセージを保存する．メッセージはそれぞれのPartitionの末尾に追記される．これによりPartitionごとにメッセージの順序性が担保される．例えば以下の図はあるTopicの3つのPartitionにメッセージが追記されていることを示す．
 
-<img src="http://kafka.apache.org/images/log_anatomy.png" />
+![](http://kafka.apache.org/images/log_anatomy.png)
 [http://kafka.apache.org/images/log_anatomy.png](http://kafka.apache.org/images/log_anatomy.png)
 
 
@@ -103,7 +103,7 @@ Partitionには大きく以下の2つの目的がある．
 
 どのように並列処理するか? Consumerはグループ単位でメッセージを購読する．そして"1つのPartitionのデータは1つのConsumerグループ内の1つのConsumerにのみ消費される"という制限でこれを実現する（つまりConsumerの並列数はPartition数を超えられない）．以下の図は2つのConsumerグループAとBに属する複数のConsumerが並列にメッセージを購読している様子を示す．グループ内では並列処理だがグループ間で見ると伝統的なPub/Subモデル（1対1）のモデルに見える．
 
-<img src="http://kafka.apache.org/images/consumer-groups.png"/>
+![](http://kafka.apache.org/images/consumer-groups.png)
 [http://kafka.apache.org/images/consumer-groups.png](http://kafka.apache.org/images/consumer-groups.png)
 
 この仕組みには以下のような利点がある．

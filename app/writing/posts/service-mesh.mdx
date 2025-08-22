@@ -54,11 +54,11 @@ Microservicesでは各チームは自分のサービスに対して責任を持�
 
 これらの課題を踏まえ登場したのがService meshである．Service meshは以下の図のように全てのサービスと一緒にSidecarとしてProxyをデプロイし，サービス間のコミュニケーションをすべてこのProxy経由で実行するようにすることで*mesh*を構成する．そしてこのProxyレイヤーでTraffic controllやLB，ネットワークのResiliency、Observability，Securityなどを担保する．
 
-<img src="http://philcalcado.com/img/service-mesh/6-a.png" />
+![](http://philcalcado.com/img/service-mesh/6-a.png)
 
 http://philcalcado.com/img/service-mesh/6-a.png
 
-<img src="http://philcalcado.com/img/service-mesh/mesh1.png" />
+![](http://philcalcado.com/img/service-mesh/mesh1.png)
 
 http://philcalcado.com/img/service-mesh/mesh1.png
 
@@ -68,7 +68,7 @@ http://philcalcado.com/img/service-mesh/mesh1.png
 
 以下の図はIstioのアーキテクチャである．ここではIstioの各コンポーネントについて簡単にまとめる．Istioのコンポーネントは大きく分けて**Data plane**と**Control plane**に分けることができる．
 
-<img src="https://istio.io/docs/concepts/what-is-istio/img/overview/arch.svg" />
+![](https://istio.io/docs/concepts/what-is-istio/img/overview/arch.svg)
 
 #### Data plane
 
@@ -98,13 +98,13 @@ Control planeはData planeのBrain的な役割を担う．Control planeはPilot�
 
 PilotはMicroservicesが最新のNetwork topologyやRouting tableを持っていることを保証する．Service discoveryに加えてA/B testsやCanary deploymentのようなTraffic controllやリクエストのTimeouts，Retries，Circuit breakeringのようなネットワークのResiliencyの機能を提供する．Pilotはこれらの機能のための専用の設定をEnvory specificな設定に変換し配下のService proxyにそれを伝搬させる．具体的に専用の設定には`RouteRule`と`DestinationPolicy`がある．
 
-<img src="https://istio.io/docs/concepts/traffic-management/img/pilot/TrafficManagementOverview.svg" />
+![](https://istio.io/docs/concepts/traffic-management/img/pilot/TrafficManagementOverview.svg)
 
 ##### Mixer
 
 Mixerはアクセスコントールの施行やService proxyからのTelemetry dataの収集を担う．MixerによりACL（Precondition Checking）やリクエストのRate-limit（Quota Management）の設定をしたり共通のメトリクスの収集（Telemetry Reporting）を行うことができる．MixerはPluggableであり，Adaptersを実装することでloggingやmonitoringやACLの機能をインフラに合わせて拡張していくことができる．Mixerは`rule`やAdapterごとの設定ファイルをもつ．
 
-<img src="https://istio.io/docs/concepts/policy-and-control/img/mixer-config/machine.svg" />
+![](https://istio.io/docs/concepts/policy-and-control/img/mixer-config/machine.svg)
 
 ちなみにMixerがSPOFになるのでは?と思ったら[Mixer and the SPOF Myth](https://istio.io/blog/2017/mixer-spof-myth.html)を読むと良い（まとめるとStatelessでありむしろスケールしやすいアーキテクチャ）．
 
@@ -112,7 +112,7 @@ Mixerはアクセスコントールの施行やService proxyからのTelemetry d
 
 Authはx509証明書のIssue，RevokeやRotationを行う．Authは全てのMicroservicesに証明書を発行しサービス間のmTLSによるAuthNを実現する．アプリケーションからUnencriptedなリクエストを投げてもService Proxy間，Mesh内ではEncryptedな通信へと透過的にUpgradeする．
 
-<img src="https://istio.io/docs/concepts/security/img/mutual-tls/auth.svg" />
+![](https://istio.io/docs/concepts/security/img/mutual-tls/auth.svg)
 
 ### IstioのConfiguration
 

@@ -1,7 +1,7 @@
-+++
-date = "2016-11-01T11:42:19+09:00"
-title = "GolangでAPI Clientを実装する"
-+++
+---
+title: "GolangでAPI Clientを実装する"
+publishedAt: "2016-11-01T11:42:19+09:00"
+---
 
 特定のAPIを利用するコマンドラインツールやサービスを書く場合はClientパッケージ（SDKと呼ばれることも多いが本記事ではClientと呼ぶ）を使うことが多いと思う．広く使われているサービスのAPIであれば大抵はオフィシャルにClientパッケージが提供されている．例えば以下のようなものが挙げられる．
 
@@ -14,23 +14,23 @@ title = "GolangでAPI Clientを実装する"
 
 自分はこれまでいくつかのAPI client パッケージを実装してきた．本記事ではその実装の自分なりの実装パターン（各人にやりかたはあると思う）といくつかのテクニックを紹介する．
 
-## Clientとは何か?
+### Clientとは何か?
 
 API ClientとはAPIのHTTPリクエストを（言語の）メソッドの形に抽象化したものである．例えば  https://api.example.com/users というエンドポイントからユーザ一覧を取得できるとする．API Clientは具体的なHTTPリクエスト（メソッドやヘッダの設定，認証など）を抽象化し `ListUsers()`のようなメソッドに落とし込んでその機能を提供する．
 
-## なぜ Client を書くべきか?
+### なぜ Client を書くべきか?
 
 そもそも共通化できることが多いため．それぞれのリクエストは独立していても例えばユーザ名やパスワード，Tokenなどは基本は同じものを使うし，ヘッダの設定なども共通して行える．またテストも書きやすくなる．
 
-## いつClientを書くべきか?
+### いつClientを書くべきか?
 
 複数のエンドポイントに対してリクエストを投げる必要がある場合はClientを書いてしまえばいいと思う．例えば，単一のエンドポイントに決まったリクエストを投げるだけであればClientをわざわざ書く必要はない．自分の場合は3つ以上エンドポイントがあればClientをさっと書いていると思う．
 
-## 基本的な実装パターン
+### 基本的な実装パターン
 
 以下では https://api.example.com （存在しない）のAPI Client パッケージを実装するとする．このAPIでは`/users`というパスでユーザの作成と取得，削除が可能であるとする．また各リクエストにはBasic認証が必要であるとする．
 
-### パッケージの名前をつける
+#### パッケージの名前をつける
 
 https://golang.org/doc/effective_go.html#package-names
 
@@ -38,7 +38,7 @@ https://golang.org/doc/effective_go.html#package-names
 
 名前については以下でもいくつか述べる．
 
-### Client（struct）を定義する
+#### Client（struct）を定義する
 
 まずは`Client` structを実装する．`Client`のフィールドにはリクエスト毎に共通に利用する値を持たせるようにする．HTTP APIの場合は例えば以下のようなものが考えられる:
 
@@ -64,7 +64,7 @@ importのように関連するフィールドでグールピングして記述�
 
 また名前は`Client`で十分である．例えばPagerDutyのAPI Clientを書いているときに`PagerDutyClient`という名前にしない．上述したように既にそれはパッケージ名で説明されるはずである．`pagerduty.PagerDutyClient`では冗長になる．簡潔な名前を心がける．
 
-### コンストラクタを定義する
+#### コンストラクタを定義する
 
 次に`Client`のコンストラクタを定義する．例えば今回の場合は以下のようになる．
 
@@ -102,7 +102,7 @@ if logger == nil {
 
 `http.Client`もコンストラクタ内で生成し`Client`にセットしておく．デフォルトを使っても良いしProxyや各Timeoutを変更したい場合は独自で準備しても良い（`http.DefaultClient`の値はバージョンによって変わるので注意する．独自の設定を使っているとバージョン毎の新しい設定に追従できないことがある）．
 
-### 共通メソッドを定義する1
+#### 共通メソッドを定義する1
 
 API Clientでは多くの共通メソッドを定義できる．代表的なのは`http.Request`を作成するメソッドである．`http.NewRequest`を使い`http.Request`を生成しBasic認証の設定やヘッダの設定といった共通の処理を行う．
 
@@ -136,7 +136,7 @@ func (c *Client) newRequest(ctx context.Context, method, spath string, body io.R
 
 また`User-Agent`をセットしておくとサーバ側に優しい．ClientのバージョンやGoのバージョンをつけておくとより便利である．
 
-### 共通メソッドを定義する2
+#### 共通メソッドを定義する2
 
 多くのAPIはレスポンスとしてJSONやXMLなどを返す．これらをGolangのstructへDecodeする処理はAPI Clientでは共通の処理になる．例えばJSONの場合は以下のような関数を準備しておくと良い．
 
@@ -150,7 +150,7 @@ func decodeBody(resp *http.Response, out interface{}) error {
 
 ちゃんと`Decoder`を使う．`ioutil.ReadAll`などを使うとメモリ効率もパフォーマンスも良くない（ref. [Crossing Streams: a love letter to Go io.Reader](https://www.datadoghq.com/blog/crossing-streams-love-letter-gos-io-reader)，[Go Walkthrough: io package](https://medium.com/go-walkthrough/go-walkthrough-io-package-8ac5e95a9fbd#.xivkrapgz)）．
 
-### 各メソッドを定義する
+#### 各メソッドを定義する
 
 最後にこれらを使って各メソッドを定義する．今回の場合は以下のようなメソッドが考えられる．外部からリクエストをキャンセルできるように`context.Context`を渡す．
 
@@ -188,11 +188,11 @@ func (c *Client) GetUser(ctx context.Context, userID string) (*User, error) {
 
 リクエストメソッドは上記で定義した共通メソッドで`http.Request`を作成し`Client`の`HTTPClient`を利用して実際のリクエストを実行する．そしてレスポンスのDecodeを行う．異なるのはパス名やリクエストBodyである．ステータスコードのチェックもここで行う．
 
-## いくつかのテクニック
+### いくつかのテクニック
 
 以下では自分が実践しているいくつかのテクニックを紹介する．
 
-### insecureオプション
+#### insecureオプション
 
 `Client`のコンストラクタに渡す値として`insecure`（`bool`）はよく使う．例えば社内の古いサービスやステージング環境だと自己署名証明書を使っている場合があり`InsecureSkipVerify`を有効にする必要がある．`insecure`はこの設定に使う．例えば以下のように切り替えを行う．
 
@@ -209,7 +209,7 @@ c.HTTPClient = &http.Client{
 }
 ```
 
-### Symmetric API testing
+#### Symmetric API testing
 
 [Symmetric API Testing](https://blog.gopheracademy.com/advent-2015/symmetric-api-testing-in-go/)
 
@@ -248,7 +248,7 @@ muxAPI.HandleFunc("/users/1", func(w http.ResponseWriter, r *http.Request) {
 
 これで実際のAPIリクエストを避けてテストを行うことができる．
 
-### ネットワーク関連のデバッグ
+#### ネットワーク関連のデバッグ
 
 `Client`を定義するときに`log.Logger`を渡すようにしたがこれはデバッグに用いる．API Clientでもデバッグは重要である．リクエストBodyなどはもちろんだが，以下のようにネットワークに関わる情報をデバッグとして出力しておくと問題が起こったときに解決しやすい．
 
@@ -265,6 +265,6 @@ c.Logger.Printf("[DEBUG] request proxy: %s", proxy)
 HTTPリクエストのどこで時間がかかっているかわかると問題の切り分けがしやすい．[tcnksm/go-httpstat](https://github.com/tcnksm/go-httpstat)を使うとDNSLookupやTLSHandshakeのレイテンシを簡単に測定することができる．詳しくは[Tracing HTTP request latency in golang](https://medium.com/@deeeet/trancing-http-request-latency-in-golang-65b2463f548c#.i8unan3sy) に書いた．
 
 
-## まとめ
+### まとめ
 
 API Clientは最初に書くGolang パッケージとしても良いと思う．

@@ -1,9 +1,6 @@
 ---
-
-title: 'DockerによるマルチホストのPaaS flynnの概要とそのアーキテクチャー'
-date: 2014-07-07
-comments: true
-categories: docker
+title: 'flynnの概要とそのアーキテクチャー'
+publishedAt: 2014-07-07
 ---
 
 <script async class="speakerdeck-embed" data-id="3e5fba00e59601314f771288f3080752" data-ratio="1.77777777777778" src="http://speakerdeck.com/assets/embed.js"></script>
@@ -14,11 +11,9 @@ categories: docker
 
 今回の発表のために資料を集めまくり，理解できない部分は出来る限りコードも読んだ．発表スライドの補完にもなると思うので，そのメモ書き（一応体裁は整えた）を公開しておく．
 
-## デモ
+### デモ
 
 以下は，簡単なデモ．
-
-<img src="/images/flynn.gif" class="image">
 
 やっていることは以下．
 
@@ -28,7 +23,7 @@ categories: docker
 
 コマンドを含めた詳しい解説は以下で解説する．
 
-## 前提知識 (Herokuの動作)
+### 前提知識 (Herokuの動作)
 
 まず，前提知識としてPaaS (ここではHeroku) がどのように動作しているのかをそのワークフローとともにまとめておく．
 
@@ -79,11 +74,11 @@ $ heroku run bash
 
 Herokuの重要な要素はDynoとslugであることがわかる．これをDockerに置き換えるとslugはDockerイメージに，DynoはDockerコンテナと考えることができる．
 
-## flynnとは何か？
+### flynnとは何か？
 
 [flynn](https://flynn.io)はDockerによるPlatform-as-a-Service．開発には，dokkuの作者である[@progrium](https://github.com/progrium)氏も関わっている．OSSかつクラウドファンディングを受けて開発が進められている．実装はGo言語．
 
-### flynnが与えてくれるもの
+#### flynnが与えてくれるもの
 
 flynnのトップページには，「The product that ops provides to developers」が掲げられている．flynnは開発者に対して以下のようなものを可能にしてくれる．
 
@@ -93,7 +88,7 @@ flynnのトップページには，「The product that ops provides to developer
 - 簡単にスケールできる
     - 新たにノードを追加するだけで
 
-### 他のDockerによるOSSのPaaS
+#### 他のDockerによるOSSのPaaS
 
 DockerによるOSSなPaaSプロジェクトは他にもある．例えば，[dokku](https://github.com/progrium/dokku)や[Deis](http://deis.io/)が挙げられる．
 
@@ -101,7 +96,7 @@ DockerによるOSSなPaaSプロジェクトは他にもある．例えば，[dok
 
 [Deis](http://deis.io)は，CoreOSを用いたマルチホストのDocker PaaS．Deisについては，DockerCoon14の発表["Deis: Evolution of a Docker PAAS"](http://gabrtv.github.io/deis-dockercon-2014/#/)が詳しい．flynnとDeisでできることはほとんど変わらない．敢えて比較するなら，DeisはCoreOSが前提であるが，flynnはOSを限定しない（現状はUbuntuが使われているが）．
 
-## flynnのアーキテクチャーの概要
+### flynnのアーキテクチャーの概要
 
 flynnのアーキテクチャーは，シンプルで理解しやすいようにデザインされている．ほとんどのコンポーネントがDockerコンテナとして動作する．すべてがコンテナで動作するため，flynnにデプロイされるサービスやアプリケーションは，flynnを構成するコンポーネントと同様であると見なすこともできる．また，コンポーネントはモジュラー的に実装されているため，再利用，変更，切り替えが容易になっている（すべてがDockerコンテナで動作する様子は，[flynn/flynn-demo](https://github.com/flynn/flynn-demo)の[Vagrantfile](https://github.com/flynn/flynn-demo/blob/master/Vagrantfile)を見るとわかる）．
 
@@ -116,7 +111,7 @@ flynnのアーキテクチャーは大きく分けて2つのレイヤーに分�
     - PaaSの基本的な機能
         - e.g., Git-receive，Heroku Buildpack，DB，HTTP Routing
 
-## layer0 (The Grid)
+### layer0 (The Grid)
 
 layer0は[Apache Mesos](http://mesos.apache.org/)やGoogleの[Omega](http://eurosys2013.tudos.org/wp-content/uploads/2013/paper/Schwarzkopf.pdf)の影響を受けた，リソースフレームワーク層．以下の2つコンポーネントから成る．
 
@@ -127,7 +122,7 @@ layer0は[Apache Mesos](http://mesos.apache.org/)やGoogleの[Omega](http://euro
 
 この2つのコンポーネントは全てのホストで起動する．
 
-### flynn/discoverd
+#### flynn/discoverd
 
 discoverdはサービスディスカバリーを行う．具体的には，ホストのクラスタを構築し，メンバーの参加/離脱イベントを他のホストのメンバーに通知する等を行う．
 
@@ -135,13 +130,13 @@ discoverdには専用のクライアントである，[flynn/go-discoverd](https
 
 現在バックエンドには，CoreOSのetcdを利用している．これは，ZooKeeperなどに入れ替え可能にしていくとのこと．
 
-### flynn/flynn-host
+#### flynn/flynn-host
 
 flynn-hostは，HTTP API経由でホストのDockerコンテナの管理を行う．flynn-hostには，リーダーとそれ以外という役割がある．リーダーは，クラスタ全体のホストの一覧とそれらが実行しているジョブの管理や新しいジョブの登録/依頼を行う．それ以外は，リーダから依頼されたジョブをDockerコンテナで実行/停止，実行中のジョブ，指定されたジョブの情報の返答を行う．
 
 flynn-hostは，内部にGoogle Omegaの影響を受けたタスクスケジューラフレームワークである，[flynn/flynn-host/sampi](https://github.com/flynn/flynn-host/tree/master/sampi)を持っている．
 
-## layer1
+### layer1
 
 layer1には基本的なPaaSの機能がくる．また，実際にユーザにデプロイされるアプリケーションもlayer1に存在する（ユーザランドとしてのlayer2が存在しないのは，実際にデプロイされるアプリケーションとlayer1のコンポーネントに技術的な差がないため）．layer1のコンポーネントは以下．
 
@@ -173,7 +168,7 @@ layer1には基本的なPaaSの機能がくる．また，実際にユーザに�
 - [Taffy](https://github.com/flynn/taffy)
     - レポジトリをpullしてflynnにデプロイする
 
-### flynn/gitreceived
+#### flynn/gitreceived
 
 gitreceivedはgit pushを受けるこをに特化したSSHサーバ．アプリケーションがgit pushによりデプロイされると，gitreceivedは以下を行う．
 
@@ -185,7 +180,7 @@ flynnはこれをflynn-receiveでラップして使っている．flynn-receive�
 1. slugbuilderでアプリケーションのビルド (slugの作成)
 1. slugをslugrunnerで実行
 
-### flynn/slugbuilder
+#### flynn/slugbuilder
 
 slugbuilderはDockerとHerokuのbuildpackを使ってHeroku的なslugを作成する．具体的には以下を実行している．
 
@@ -197,7 +192,7 @@ $ docker cp $id:/tmp/slug.tgz . # コンテナ内のslug.tgzを取り出す
 
 flynn/slugbuilderというDockerコンテナにアプリケーションのソースを標準入力から突っ込み，コンテナ内部でHerokuのbuildpackを使ったビルドを実行する．ビルドが終わったら，`docker cp`で生成物を取り出す．
 
-### flynn/slugrunner
+#### flynn/slugrunner
 
 slugrunnerはslugbuilderで作成された（Heroku的な）slugを実行する．具体的には以下を実行している．
 
@@ -208,13 +203,13 @@ $ cat myslug.tgz |
 
 flynn/slugrunnerというDockerコンテナにslugを標準入力から突っ込み，`Procfile`に基づくwebプロセスを実行する．
 
-### flynn/strowger
+#### flynn/strowger
 
 strowgerはTCP/HTTP ルータで，複数のslugrunnerに対するランダムロードバランシングのためのリバースプロキシとして動作する．サービスディスカバリーがバックで動いており，背後で何が起動したかを常に監視する．
 
 HAProxyやnginxと比較した利点は，サービスディスカバリーをネイティブで持っていることで，動的な設定変更が可能である点（HAProxyやnginxは設定変更で新しくプロセスを作成する必要がある）．
 
-## flynnの操作
+### flynnの操作
 
 flynnは専用のコマンドクライアントである[flynn/flynn-cli](https://github.com/flynn/flynn-cli)を使って操作する．
 
@@ -295,13 +290,13 @@ slug (コンテナ) に対してを直接コマンドの実行を要請するこ
 $ flynn run bash
 ```
 
-## 最後に
+### 最後に
 
 今回Docker meetupで発表の機会をもうけて頂いた[@stanaka](https://twitter.com/stanaka)さん，[@kazunori_279](https://twitter.com/kazunori_279)さんありがとうございました．他のスタッフのかたもありがとうございました．
 
 帰りにゲストの[@philwhln](https://twitter.com/philwhln)を駅まで送って行き，Solomon Hykes氏によるlibswarm，Mitchell Hashimoto氏によるConsulのインタビューなどの話を聴けたのは良い思い出．
 
-## 参考文献
+### 参考文献
 
 - ["Flynn - Open source Platform as a Service powered by Docker"](https://flynn.io/)
 - ["The Start of the Age of Flynn"](http://progrium.com/blog/2014/02/06/the-start-of-the-age-of-flynn/)

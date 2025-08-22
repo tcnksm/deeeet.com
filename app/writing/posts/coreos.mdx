@@ -1,10 +1,6 @@
 ---
-
 title: 'CoreOSに入門した'
-date: 2014-11-17
-comments: true
-categories: coreos
-cover_image: coreos.png
+publishedAt: 2014-11-17
 ---
 
 [CoreOS is Linux for Massive Server Deployments · CoreOS](https://coreos.com/)
@@ -13,7 +9,7 @@ cover_image: coreos.png
 
 まず，CoreOSの概要とそれを支える技術について説明する．次に実際にDigitalOcenan上にVagrantを使って実際にCoreOSクラスタを立てて，CoreOSで遊ぶ方法について書く．
 
-## CoreOSとは何か
+### CoreOSとは何か
 
 [CoreOS](https://coreos.com/)は，GoogleやFacebook，Twitterといった企業が実現している柔軟かつスケーラブル，耐障害性の高いインフラの構築を目的としたLinuxディストリビューションである．軽量かつ使い捨てを前提にしており，クラウドなアーキテクチャのベストプラクティスを取り入れている．CoreOSの特徴は大きく4つ挙げられる．
 
@@ -34,7 +30,7 @@ CoreOSはクラウドネイティブなOSである．Amazon EC2，DigitalOcean�
 
 CoreOSの特徴については，[@mopemope](https://twitter.com/mopemope)さんの ["CoreOS入門 - Qiita"](http://qiita.com/mopemope/items/fa9424b094aae3eac580)や，[@yungsang](https://twitter.com/yungsang)さんの["CoreOS とその関連技術に関するここ半年間の私の活動まとめ"](https://gist.github.com/YungSang/73148282c1a081adb2ba)が詳しい．
 
-## CoreOSを支える技術
+### CoreOSを支える技術
 
 CoreOSを支える技術キーワードを挙げるとすれば以下の3つになる．
 
@@ -44,7 +40,7 @@ CoreOSを支える技術キーワードを挙げるとすれば以下の3つに�
 
 これらについてざっと説明する．
 
-### Docker
+#### Docker
 
 CoreOSは専用のパッケージマネージャーをもたない．またRubyやPythonといった言語のRuntimeも持たない．全てのアプリケーションをDockerコンテナとして動作させる．
 
@@ -54,11 +50,9 @@ CoreOSは専用のパッケージマネージャーをもたない．またRuby�
 
 Dockerを使うことで上図のようにコンテナによるプロセスの隔離と，安全なマシンリソースの共有，アプリケーションのポータビリティという恩恵を受けることができる．
 
-### etcd
+#### etcd
 
 CoreOSは複数のマシンからクラスタを形成する．クラスタを形成するために，CoreOSは`etcd`という分散Key-Valuesストアを使い，各種設定をノード間で共有する（`etcd`ってのは"`/etc` distributed"という意味）．
-
-<img src="/images/etcd.png" class="image">
 
 [https://coreos.com/assets/images/media/Three-Tier-Webapp.png](https://coreos.com/assets/images/media/Three-Tier-Webapp.png)
 
@@ -66,7 +60,7 @@ CoreOSは複数のマシンからクラスタを形成する．クラスタを�
 
 etcdは[locksmith](https://github.com/coreos/locksmith)というクラスタの再起動時のリブートマネジャーにも使われている．
 
-### fleet
+#### fleet
 
 コンテナによるサービスをクラスタ内のどのマシンで起動するかをいちいち人手で決めるわけにはいけない．クラスタ内のリソースの状態や動いているサービスに基づき，適切なマシンでコンテナを動かすスケジューリングの仕組みが必要になる．
 
@@ -81,7 +75,7 @@ etcdは[locksmith](https://github.com/coreos/locksmith)というクラスタの�
 もしマシンに障害が発生しても`fleet`は自動でフェイルオーバーを行う．適切なマシンを選択し直し，登録された分のコンテナが起動していることを保証する．
 
 
-## CoreOSの起動
+### CoreOSの起動
 
 CoreOSは`cloud-config`という設定ファイルを使って起動する．このファイルにより，CoreOSはクラスタ内の他のメンバーと接続し，基本的なサービスを起動し，重要なパラメータを設定する．
 
@@ -89,13 +83,13 @@ CoreOSは`cloud-config`という設定ファイルを使って起動する．こ
 
 最小限には，`cloud-config`は，ホストに既存のクラスタへの参入方法と`etcd`と`fleet`の2つのサービスの起動方法を伝えればよい（これらは全て関連している）．これにより，新しいホストを，既存のサーバーに接続させ，設定する必要のあるツールを提供する．基本的に，これらがCoreOSノードを既存クラスタへ参入させるための要件となる．
 
-## CoreOSクラスタを立てる
+### CoreOSクラスタを立てる
 
 [tcnksm/vagrant-digitalocean-coreos](https://github.com/tcnksm/vagrant-digitalocean-coreos)
 
 Vagrantを使ってDigitalOcean上にCoreOSのクラスタを立ち上げてみる（ソースは全て上記のレポジトリにある）．
 
-### SSHの準備
+#### SSHの準備
 
 まず，全てのCoreOSは少なくとも1つのSSH公開鍵が登録されている必要がある．DigitalOceanの場合は，公開鍵をDropletsに登録しておき，以下で秘密鍵をエージェントに登録しておく必要がある．
 
@@ -105,7 +99,7 @@ $ ssh-add
 
 fleetを使った他nodeへの接続でもCoreOSはsshを使う．CoreOSへログインした後も同様の秘密鍵の情報が利用される必要があるので，sshの際は必ず`-A`オプションを指定する．
 
-### サービスディスカバリーの設定
+#### サービスディスカバリーの設定
 
 etcdを使ってクラスタを形成するために，discovery用のサーバを別途準備する必要がある．CoreOSは[https://discovery.etcd.io](#)というdiscoveryサービスを運用しており，それをそのまま使うことができる．今回はこれを利用する．
 
@@ -118,7 +112,7 @@ https://discovery.etcd.io/724ac1949c661bb3970ff8984b895bca
 
 （1つのクラスタに付き1つの新しいTokenを生成する必要がある．また，同じIPで再びクラスタを再構成する場合も新しいTokenを取得する必要がある）
 
-### 最小限のcloud-config
+#### 最小限のcloud-config
 
 `cloud-config`は`#cloud-config`で始まるYAMLフォーマットで既述する．以下は最小限の設定内容になる．これを`user-data.yml`という名前で作成する．
 
@@ -152,7 +146,7 @@ units:
 - `/run/systemd/system/etcd.service/20-cloundinit.conf`
 - `/run/systemd/system/fleet.service/20-cloundinit.conf `
 
-### Vagrantfile
+#### Vagrantfile
 
 [vagrant-digitalocean](https://github.com/smdahlen/vagrant-digitalocean) pluginを使えばVagranを使ってDigitalOcean上にイメージを立てることができる．CoreOSには，現時点（2014年11月）では最新の`494.0.0`を利用する．以下のような`Vagrantfile`を準備する．
 
@@ -194,7 +188,7 @@ $ gem build vagrant-digitalocean.gemspec
 $ vagrant plugin install vagrant-digitalocean-0.7.0.gem
 ```
 
-### CoreOSを起動する
+#### CoreOSを起動する
 
 では，実際に上記の`user-data.yml`と`Vagrantfile`を使ってDigitalOcean上にクラスタを立ててみる．今回は3つのインスタンスを立てる．以下のようにするだけ．
 
@@ -208,7 +202,7 @@ export NUM_INSTANCES=3
 $  vagrant up --provider=digital_ocean
 ```
 
-### クラスタの確認をする
+#### クラスタの確認をする
 
 クラスタがちゃんと形成されているかを確認する．`core1`にログインする．
 
@@ -228,7 +222,7 @@ b463af61...     10.102.101.101  -
 
 `etcd`や`fleet`，DockerといったCoreOSで重要なサービスも使えるようになっているはず．
 
-## 参考
+### 参考
 
 - [CoreOS入門 - SlideShare](http://www.slideshare.net/YutakaMatsubara/coreos-35320632)
 - [CoreOS入門 - Qiita](http://qiita.com/mopemope/items/fa9424b094aae3eac580)

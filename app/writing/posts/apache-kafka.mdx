@@ -1,8 +1,7 @@
-+++
-date = "2015-09-01T18:13:38+09:00"
-title = "Apache Kafkaに入門した"
-cover_image = "kafka-logo-wide.png"
-+++
+---
+title: "Apache Kafkaに入門した"
+publishedAt: "2015-09-01T18:13:38+09:00"
+---
 
 [Apache kafka](http://kafka.apache.org/)
 
@@ -10,7 +9,7 @@ cover_image = "kafka-logo-wide.png"
 
 バージョンは _0.8.2_ を対象に書いている．
 
-## Apache Kafkaとは?
+### Apache Kafkaとは?
 
 2011年に[LinkedIn](https://www.linkedin.com/)から公開されたオープンソースの分散メッセージングシステムである．Kafkaはウェブサービスなどから発せられる大容量のデータ（e.g., ログやイベント）を高スループット/低レイテンシに収集/配信することを目的に開発されている．公式のトップページに掲載されているセールスポイントは以下の4つ．
 
@@ -19,13 +18,13 @@ cover_image = "kafka-logo-wide.png"
 - **Durable** メッセージはディスクにファイルとして保存され，かつクラスタ内でレプリカが作成されるためデータの損失を防げる（パフォーマンスに影響なくTBのメッセージを扱うことができる）
 - **Distributed by Design** クラスタは耐障害性のある設計になっている
 
-## どこで使われているのか?
+### どこで使われているのか?
 
 [Use Cases](http://kafka.apache.org/documentation.html#uses)をあげると，メッセージキューやウェブサイトのアクティビティのトラッキング（LinkedInのもともとのUse Case），メトリクスやログの収集，[Storm](https://storm.apache.org/)や[Samza](http://samza.apache.org/)を使ったストリーム処理などがあげられる．
 
 利用している企業は例えばTwitterやNetflix，Square，Spotify，Uberなどがある（cf. [Powered By](https://cwiki.apache.org/confluence/display/KAFKA/Powered+By)）．
 
-## Kafkaの初期衝動
+### Kafkaの初期衝動
 
 Kafkaのデザインを理解するにはLinkedInでなぜKafkaが必要になったのかを理解するのが早い．それについては2012年のIEEEの論文["Building LinkedIn's Real-time Activity Data Pipeline"](http://sites.computer.org/debull/A12june/pipeline.pdf)を読むのが良い．簡単にまとめると以下のようになる．
 
@@ -46,7 +45,7 @@ LinkedInでは大きく2つのデータを扱っている．1つはウェブサ�
 - 様々なタイプのシステム（バッチ/リアルタイム）が同じデータを読める
 - 高スループットでデータを処理する（並列でデータを読める）
 
-## どのように動作するのか?（概要）
+### どのように動作するのか?（概要）
 
 KafkaはBroker（クラスタ）とProducer，Consumerという3つのコンポーネントで構成される．Producerはメッセージの配信を行いConsumerはメッセージの購読を行う．そしてKafkaのコアであるBrokerはクラスタを構成しProducerとConsumerの間でメッセージの受け渡しを行うキューとして動作する．
 
@@ -73,7 +72,7 @@ BrokerはConsumerがメッセージを購読したかに関わらず設定され
 
 この2つの特徴のためConsumerはBrokerにも他のBrokerにも大きな影響を与えない．
 
-## 高速にメッセージを消費する
+### 高速にメッセージを消費する
 
 Kafkaで面白いのはConsumerがBrokerから高速にメッセージを読み込むための仕組みであると思う．これをどのように実現しているかを説明する．
 
@@ -119,20 +118,20 @@ Partition内，つまりConsumer内では順序性が確保される．つまり
 
 ProducerはBrokerにメッセージを配信するときにKeyを指定することができる．このKeyにより同じKeyが指定されたメッセージを同じPartitionに保存することができる．Partition内の順序性とKeyで大抵のアプリケーションには問題ない（とのこと）．完全な順序性を確保したければPartitionを1つにすれば良い（Consumerも一つになってしまうが）．
 
-## 高スループットへの挑戦
+### 高スループットへの挑戦
 
 Brokerへの書き込み/読み込みはとにかく速い．LinkedInのベンチマークでは200万 write/sec（[Benchmarking Apache Kafka: 2 Million Writes Per Second (On Three Cheap Machines)](https://engineering.linkedin.com/kafka/benchmarking-apache-kafka-2-million-writes-second-three-cheap-machines)）とある．なぜこれだけ速いのか．以下の2つを組み合わせることにより実現している．
 
 - **write** バッファ書き込みを自分たちで実装するのではなくてカーネルのメモリキャシュ機構をがっつり使うようにした（Brokerが動いているサーバーのメモリ32GBのうち28-30GBがキャッシュに使われている）
 - **read** ページキャッシュからネットワークのsocketへ効率よくデータを受け渡すために`sendfile()`を使ってる
 
-## まとめ
+### まとめ
 
 先に紹介した論文["Building LinkedIn's Real-time Activity Data Pipeline"](http://sites.computer.org/debull/A12june/pipeline.pdf)は他にも面白いことがたくさん書いてあるのでKafkaを使おうとしているひとはぜひ一度目を通してみるといいと思う．
 
 次回はGo言語を使ってProducerとConsumerを実装する話を書く．
 
-## 参考
+### 参考
 
 - [Building LinkedIn's Real-time Activity Data Pipeline](http://sites.computer.org/debull/A12june/pipeline.pdf)
 - [Apache Kafka入門](http://www.amazon.co.jp/Apache-Kafka%E5%85%A5%E9%96%80-%E4%BC%8A%E6%A9%8B-%E6%AD%A3%E7%BE%A9-ebook/dp/B00JU43ONW)

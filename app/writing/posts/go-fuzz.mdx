@@ -1,7 +1,7 @@
-+++
-date = "2015-12-21T00:25:30+09:00"
-title = "Go言語でファジング"
-+++
+---
+title: "Go言語でファジング"
+publishedAt: "2015-12-21T00:25:30+09:00"
+---
 
 この記事は[Go Advent Calendar 2015](http://qiita.com/advent-calendar/2015/go)の21日目の記事です．
 
@@ -11,7 +11,7 @@ title = "Go言語でファジング"
 
 本記事ではこの`go-fuzz`の紹介を行う．
 
-## ファジングとは?
+### ファジングとは?
 
 - [Fuzz testing - Wikipedia, the free encyclopedia](https://en.wikipedia.org/wiki/Fuzz_testing)
 - [ソフトウェアの脆弱性検出におけるファジングの活用](http://gihyo.jp/dev/feature/01/fuzzing)
@@ -29,7 +29,7 @@ title = "Go言語でファジング"
 
 ファジングで入力となるデータは「ファズ」と呼ばれる．コマンドラインツールであれば引数や環境変数，ウェブサーバーであればHTTPリクエストである．ファジングではこのファズをいかに生成するのかが重要になる．完全にランダムにする，指定の範囲内で連続に値を変化させる，正常なデータの一部を変更させる．ある特定の制御文字列を対象にするといった手法がある．
 
-## go-fuzzとは?
+### go-fuzzとは?
 
 - [dvyukov/go-fuzz](https://github.com/dvyukov/go-fuzz)
 - [GopherCon 2015: Dmitry Vyukov - Go Dynamic Tools](https://www.youtube.com/watch?v=a9xrxRsIbSU) ([Slide](https://talks.golang.org/2015/dynamic-tools.slide#1))
@@ -44,7 +44,7 @@ corpusは事前に与えることもできる．例えば対象とする関数�
 
 入力を繰り返し意図しない挙動が得られる（例えばpanicが起こる）と`go-fuzz`はそれを引き起こした入力とスタックトレースをファイルとして保存する．開発者はその結果をもとに新たにユニットテストを追加しコードを修正していく．
 
-### 使いかた
+#### 使いかた
 
 `go-fuzz`によるファジングには以下の2つが必要である
 
@@ -82,7 +82,7 @@ $ go-fuzz -bin=pkg_fuzz.zip -workdir=dir
 
 ちなみに作成されたcorpusはバージョン管理システムに保存するべきである．そうすれば他の人もそれを再利用することができる．
 
-## 使ってみる
+### 使ってみる
 
 言葉だけでは分かり難いので実際に使ってみる．例えば以下のような関数をテストしてみる．
 
@@ -164,13 +164,13 @@ github.com/tcnksm-sample/go-fuzz.CoolFunc(0x820267e78, 0x4, 0x0, 0x0)
 クラッシュが得られたどうするか? まずユニットテストにその入力を追加する．そしてコードを修正し適切にハンドルされるようにする．
 
 
-## まとめ
+### まとめ
 
 自分のつくっているいくつかのツールでも試してみたが残念ながら面白いバグを発見することはできなかった（特に複雑なことをしていないというものあるが..）．[ユーザの入力を受けるソフトウェアはすべてファジングするべき](https://blog.gopheracademy.com/advent-2015/go-fuzz/)という意見もある．会社で書いているソフトウェアにもファジングを導入していきたいと思う．ファジングはとにかく簡単なので導入は容易だと思う．
 
 OSSのツールに対してファジングでバグを発見してコミットを行う実践的な方法は["go-fuzz github.com/arolek/ase"](https://medium.com/@dgryski/go-fuzz-github-com-arolek-ase-3c74d5a3150c#.2s399y3sg)が詳しい．
 
-### 参考
+#### 参考
 
 - [dvyukov/go-fuzz](https://github.com/dvyukov/go-fuzz)
 - [Fuzz testing - Wikipedia, the free encyclopedia](https://en.wikipedia.org/wiki/Fuzz_testing)

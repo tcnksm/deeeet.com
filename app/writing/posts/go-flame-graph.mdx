@@ -1,7 +1,7 @@
-+++
-date = "2016-05-29T14:22:17+09:00"
-title = "GolangでFlame Graphを描く"
-+++
+---
+title: "GolangでFlame Graphを描く"
+publishedAt: "2016-05-29T14:22:17+09:00"
+---
 
 アプリケーションのパフォーマンス問題の解決やチューニングで大切なのは問題のコアやボトルネックに最短パスで到達することである．
 
@@ -9,13 +9,13 @@ title = "GolangでFlame Graphを描く"
 
 [Flame Graph](http://www.brendangregg.com/flamegraphs.html)はon-CPUでのパフォーマンスの問題が発覚した時に行うCPUプロファイリングを助ける．どのcode pathがボトルネックになっているのかを1つのグラフ上で理解できる．本記事ではFlame Graphとは何か? なぜ必要なのか? を解説しGoのアプリケーションでそれを用いるために方法を解説する．
 
-## Flame Graphとは何か?
+### Flame Graphとは何か?
 
 [Flame Graph](http://www.brendangregg.com/flamegraphs.html)はCPUプロファイリング結果をvisualizeしたグラフである．元Joyent，現Netflixの[Brendan Gregg](http://www.brendangregg.com/index.html)氏によって開発された．例えば以下はMySQLのCPUプロファイリング結果をFlame Graphで描画したものである．
 
 ![](http://www.brendangregg.com/FlameGraphs/cpu-mysql-filt.svg)
 
-### CPU プロファイリング
+#### CPU プロファイリング
 
 CPUプロファイリングの共通のテクニックはStack traceのサンプリングである．Stack traceというのは関数コールのリストで，code pathの先祖を追うことができる．例えば，以下はGolangのstack traceで子から親へStackと辿ることができる．
 
@@ -29,13 +29,13 @@ log.(*Logger).Output
 log.Printf
 ```
 
-### Flame Graphの初期衝動
+#### Flame Graphの初期衝動
 
 CPUプロファイリングの出力は往々にしてverboseである．例えば，Brendan Gregg氏がFlame GraphをつくるきっかけとなったプロダクションのMySQLのプロファイリングの出力は500,000行近くもあったという（[参考画像](http://www.slideshare.net/brendangregg/blazing-performance-with-flame-graphs/16)...やばいw）．
 
 Flame Graphはそのような膨大なCPUプロファイリングを一つのグラフ上で直感的かつ簡単に理解するために開発された．
 
-### Flame Graphの読み方
+#### Flame Graphの読み方
 
 以下はFlame Graphを単純化したものである．
 
@@ -58,11 +58,11 @@ Flame Graphはそのような膨大なCPUプロファイリングを一つのグ
 - Q. なぜ`g()`を実行しているのか
     - A. `a()`が`b()`を選択し，`d()`が`f()`を選択したため
 
-## GoでFlame Graphを描く
+### GoでFlame Graphを描く
 
 GoでFlame Graphを描くにはUberの[go-torch](https://github.com/uber/go-torch)を使えば良い．Gopherfest Sprint 2016の[Parashant](https://github.com/prashantv)氏の発表["Profiling and Optimizing Go"](https://www.youtube.com/watch?v=N3PWzBeLX2M)でこの`go-torch`を使ってパフォーマンスをチューニングする様子が観れる．ライブデモが華麗すぎて感動するので今すぐ観ると良い．
 
-### Goのプロファイリングの基礎
+#### Goのプロファイリングの基礎
 
 Goにはプロファイリングのためのパッケージが標準で準備されている．Webサーバーであれば`net/http/pprof`，通常のツールであれば`runtime/pprof`を使う．`runtime/pprof`についてはRuss Coss氏の["Profiling Go Programs"](http://blog.golang.org/profiling-go-programs)を読むと良い．ここでは`net/http/pprof`を使って解説をする．
 
@@ -106,11 +106,9 @@ flat  flat%   sum%        cum   cum%
 (pprof) web
 ```
 
-<img src="/images/pprof.png" class="image">
-
 コードベースが小さければこれだけでも十分強力だが，コードが増えるほどグラフは複雑になり結果を直感的に理解するのが難しくなる．
 
-### go-torchを使う
+#### go-torchを使う
 
 `go-torch`を使うには`net/http/pprof`によるエンドポイントを有効にしておくだけで良い．そして`go tool pprof`を使うのと同じように以下のようなコマンドを叩くだけで`.svg`形式のFlame Graphが出力される（`go-torch`に加えてBrendan Gregg氏のPerlスクリプト[brendangregg/FlameGraph](https://github.com/brendangregg/FlameGraph)をダウンロードして`PATH`を通しておく必要がある）．
 
@@ -120,17 +118,15 @@ $ go-torch --time 5 --url http://localhost:9090/debug/pprof/profile
 
 結果は以下．
 
-<img src="/images/torch.svg" class="image">
-
 （例えば上は単純なWebサーバーの場合である．`logRequest`という関数の`os.Hostname()`が怪しいのがすぐわかる）
 
-## まとめ
+### まとめ
 
 グラフの生成はとても簡単なので読み方さえわかればFlame Graphはとても強力である．Flame Graphで問題の原因の大まかなあたりを付け`go tool pprof`で詳細な解析をするという流れが良いと思う．
 
 Flame GraphはJavaやNode，RubyといったVM言語でも使うことができる．またCPUだけではなくてMemoryやIOのプロファイルにも利用することができる．気になる人はいろいろ漁ってみると良さそう．
 
-## 参考文献
+### 参考文献
 
 - ["Systems Performance: Enterprise and the Cloud"](https://www.amazon.co.jp/Systems-Performance-Enterprise-Brendan-Gregg-ebook/dp/B00FLYU9T2)
 - [The Flame Graph - ACM Queue](http://queue.acm.org/detail.cfm?id=2927301)

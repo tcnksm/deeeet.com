@@ -1,27 +1,27 @@
 ---
 title: "KustomizeでKubernetes YAMLを管理する"
-date: 2018-07-10T09:34:18+09:00
+publishedAt: 2018-07-10T09:34:18+09:00
 ---
 
 [Kubernetes YAMLの壁](https://deeeet.com/writing/2018/01/10/kubernetes-yaml/)で述べたようにKubernetesのYAML管理はKubernetesユーザにとって長年の課題だ．コミュニティでは様々なツールが議論されてきた．先日[SIG-CLI](https://github.com/kubernetes/community/tree/master/sig-cli)から登場した[kustomize](https://github.com/kubernetes-sigs/kustomize)は将来的に`kubectl`に統合される前提で開発されている+他のツールと比べても非常に筋が良い（と感じている）．本記事ではkustomizeが登場した背景とKustomizeを使って何ができるのかをまとめる．
 
-## Declarativeであること
+### Declarativeであること
 
 Declarative ConfigurationはKubernetesの重要な機能の一つだ．KubernetesユーザはKubernetes APIに対してあるべきDesiredな状態を宣言（Declare）することでKubernetesはその状態になるように動き続ける．例えばユーザが「Podを5つ動かす」という状態を宣言するとKubernetesはそれを受け「Podが5つ動いている状態」を維持するように動く．
 
 Declarative configurationの逆のアプローチがImperative configurationだ．ユーザは一連の動作を全て指示する．例えばPodを5つ立てたいならその状態になるために必要な動作を1つ1つ指示する．Imperative configurationは理解しやすい，「これをして，これをして...」と書くだけでありDeclarativeの複雑なSyntaxを理解する必要はない．Declarative configurationが強力なのは「あるべき状態」を伝えられることだ．Kubernetesはそのあるべき状態を理解できるのでユーザのインタラクションと独立してその状態へ「自律的に」動くことができる．つまり問題や障害があっても自分でそれを直すことができる（Self-healing）．より詳しくは[Level Triggering and Reconciliation in Kubernetes](https://hackernoon.com/level-triggering-and-reconciliation-in-kubernetes-1f17fe30333d)を読むと良い．
 
-## GitOps
+### GitOps
 
 Declarative Configurationの大きな利点の一つはGitでバージョン管理できるところだ．つまり変更をPull Requesでレビューし変更の履歴を残すことができる．そしてGitを「Source of truth」としてCI/CD workflowを構築することができる（もともとあったものに名前がついただけだが最近はこれを[GitOps](https://www.weave.works/blog/gitops-operations-by-pull-request)と呼ぶ）．
 
-## kubectlの問題
+### kubectlの問題
 
 既存の`kubectl`コマンド「のみ」ではこのGitOpsを実現するのは難しい．例えば`Secret`リソースをBinaryファイルから作成するには，まずBinaryファイルをBase64でエンコードしそこから`Secret`用のYAMLを作成する必要がある．この場合Source of truthはBinaryファイルでありYAMLファイルではないため別途スクリプトを準備して2つのファイルを関連させなければならない．これは`ConfigMap`リソースの管理においても同様である．
 
 もちろん`kubectl create`コマンドとそのオプションを使うこともできるがそれはImperativeなワークフローである．
 
-## YAML管理の問題
+### YAML管理の問題
 
 近年の多くのOSSツールはKubernetesにデプロイするためのYAMLファイルが一緒に提供されていることが多い．試すだけならそのまま利用すれば良いことが多いが会社などで実際に導入する場合は環境に合わせたカスタマイズが必要である．例えばCPUやメモリを使いすぎないように適切なResource Limit/Requestを設定したり内部ツールのためにLabelやAnnotationを別途付与する必要がある．
 
@@ -31,17 +31,17 @@ Declarative Configurationの大きな利点の一つはGitでバージョン管�
 
 [Kubernetes YAMLの壁](https://deeeet.com/writing/2018/01/10/kubernetes-yaml/)で紹介したHelmなどを使えばこの問題をある程度解決できる．しかしHelmはデファクトではないのでそもそもHelm Chartが存在していない場合は自分でそれを書かないといけない．またHelmのTemplate機構では変更したいYAMLのフィールドが変数として公開されていないといけない．そのためChartが公開されていてもForkが必要な場合がある...
 
-## Kustomize
+### Kustomize
 
 これらの問題を解決するために登場したのが[kustomize](https://github.com/kubernetes-sigs/kustomize)である．`kustomize`は[SIG-CLI](https://github.com/kubernetes/community/tree/master/sig-cli)のサブプロジェクトであり将来的には`kubectl`に統合される前提で開発されている（Goにおける`vgo`のような開発スタイル）．より詳細な背景や既存の問題点を理解するには[KEP](https://github.com/kubernetes/community/blob/master/keps/sig-cli/0008-kustomize.md)や[公式ブログ](https://kubernetes.io/blog/2018/05/29/introducing-kustomize-template-free-configuration-customization-for-kubernetes/)を読むのが良い．
 
 `Kustomize`はYAMLファイルのDeclarative管理を推し進めReusabilityとCustomizabilityを高めるツールである．
 
-## Kustomizeの使い方
+### Kustomizeの使い方
 
 基本はGithubの[README](https://github.com/kubernetes-sigs/kustomize/blob/v1.0.3/README.md)や[Example](https://github.com/kubernetes-sigs/kustomize/tree/v1.0.3/examples)を読むのが一番良い．
 
-### kustomization ファイルを使う
+#### kustomization ファイルを使う
 
 まず`kustomization.yaml`を準備しapplicationをつくる．[application](https://github.com/kubernetes-sigs/kustomize/blob/v1.0.3/docs/glossary.md#application)により複数のYAMLリソースをGroupingする．例えば以下のように書ける．以下では`Deployment`と`Service`，`ConfigMap`リソースからapplicationを構成している．
 
@@ -64,7 +64,7 @@ secretGenerator:
 
 さらに`kustomization.yaml`には共通のnamespaceや`commonLabels`を書け`build`時に各リソースにそれを差し込むこともできる．
 
-### Overlaysを使う
+#### Overlaysを使う
 
 さらに1つのKustomizationファイルを[base](https://github.com/kubernetes-sigs/kustomize/blob/v1.0.3/docs/glossary.md#base)として[overlay](https://github.com/kubernetes-sigs/kustomize/blob/v1.0.3/docs/glossary.md#overlay)により複数の[variant](https://github.com/kubernetes-sigs/kustomize/blob/v1.0.3/docs/glossary.md#variant)を生成することができる．つまり共通のYAMLファイルから一部の設定のみが異なるYAMLファイルを作成できる．例えばBase YAMLファイルから本番環境用のYAMLと開発環境用のYAMLを生成できる．
 
@@ -74,7 +74,7 @@ secretGenerator:
 
 この機能により外部のYAMLファイルの管理問題と複数環境問題を解決できる．OSSとして提供されるYAMLファイル（[off-the-shelf configuration](https://github.com/kubernetes-sigs/kustomize/blob/v1.0.3/docs/glossary.md#off-the-shelf-configuration)）をcloneしてきてOverlayによりInternal用の環境に合わせてカスタマイズすれば良い．Template方式とは違い上書きするだけなのでBaseの設定ファイルの書き方に影響を受けない．
 
-## まとめ
+### まとめ
 
 Kustomizeの登場した背景と何ができるかについて簡単にまとめた．
 
@@ -83,7 +83,7 @@ Helm Chartが準備されていないOSSツールのため，複数の環境用�
 またMercariではCDにSpinnakerを利用しているので`kustomize build`を行うPipeline stageを準備できれば良いかなーと思っている．
 
 
-## 参考
+### 参考
 
 - [kubernetes-sigs/kustomize](https://github.com/kubernetes-sigs/kustomize)
 - [SIG CLI KEP for Kustomize subproject](https://github.com/kubernetes/community/blob/master/keps/sig-cli/0008-kustomize.md)

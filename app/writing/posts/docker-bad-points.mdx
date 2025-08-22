@@ -1,7 +1,7 @@
-+++
-date = "2015-02-17T23:32:16+09:00"
-title = "Dockerの諸問題とRocket登場の経緯"
-+++
+---
+title: "Dockerの諸問題とRocket登場の経緯"
+publishedAt: "2015-02-17T23:32:16+09:00"
+---
 
 2014年の後半あたりからDocker，Docker Inc.への批判を多く見かけるようになった（もちろんもともと懸念や嫌悪を表明するひとはいた）．それを象徴する出来事としてCoreOSチームによる新しいコンテナのRuntimeである[Rocket](https://github.com/coreos/rocket)のリリースと，オープンなアプリケーションコンテナの仕様の策定を目指した[App Containerプロジェクト](https://github.com/appc/spec)の開始があった．
 
@@ -11,7 +11,7 @@ title = "Dockerの諸問題とRocket登場の経緯"
 
 なお僕自身は，コンテナ技術に初めて触れたのがDockerであり，かつ長い間Dockerに触れているので，Docker派的な思考が強いと思う．またセキュリティに関しても専門ではない．なので，以下の記事はなるべく引用を多くすることを意識した．また，あくまで僕の観測範囲であり，深追いしていないところもある，気になるひとは自分で掘ってみて欲しい．
 
-## セキュリティ問題
+### セキュリティ問題
 
 Dockerを使ったことがあるひとならわかると思うがDockerを使うにはルート権限が必須である．デーモンが常に動いており，それにクライアントがコマンドを発行するアーキテクチャになっているので，Dockerコンテナが動いているホストでは常にルートのプロセスが動き続けることになる．クライアントとデーモンはHTTPでやりとりするため，外部ホストからコマンドを叩くこともできてしまう．
 
@@ -22,7 +22,7 @@ Dockerを使ったことがあるひとならわかると思うがDockerを使�
 - [CVE-2014-6407](http://web.nvd.nist.gov/view/vuln/detail?vulnId=CVE-2014-6407)
 - [CVE-2014-6408](http://web.nvd.nist.gov/view/vuln/detail?vulnId=CVE-2014-6408)
 
-### docker pullは安全なの？
+#### docker pullは安全なの？
 
 上記の脆弱性では悪意のあるイメージによる攻撃が指摘されており，攻撃を受けやすいのは`docker pull`で外部からイメージを取得/展開するところである．ではここはちゃんと安全になっているのか？答えは「No」で，あまりよろしくないモデルになっており，よく批判されるところでもある．
 
@@ -45,7 +45,7 @@ Dockerを使ったことがあるひとならわかると思うがDockerを使�
 127.0.0.1 index.docker.io
 ```
 
-## Dockerfile問題
+### Dockerfile問題
 
 Dockerfileには，なんでこれができないの？やハマりどころが多い．
 
@@ -55,7 +55,7 @@ Dockerfileには，なんでこれができないの？やハマりどころが�
 
 これらはバージョンが上がるに連れて解決されていくであろう問題だとは思う．が以下に関しては慎重にならないといけない．
 
-### このDockerfileから10年後も同じDockerイメージができるの？
+#### このDockerfileから10年後も同じDockerイメージができるの？
 
 - [Gregory Szorc's Digital Home | Deterministic and Minimal Docker Images](http://gregoryszorc.com/blog/2014/10/13/deterministic-and-minimal-docker-images/)
 
@@ -67,7 +67,7 @@ Dockerfileには，なんでこれができないの？やハマりどころが�
 
 - [DockerイメージのビルドにPackerを使うべき理由](http://deeeet.com/writing/2014/03/03/why-building-docker-by-packer/)
 
-## Registry問題
+### Registry問題
 
 - [Rebuild: 79: Deep Learning Anime (Naoya Ito)](http://rebuild.fm/79/)
 
@@ -80,13 +80,13 @@ Docker Registryもなかなかの嫌われものである．自分としては�
 絶対自分で運用したくないから外部のプライベートレジストリサービス，例えば[Quay.io](https://quay.io/)など，を見ているが，ちゃんと使おうと思うと有料の壁にぶつかる（ただQuay.ioは機能的にも面白いし，CoreOSに買収されてるので期待感はあり，現時点では良い選択かなと思っている）．
 
 
-## コンテナイメージの仕様問題
+### コンテナイメージの仕様問題
 
 「Dockerがホストを抽象化しDockerさえあればどこでもイメージを起動できる」というのはDockerを使うことの利点として語られることだけど，別の見方をすればDockerがないと何もできないうことになる．["boycott docker"](http://www.boycottdocker.org/)はDockerのことをまるでDockerOSだと批判し，ベンダーロックインに陥る危険性を仮想化技術との比較で語っている．
 
 そういうこともあり，統一的なコンテナイメージの仕様を作ろうという流れは以前からあった（つまり，誰でもコンテナのRumtimeを作れるようにしようと）．が，それに対して最近になるまでちゃんとした仕様を作るということをしていなかった．
 
-## Docker Inc.の方向性問題
+### Docker Inc.の方向性問題
 
 - [Why Docker and CoreOS split was predictable – Daniel With Music](http://danielcompton.net/2014/12/02/modular-integrated-docker-coreos)
 
@@ -94,7 +94,7 @@ Docker Registryもなかなかの嫌われものである．自分としては�
 
 が，Dockerをコンポーネントとして見ていたCoreOSのようなチームは，何でやねんとはなる．上で紹介したようなセキュリティなど今すぐにでも解決するべき問題がたくさんあるのにも関わらず，またDockerが進もうとしている領域は既に他のツールが解決しているのにも関わらず... これがRocketという新しいRumtimeの登場につながる．
 
-## Rocketとは何か
+### Rocketとは何か
 
 - [CoreOS 共同創設者 Alex Polvi が語る: コンテナ、Rocket と Docker の比較ほか](https://jp.linux.com/news/linuxcom-exclusive/426261-lco2015021001)
 - [What is Rocket and How It’s Different Than Docker | Century Link Labs](http://www.centurylinklabs.com/interviews/what-is-rocket-and-how-its-different-than-docker/)
@@ -111,13 +111,13 @@ Docker Registryもなかなかの嫌われものである．自分としては�
 
 内部を詳しくは見れていないが，他のCoreOSツールと同様に既にあるテクノロジーをなるべく使うように作られている（例えば内部では，[systemd-nspawn](http://www.freedesktop.org/software/systemd/man/systemd-nspawn.html)を使っている）．少し触ってみたが，まだまだ使いやすさとは決して言えないレベル．
 
-## まとめ
+### まとめ
 
 Dockerの何がすごかったか，コンテナという技術を一般の人にも使いやすくしたところだと思う．現時点でRocketにはDockerほどの使いやすさはない．が，かといってDockerのセキュリティ問題などを無視するわけにもいかない．
 
 今年はKubernetesやMesosといった周辺ツールにひと盛り上がりがありそうだが，ここで書いた諸問題に関してもちゃんと注視しておきたい．
 
-## 参考
+### 参考
 
 - [The case against Docker - Andreas Jung](https://www.andreas-jung.com/contents/the-case-against-docker)
 - [Docker vs Reality , 0 - 1 | Everything is a Freaking DNS problem](http://www.krisbuytaert.be/blog/docker-vs-reality-0-1)

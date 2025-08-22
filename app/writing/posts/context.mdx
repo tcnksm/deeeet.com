@@ -1,13 +1,13 @@
-+++
-date = "2016-07-22T09:12:28+09:00"
-title = "Go1.7のcontextパッケージ"
-+++
+---
+title: "Go1.7のcontextパッケージ"
+publishedAt: "2016-07-22T09:12:28+09:00"
+---
 
 [Go1.7](https://tip.golang.org/doc/go1.7)では[golang.org/x/net/context](https://godoc.org/golang.org/x/net/context)が`context`パッケージとして標準パッケージに仲間入りする．そしていくつかの標準パッケージでは`context`パッケージを使ったメソッド/関数も新たに登場する．`context`パッケージは今後さらに重要な，Gopherは普通に扱うべき，パッケージになると考えられる．本記事ではそもそも`context`パッケージとは何か？なぜ登場したのか？なぜ重要なのか？どのように使うべきか？についてまとめる．
 
 `context`パッケージが初めて紹介されたのは2014年のThe Go Blogの記事 ["Go Concurrency Patterns: Context"](https://blog.golang.org/context)である．この記事ではなぜGoogleが`context`パッケージを開発したのか，どのように使うのか具体的な検索タスクを例に解説されている．まだ読んだことがない人はそちらを先に読むと良い．
 
-## contextパッケージとは何か
+### contextパッケージとは何か
 
 ここでは具体的な利用例から`context`とは何かを説明する．
 
@@ -25,7 +25,7 @@ title = "Go1.7のcontextパッケージ"
 
 （後述するが`context`パッケージは限定されたスコープの値，例えば認証情報など，の受け渡しとしても利用できる．しかし筆者はこれは付随的な機能でありキャンセル機構としての`context`の方が重要であると考えている）
 
-## コードで追うcontextパッケージ
+### コードで追うcontextパッケージ
 
 言葉のみでは伝わりにくいので具体的なサンプルコードを使って`context`パッケージの使いどころを説明する．
 
@@ -223,7 +223,7 @@ func request(ctx context.Context) error {
 
 `doneCh`と比べると`context`を使った場合はよりシンプルに書けているのがわかる．これだけではない．標準パッケージになるということは，今後はこの重要なキャンセル処理を統一的なインターフェースとして書くことができるということである．
 
-## contextの契約
+### contextの契約
 
 具体的な使い方は[ドキュメント](https://tip.golang.org/pkg/context/)が詳しいのでそれを読むのが良い．大きなパッケージではないのですぐに読めると思う．以下では注意するべきことを簡単にまとめる．
 
@@ -241,7 +241,7 @@ func DoSomething(ctx context.Context, arg Arg) error {
 
 これらがGopherの間の`context`の契約になると思う．
 
-## Valueの扱い
+### Valueの扱い
 
 `context`パッケージは限定されたスコープの値，例えば認証情報など，の受け渡しとしても利用できる．しかしこれはキーと値を`interface{}`型で指定するため利用には注意が必要である．ドキュメントにも利用するときの注意点がしっかり書かれている．例えば，値の取り出しには専用のメソッド/関数を準備してちゃんとした型として値を返すようにする，キーは公開しないなどである．
 
@@ -249,11 +249,11 @@ func DoSomething(ctx context.Context, arg Arg) error {
 
 - [context](https://peter.bourgon.org/blog/2016/07/11/context.html)
 
-## 標準パッケージの中のcontext
+### 標準パッケージの中のcontext
 
 先にも述べたようにGo1.7ではいくつかの標準パッケージで`context`パッケージを使ったメソッド/関数が実装された．実装されたのは`net`と`net/http`，そして`os/exec`である．それぞれ簡単に紹介する．
 
-### net
+#### net
 
 `net`パッケージには`Dialer`に新たに`DialContext()`メソッドが追加された．これは既存の`Dial()`メソッドに`context.Context`を渡せるようにしたメソッドである．例えば以下のように使うことができる．
 
@@ -268,7 +268,7 @@ if err != nil {
 }
 ```
 
-### net/http
+##### net/http
 
 `net/http`には`Request`に新たに`Context()`メソッドと`WithContext()`メソッドが追加された．`Context()`はそのリクエストにおける`context.Context`を取得するために，`WithContext()`は変更に用いる．
 
@@ -319,7 +319,7 @@ func handler(w http.ResponseWriter, r *http.Request) {
 }    
 ```
 
-### os/exec
+#### os/exec
 
 `os/exec`には`CommandContext()`関数が追加された．これは既存の`Command()`関数に`context.Context`を渡せるようにした関数である．例えば以下のように使うことができる
 
@@ -334,7 +334,7 @@ if err := cmd.Run(); err != nil {
 
 `context`は`net`関連で主に使われてきたが，そうではない場合であってもタスクにDeadlineやTimeout，Cancelを持たせるための標準的なインターフェースに利用可能であることを示す良い例である．
 
-## Context leakを避ける
+### Context leakを避ける
 
 `WithCancel`や`WithTimeout`，`WithDeadline`で返される`cancel`が呼ばれないと，その親`Context`が`cancel`されるまでその子`Context`がLeakする（context leak）．Go1.7からの`go vet`はそれを検出する（`-lostcancel`）．例えば以下のような出力が得られる．
 
@@ -351,11 +351,11 @@ func leak() {
 
 [こちらの変更](https://go-review.googlesource.com/#/c/24150/13/src/cmd/vet/testdata/lostcancel.go)を見ると別の検出パターンもわかる．
 
-## まとめ
+### まとめ
 
 どんどん使っていきましょう．
 
-## 参考
+### 参考
 
 - [Go 1.7 Release Notes DRAFT](https://tip.golang.org/doc/go1.7)
 - [Context and Cancellation of goroutines](http://dahernan.github.io/2015/02/04/context-and-cancellation-of-goroutines/)

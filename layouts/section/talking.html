@@ -1,7 +1,0 @@
-{{ partial "header.html" . }}
-
-<article class="container">
-  {{ range .Data.Pages }}
-  {{ .Render "summary"}}
-  {{ end }}
-</article>

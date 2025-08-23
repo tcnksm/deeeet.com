@@ -4,6 +4,7 @@ import {
   InstagramIcon,
   RSSIcon,
   LinkedInIcon,
+  BlueSkyIcon,
 } from "./icons";
 
 export default function Footer() {
@@ -41,6 +42,17 @@ export default function Footer() {
             aria-label="Twitter Profile"
           >
             <TwitterIcon />
+          </a>
+        </li>
+        <li>
+          <a
+            className="flex items-center transition-all hover:text-neutral-800 dark:hover:text-neutral-100"
+            rel="noopener noreferrer"
+            target="_blank"
+            href="https://bsky.app/profile/deeeeet.bsky.social"
+            aria-label="Bluesky Profile"
+          >
+            <BlueSkyIcon />
           </a>
         </li>
         <li>

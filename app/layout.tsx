@@ -19,6 +19,9 @@ export const metadata: Metadata = {
     icon: "/icon.svg",
     apple: "/apple-icon.svg",
   },
+  other: {
+    "Hatena::Bookmark": "nocomment",
+  },
   openGraph: {
     title: "Taichi Nakashima",
     description: "Taichi Nakashima",

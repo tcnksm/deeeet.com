@@ -29,6 +29,30 @@ export const metadata: Metadata = {
     siteName: "deeeet.com",
     locale: "en_US",
     type: "website",
+    images: [
+      {
+        url: `${baseUrl}/og?title=${encodeURIComponent(
+          "Taichi Nakashima"
+        )}&summary=${encodeURIComponent(
+          "Software Engineer living in Tokyo, Japan. VP of Engineering at Mercari, leading global expansion team."
+        )}`,
+        width: 1200,
+        height: 630,
+        alt: "Taichi Nakashima",
+      },
+    ],
+  },
+  twitter: {
+    card: "summary",
+    title: "Taichi Nakashima",
+    description: "Taichi Nakashima",
+    images: [
+      `${baseUrl}/og?title=${encodeURIComponent(
+        "Taichi Nakashima"
+      )}&summary=${encodeURIComponent(
+        "Software Engineer living in Tokyo, Japan. VP of Engineering at Mercari, leading global expansion team."
+      )}`,
+    ],
   },
   robots: {
     index: true,

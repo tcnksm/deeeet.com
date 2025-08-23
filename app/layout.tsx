@@ -15,6 +15,10 @@ export const metadata: Metadata = {
     template: "%s | Taichi Nakashima",
   },
   description: "Taichi Nakashima",
+  icons: {
+    icon: "/icon.svg",
+    apple: "/apple-icon.svg",
+  },
   openGraph: {
     title: "Taichi Nakashima",
     description: "Taichi Nakashima",

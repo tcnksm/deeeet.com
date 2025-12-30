@@ -5,17 +5,17 @@ publishedAt: 2025-12-30
 
 [Meet exe.dev, modern VMs](https://blog.exe.dev/meet-exe.dev)
 
-AI Agent で開発をしてると，デスクトップ PC で開発しつつ，そのままモバイル環境でも隙間時間を活用しつつ指示を出し続けるということをしたくなる．方向転換してしまったっぽいけど[omnara](https://github.com/omnara-ai/omnara)のようなプロジェクトや，[@ryot_a_rai](https://x.com/ryot_a_rai)くんがやってた Tailscale + [MagicDNS](https://tailscale.com/kb/1081/magicdns) + [siteboon/claudecodeui](https://github.com/siteboon/claudecodeui) みたいなアプローチも良さそうだと思っていたがしっくりはきてなかった．
+AI Agent で開発をしてると，デスクトップ環境とモバイル環境を行き来しつつ，隙間時間や移動時間を活用しつつ AI に指示を出し続けたりコードを調整したりするということをしたくなる．方向転換してしまったっぽいけど[omnara](https://github.com/omnara-ai/omnara)のようなプロジェクトや，[@ryot_a_rai](https://x.com/ryot_a_rai)くんがやってた Tailscale + [MagicDNS](https://tailscale.com/kb/1081/magicdns) + [siteboon/claudecodeui](https://github.com/siteboon/claudecodeui) みたいなアプローチも良さそうだと思っていたがしっくりはきてなかった．
 
 加えて AI で軽いツールや自動化などを簡単に作れるようになってもそれらをどこで動かすかという問題が未だにある．Web app 公開したり，Cron ジョブで定期実行させたり，Webhook 受けたりなどなど，デスクトップ PC だけじゃ完結しないやつ．インターネットに公開するとなるとドメインとか認証認可となりをちゃんと考える必要もある．仕事のしっかりしたやつなら Cloud Run なり k8s で頑張るけど個人レベルだったらそこまでやるのもだるいなあと思っていた ([AI ツール開発の現場でこそ必要な「AI 以外の」技術選定](https://engineering.mercari.com/blog/entry/20251217-2204b3261b/) これは本当そうと思う)．
 
-そういうことを考えていた時に偶然読んだのが Josh Bleecher Snyder の[Just in time software](https://commaok.xyz/ai/just-in-time-software/)というブログ記事．スーパーで買い物してるときにその場でショッピングリストアプリを開発したという話で，そこで使われていたのが [exe.dev](https://exe.dev/) というサービスだった (ちなみに開発チームのひとり)．ぱっと見は VM Hosting サービスで 2026 年にもなって VM Hosting?と思ったが，作ってるのが Tailscale の元 CTO の[David Crawshaw](https://x.com/davidcrawshaw)ということもあり，詳しく見てみたらなかなか良く，ちょうど自分が欲しいなあと思っていたものだった．
+そういうことを考えていた時に偶然読んだのが Josh Bleecher Snyder の[Just in time software](https://commaok.xyz/ai/just-in-time-software/)というブログ記事．スーパーで買い物してるときにその場でショッピングリストアプリを開発したという話で，そこで使われていたのが [exe.dev](https://exe.dev/) というサービスだった．ぱっと見は VM Hosting サービスで 2026 年にもなって VM Hosting?と思ったが，作ってるのが Tailscale の元 CTO の[David Crawshaw](https://x.com/davidcrawshaw)ということもあり，詳しく見てみたらなかなか良く，ちょうど自分が欲しいなあと思っていたものだった．
 
 ## exe.dev とは
 
 [What is exe.dev?](https://exe.dev/docs/what-is-exe)
 
-公式の Doc はまだちょっと分かりにくいが，一言でまとめると「簡単かつセキュアにアプリを公開できる AI Agent つきの VM Hosting サービス」．[Pricing](https://exe.dev/docs/pricing)的には$20/month で 25VM (2CPU + 8GB RAM を共有する感じ)からスタート．今は一旦無料で試せてる．
+公式の Doc はまだちょっと分かりにくいが，一言でまとめると「簡単かつセキュアにアプリを公開できる AI Agent つきの VM Hosting サービス」．[Pricing](https://exe.dev/docs/pricing)的には$20/month で 25VM (2CPU + 8GB RAM を共有する感じ)からスタート．定額で環境を複数作れるというモデル．
 
 `ssh exe.dev` で VM を立ち上げると， Public IP ではなく専用のドメイン`vmname.exe.xyz`が付与される．デフォルトは`exeuntu`イメージが動いるが，コンテナイメージであればなんでも動かせる．基本は普通の VM Hosting サービスと変わらない．その VM 上で動く専用の AI Agent である[Shelley](https://exe.dev/docs/shelley)とのチャットを専用のポートで開けるようになってるのが最近っぽい．近年の Serverless 環境とは違いディスクは Persist されるのでその場でいろいろインストールしても保持されるし SQLite とかも動かせる．立ち上がりは非常に速く，AI と話しつつとりあえず起動していろいろ試してみて不要になれば捨てるみたいなことが簡単にできる．
 

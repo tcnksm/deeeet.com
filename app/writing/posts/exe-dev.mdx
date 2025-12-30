@@ -5,7 +5,7 @@ publishedAt: 2025-12-30
 
 [Meet exe.dev, modern VMs](https://blog.exe.dev/meet-exe.dev)
 
-隙間時間で AI Agent を使って開発を進めるということをしたいなあと思っており，特に移動中とかでも実行できるようにモバイル環境から Claude Code などを実行する方法を模索していた (PC との開発がシームレスにできるとより良い)．方向転換してしまったっぽいけど[omnara](https://github.com/omnara-ai/omnara)のようなプロジェクトや，同僚がやってた Tailscale + [MagicDNS](https://tailscale.com/kb/1081/magicdns) + [siteboon/claudecodeui](https://github.com/siteboon/claudecodeui) みたいなアプローチも良さそうだと思っていたがしっくりはきてなかった．
+AI Agent で開発をしてると，デスクトップ PC で開発しつつ，そのままモバイル環境でも隙間時間を活用しつつ指示を出し続けるということをしたくなる．方向転換してしまったっぽいけど[omnara](https://github.com/omnara-ai/omnara)のようなプロジェクトや，[@ryot_a_rai](https://x.com/ryot_a_rai)くんがやってた Tailscale + [MagicDNS](https://tailscale.com/kb/1081/magicdns) + [siteboon/claudecodeui](https://github.com/siteboon/claudecodeui) みたいなアプローチも良さそうだと思っていたがしっくりはきてなかった．
 
 加えて AI で軽いツールや自動化などを簡単に作れるようになってもそれらをどこで動かすかという問題が未だにある．Web app 公開したり，Cron ジョブで定期実行させたり，Webhook 受けたりなどなど，デスクトップ PC だけじゃ完結しないやつ．インターネットに公開するとなるとドメインとか認証認可となりをちゃんと考える必要もある．仕事のしっかりしたやつなら Cloud Run なり k8s で頑張るけど個人レベルだったらそこまでやるのもだるいなあと思っていた ([AI ツール開発の現場でこそ必要な「AI 以外の」技術選定](https://engineering.mercari.com/blog/entry/20251217-2204b3261b/) これは本当そうと思う)．
 
@@ -17,7 +17,7 @@ publishedAt: 2025-12-30
 
 公式の Doc はまだちょっと分かりにくいが，一言でまとめると「簡単かつセキュアにアプリを公開できる AI Agent つきの VM Hosting サービス」．[Pricing](https://exe.dev/docs/pricing)的には$20/month で 25VM (2CPU + 8GB RAM を共有する感じ)からスタート．今は一旦無料で試せてる．
 
-VM を立ち上げると (`ssh exe.dev` で立ち上げれる!)，専用のドメイン`vmname.exe.xyz`が付与される．デフォルトは`exeuntu`イメージが動いるが，[Marimo Notebook](https://marimo.io/)などコンテナイメージであればなんでも動かせる．基本は普通の VM Hosting サービスと変わらない．その VM 上で動く専用の AI Agent である[Shelley](https://exe.dev/docs/shelley)とのチャットを開けるようになってるのが最近っぽい(`:9999`で繋げる)．近年の Serverless 環境とは違いディスクは Persist されるのでその場でいろいろインストールしても保持されるし SQLite とかも動かせる．
+`ssh exe.dev` で VM を立ち上げると， Public IP ではなく専用のドメイン`vmname.exe.xyz`が付与される．デフォルトは`exeuntu`イメージが動いるが，コンテナイメージであればなんでも動かせる．基本は普通の VM Hosting サービスと変わらない．その VM 上で動く専用の AI Agent である[Shelley](https://exe.dev/docs/shelley)とのチャットを専用のポートで開けるようになってるのが最近っぽい．近年の Serverless 環境とは違いディスクは Persist されるのでその場でいろいろインストールしても保持されるし SQLite とかも動かせる．立ち上がりは非常に速く，AI と話しつつとりあえず起動していろいろ試してみて不要になれば捨てるみたいなことが簡単にできる．
 
 VM 環境に加えてやってくれることとしては
 
@@ -38,7 +38,7 @@ VM 環境に加えてやってくれることとしては
 
 ちなみに Claude とか Codex も最初から入ってるので Shelley を使う必要は別になくて好きな AI Agent を動かしておける環境としても使うことができる．自作 MCP とかいまだにモバイル App 経由で使えないのでここで動かそうかなと思っている．
 
-Shelley 自体が上で書いたような exe.dev のインフラの仕組みを理解してるので，どうサービスを公開するかなどのインフラの設定は勝手にやってくれる．何も指定しないと Systemd でデーモン化して期待する Port で Listen して Journald でログとって勝手にデバッグする．コード書き直すと勝手に`pkill`して再起動する．Docker build なり Push なりもなくその場でリロードして終わりってのは久々の体験で気楽で良いなってなる．何より速いしね．
+Shelley 自体が上で書いたような exe.dev のインフラの仕組みを理解してるので，どうサービスを公開するかなどのインフラの設定は勝手にやってくれる．何も指定しないと Systemd でデーモン化して期待する Port で Listen して Journald でログとって勝手にデバッグする．コード書き直すと再起動してくれる．Docker Build なり Push なりもなくその場でリロードして終わりってのは気楽で良いなってなる．何より速いしね．
 
 モバイル環境からもアクセスできるので PC とモバイルで行き来して開発するのも楽にでき，隙間時間をうまく活用するという本来やりたかったこともできた．モバイルだと Passkey をサポートしていてサクッとログインできるのもなかなか面白く，モバイルは前提になってそう．
 

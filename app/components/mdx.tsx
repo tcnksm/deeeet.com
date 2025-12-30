@@ -49,8 +49,12 @@ function RoundedImage(props) {
 }
 
 function Code({ children, ...props }) {
-  let codeHTML = highlight(children)
-  return <code dangerouslySetInnerHTML={{ __html: codeHTML }} {...props} />
+  // Only apply syntax highlighting to code blocks (inside <pre>), not inline code
+  if (props.className) {
+    let codeHTML = highlight(children)
+    return <code dangerouslySetInnerHTML={{ __html: codeHTML }} {...props} />
+  }
+  return <code {...props}>{children}</code>
 }
 
 function slugify(str) {

@@ -1,0 +1,55 @@
+---
+title: exe.dev - AI時代のVM Hostingサービス
+publishedAt: 2025-12-30
+---
+
+[Meet exe.dev, modern VMs](https://blog.exe.dev/meet-exe.dev)
+
+隙間時間で AI Agent を使って開発を進めるということをしたいなあと思っており，特に移動中とかでも実行できるようにモバイル環境から Claude Code などを実行する方法を模索していた (PC との開発がシームレスにできるとより良い)．方向転換してしまったっぽいけど[omnara](https://github.com/omnara-ai/omnara)のようなプロジェクトや，同僚がやってた Tailscale + [MagicDNS](https://tailscale.com/kb/1081/magicdns) + [siteboon/claudecodeui](https://github.com/siteboon/claudecodeui) みたいなアプローチも良さそうだと思っていたがしっくりはきてなかった．
+
+加えて AI で軽いツールや自動化などを簡単に作れるようになってもそれらをどこで動かすかという問題が未だにある．Web app 公開したり，Cron ジョブで定期実行させたり，Webhook 受けたりなどなど，デスクトップ PC だけじゃ完結しないやつ．インターネットに公開するとなるとドメインとか認証認可となりをちゃんと考える必要もある．仕事のしっかりしたやつなら Cloud Run なり k8s で頑張るけど個人レベルだったらそこまでやるのもだるいなあと思っていた ([AI ツール開発の現場でこそ必要な「AI 以外の」技術選定](https://engineering.mercari.com/blog/entry/20251217-2204b3261b/) これは本当そうと思う)．
+
+そういうことを考えていた時に偶然読んだのが Josh Bleecher Snyder の[Just in time software](https://commaok.xyz/ai/just-in-time-software/)というブログ記事．スーパーで買い物してるときにその場でショッピングリストアプリを開発したという話で，そこで使われていたのが [exe.dev](https://exe.dev/) というサービスだった．ぱっと見は VM Hosting サービスで 2026 年にもなって VM Hosting?と思ったが，作ってるのが Tailscale の元 CTO の[David Crawshaw](https://x.com/davidcrawshaw)ということもあり，詳しく見てみたらなかなか良くちょうど自分が欲しいなあと思っていたものだった．
+
+## exe.dev とは
+
+[What is exe.dev?](https://exe.dev/docs/what-is-exe)
+
+公式の doc はまだちょっと分かりにくいが，一言でまとめると「簡単かつセキュアにアプリを公開できる AI Agent つきの VM Hosting サービス」．[Pricing](https://exe.dev/docs/pricing)的には$20/month で 25VM (2CPU + 8GB RAM を共有する感じ)からスタート．今は一旦無料で試せてる．
+
+VM を立ち上げると (`ssh exe.dev` で立ち上げれる!)，専用のドメイン`vmname.exe.xyz`が付与される．デフォルトは`exeuntu`イメージが動いるが基本は普通の VM Hosting と変わらない．その VM 上で動く専用の AI Agent である[Shelley](https://exe.dev/docs/shelley)とのチャットを開けるようになってるのが最近っぽい．近年の Serverless 環境とは違いディスクは Persist されるのでその場でいろいろインストールしても保持されるし SQLite とかも動かせる．
+
+VM 環境に加えてやってくれることとしては
+
+- **HTTP Proxy**：`vmname.exe.xyz`へのトラフィックを VM にプロキシしてくれる．TLS 証明書の発行・管理を自動でやってくれるので開発者はポートで待ち受けるだけ．デフォルトは Private で Email 認証したユーザだけがアクセスでき，公開したければコマンド一発で切り替えられる．自分のドメインを VM に向けることもでき，CNAME レコードを設定するだけで、TLS 証明書も自動発行．
+- **Login with exe**: exe.dev の認証システムを自分のアプリでも使える．認証されたユーザーには`X-ExeDev-Email`などのヘッダーが付与されるので自分でパスワード管理せずに認可を実装できる．
+
+![](/images/exe-proxy.png)
+
+[内部のアーキテクチャも軽く書いてある](https://exe.dev/docs/how-exedev-works)けど現状は[Kata Containers](https://katacontainers.io/)がベースっぽい．
+
+## 使ってみて
+
+個人の自動化で Webhook を扱いたかったので，実際に exe.dev に環境立てて Go でサーバー立てて公開するところまでやってみた．
+
+基本は一緒についてくる AI Agent である Shelley と Chat して Vibe coding 的に実装する感じ．以下のように Shelley の画面上で[difit](https://github.com/yoshiko-pg/difit)のように GitHub UI でコードチェックしてコメントできるようになっていたり，同じチームが作ってる Ai coding ツールの[sketch.dev](https://sketch.dev/welcome)と同じく Chromium の Headless copy がおそらく動いてるので Web ページのスクショとってみたいなこともやれる，のでほとんど全ての開発実装がそこで完結できるようになっている．Chat UI は音声入力も対応してるので分かってる感じする．必要なら VSCode の SSH 機能で直接繋いでコード書くこともできる．
+
+![](/images/exe-diff.png)
+
+ちなみに Claude とか Codex も最初から入ってるので Shelley を使う必要は別になくて好きなエージェントを動かしておける環境としても使うことができる．自作 MCP とかいまだにモバイル App 経由で使えないのでここで動かそうかなと思っている．
+
+Shelley 自体が上で書いたような exe.dev のインフラの仕組みを理解してるので，どうサービスを公開するかなどのインフラの設定は勝手にやってくれる．何も指定しないと Systemd でデーモン化して期待する Port で Listen して Journald でログとって勝手にデバッグする．コード書き直すと勝手に`pkill`して再起動する．Docker build なり Push なりもなくその場でリロードして終わりってのは久々の体験で気楽で良いなってなる．何より速いしね．
+
+モバイル環境からもアクセスできるので PC とモバイルで行き来して開発するのも楽にでき，隙間時間をうまく活用するという本来やりたかったこともできた．モバイルのログインだと Passkey をサポートしていてサクッとログインできるのもなかなか面白く，そういうユースケースも結構考えられてるなと．
+
+まだ試せてないけど VM 環境自体は Google doc みたいに Email 経由で共有することもできる．ので，飲み会なりの集まりで出てきたアイディアに対してその場で VM 立てて皆んなで開発するといったユースケースも考えられてそう．
+
+## まとめ
+
+AI によりコーディングのコストが下がったことに対して，じゃあそれらをどこで安全に動かすのか？という問いに対する良い解だなあと (VM Hosting なのである程度 Linux 的な知識もいるので基本はまだエンジニア向けにはなりそうだが…)．Vibe coding サービスと比べると VM による自由度と柔軟性が良く，クラウドの VM 環境とかと比べると公開と共有までの容易さと素早さがある．
+
+インフラの流れという観点だと PaaS から k8s になりその複雑さの揺り戻しはあるだろうなあと思っていたが exe はその一つの感じする (本番サービスを動かすという感じではないが... k8s や分散トランザクションは他に任せて Monotlith に bet してますとも[書いてあって](https://exe.dev/docs/guts)動かす前提のものも割り切ってる)．とはいえネットワーク周りなどは PaaS 的な良さはあって，それ以外の部分は VM の自由度があって好き勝手は試せるが，いざちゃんと動かす時は AI 経由で Systemd なりの設定はやれちゃうからは気にする必要はないというバランス感はなかなか良い．
+
+技術要素的には新しさはないが，基礎技術を組み合わせながら，AI というピースをうまく入れ込んで VM Hosting サービスを再考した感じ．NoSSH とか言ってたけどまた SSH するようになるとは思わなかった．まだどうなるか分からんが可能性はいろいろありそうだなあと．
+
+環境的にはぶっ壊れても良いし捨てられるのでとりあえずアイディアを実装したり，個人のための自動化なりを動かしておくため，まさに Just in Time Software のサービス，としてはとても良いなと思う．なんなら会社でも個人試し環境，リモート開発環境として導入するの考えたい．

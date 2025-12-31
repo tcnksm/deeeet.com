@@ -17,7 +17,7 @@ AI Agent で開発をしてると，デスクトップ環境とモバイル環�
 
 公式の Doc はまだちょっと分かりにくいが，一言でまとめると「簡単かつセキュアにアプリを公開できる AI Agent つきの VM Hosting サービス」．[Pricing](https://exe.dev/docs/pricing)的には$20/month で 25VM (2CPU + 8GB RAM を共有する感じ)からスタート．定額で環境を複数作れるというモデル．
 
-`ssh exe.dev` で VM を立ち上げると， Public IP ではなく専用のドメイン`vmname.exe.xyz`が付与される．デフォルトは`exeuntu`イメージが動いるが，コンテナイメージであればなんでも動かせる．基本は普通の VM Hosting サービスと変わらない．その VM 上で動く専用の AI Agent である[Shelley](https://exe.dev/docs/shelley)とのチャットを専用のポートで開けるようになってるのが最近っぽい．近年の Serverless 環境とは違いディスクは Persist されるのでその場でいろいろインストールしても保持されるし SQLite とかも動かせる．立ち上がりは非常に速く，AI と話しつつとりあえず起動していろいろ試してみて不要になれば捨てるみたいなことが簡単にできる．
+`ssh exe.dev` で VM を立ち上げると， Public IP ではなく専用のドメイン`vmname.exe.xyz`が付与される．デフォルトは`exeuntu`イメージが動いるが，コンテナイメージであればなんでも動かせる．基本は普通の VM Hosting サービスと変わらない．その VM 上で動く専用の AI Agent である[Shelley](https://exe.dev/docs/shelley)とのチャットを専用のポートで開けるようになってるのが最近っぽい．近年の Serverless 環境とは違いディスクは Persist されるのでその場でいろいろインストールしても保持されるし SQLite とかも動かせる．立ち上がりは非常に速く，とりあえず起動して AI と話しつついろいろ試してみて不要になれば捨てるみたいなことが簡単にできる．
 
 VM 環境に加えてやってくれることとしては
 

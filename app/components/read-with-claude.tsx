@@ -5,7 +5,7 @@ export function ReadWithClaude({
   articleUrl: string; 
   articleTitle: string;
 }) {
-  const prompt = `${articleTitle}\n${articleUrl}`;
+  const prompt = `${articleTitle}: ${articleUrl}`;
 
   const claudeUrl = `https://claude.ai/new?q=${encodeURIComponent(prompt)}`;
 

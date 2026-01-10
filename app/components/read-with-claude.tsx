@@ -16,11 +16,11 @@ Start with a tight summary: one paragraph, bulleted. Assume I have zero contextâ
       href={claudeUrl}
       target="_blank"
       rel="noopener noreferrer"
-      className="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium rounded-md bg-[#D97757] hover:bg-[#c4654a] text-white transition-colors"
+      className="inline-flex items-center gap-1.5 px-2.5 py-1 text-xs font-medium rounded bg-[#D97757] hover:bg-[#c4654a] text-white transition-colors"
     >
       <svg
-        width="18"
-        height="18"
+        width="14"
+        height="14"
         viewBox="0 0 24 24"
         fill="currentColor"
         xmlns="http://www.w3.org/2000/svg"

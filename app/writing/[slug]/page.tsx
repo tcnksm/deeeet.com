@@ -104,7 +104,10 @@ export default function Blog({ params }) {
           articleTitle={post.metadata.title}
         />
       </div>
-      <div className="flex justify-end items-center mb-4 text-sm">
+      <article className="prose">
+        <CustomMDX source={post.content} />
+      </article>
+      <div className="flex justify-end items-center mt-8 text-sm">
         <a
           href={`https://github.com/tcnksm/deeeet.com/edit/main/app/writing/posts/${post.slug}.mdx`}
           target="_blank"
@@ -128,9 +131,6 @@ export default function Blog({ params }) {
           Edit
         </a>
       </div>
-      <article className="prose">
-        <CustomMDX source={post.content} />
-      </article>
     </section>
   );
 }

@@ -21,12 +21,12 @@ Start with a tight summary: one paragraph, bulleted. Assume I have zero contextâ
       <svg
         width="14"
         height="14"
-        viewBox="0 0 24 24"
+        viewBox="0 0 64 64"
         fill="currentColor"
         xmlns="http://www.w3.org/2000/svg"
       >
-        {/* Anthropic Claude "asterisk" style icon */}
-        <path d="M12 2L13.5 8.5L20 7L15 12L20 17L13.5 15.5L12 22L10.5 15.5L4 17L9 12L4 7L10.5 8.5L12 2Z" />
+        {/* Claude starburst icon */}
+        <path d="M32 0L35.5 24.5L56 8L43.5 28.5L64 32L43.5 35.5L56 56L35.5 43.5L32 64L28.5 43.5L8 56L20.5 35.5L0 32L20.5 28.5L8 8L28.5 24.5L32 0Z" />
       </svg>
       Read with Claude
     </a>

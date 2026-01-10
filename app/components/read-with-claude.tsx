@@ -5,9 +5,7 @@ export function ReadWithClaude({
   articleUrl: string; 
   articleTitle: string;
 }) {
-  const prompt = `Hey! Got something cool for you—curious what you make of this: ${articleUrl}
-It's an article titled "${articleTitle}" and I want to understand it better.
-Start with a tight summary: one paragraph, bulleted. Assume I have zero context—actually make sure I get it, not just skim the surface. Then offer to go deeper on what's most interesting or relevant to me.`;
+  const prompt = `${articleTitle}\n${articleUrl}`;
 
   const claudeUrl = `https://claude.ai/new?q=${encodeURIComponent(prompt)}`;
 

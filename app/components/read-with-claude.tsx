@@ -34,7 +34,7 @@ export function ReadWithClaude({
         href={claudeUrl}
         target="_blank"
         rel="noopener noreferrer"
-        className="inline-flex items-center gap-1.5 px-2.5 py-1 text-xs font-medium rounded border border-[#D97757] text-[#D97757] hover:bg-[#D97757] hover:text-white transition-colors"
+        className="inline-flex items-center gap-1.5 px-2.5 py-1 text-xs font-medium rounded border border-[#D97757] text-neutral-800 dark:text-neutral-200 hover:bg-[#D97757] hover:text-white transition-colors"
       >
         Claude
         <ExternalLinkIcon />
@@ -43,7 +43,7 @@ export function ReadWithClaude({
         href={chatgptUrl}
         target="_blank"
         rel="noopener noreferrer"
-        className="inline-flex items-center gap-1.5 px-2.5 py-1 text-xs font-medium rounded border border-[#10a37f] text-[#10a37f] hover:bg-[#10a37f] hover:text-white transition-colors"
+        className="inline-flex items-center gap-1.5 px-2.5 py-1 text-xs font-medium rounded border border-[#10a37f] text-neutral-800 dark:text-neutral-200 hover:bg-[#10a37f] hover:text-white transition-colors"
       >
         ChatGPT
         <ExternalLinkIcon />

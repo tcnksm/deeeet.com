@@ -1,3 +1,22 @@
+function ExternalLinkIcon() {
+  return (
+    <svg
+      width="12"
+      height="12"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
+      <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6" />
+      <polyline points="15 3 21 3 21 9" />
+      <line x1="10" y1="14" x2="21" y2="3" />
+    </svg>
+  );
+}
+
 export function ReadWithClaude({ 
   articleUrl, 
   articleTitle 
@@ -15,17 +34,19 @@ export function ReadWithClaude({
         href={claudeUrl}
         target="_blank"
         rel="noopener noreferrer"
-        className="inline-flex items-center gap-1.5 px-2.5 py-1 text-xs font-medium rounded bg-[#D97757] hover:bg-[#c4654a] text-white transition-colors"
+        className="inline-flex items-center gap-1.5 px-2.5 py-1 text-xs font-medium rounded border border-[#D97757] text-[#D97757] hover:bg-[#D97757] hover:text-white transition-colors"
       >
-        Read with Claude
+        Claude
+        <ExternalLinkIcon />
       </a>
       <a
         href={chatgptUrl}
         target="_blank"
         rel="noopener noreferrer"
-        className="inline-flex items-center gap-1.5 px-2.5 py-1 text-xs font-medium rounded bg-[#10a37f] hover:bg-[#0d8a6a] text-white transition-colors"
+        className="inline-flex items-center gap-1.5 px-2.5 py-1 text-xs font-medium rounded border border-[#10a37f] text-[#10a37f] hover:bg-[#10a37f] hover:text-white transition-colors"
       >
-        Read with ChatGPT
+        ChatGPT
+        <ExternalLinkIcon />
       </a>
     </div>
   );

@@ -2,6 +2,7 @@ import { notFound } from "next/navigation";
 import { CustomMDX } from "app/components/mdx";
 import { formatDate, getBlogPosts } from "app/writing/utils";
 import { baseUrl } from "app/sitemap";
+import { ReadWithClaude } from "app/components/read-with-claude";
 
 export async function generateStaticParams() {
   let posts = getBlogPosts();
@@ -96,6 +97,17 @@ export default function Blog({ params }) {
         <p className="text-sm text-neutral-600 dark:text-neutral-400">
           {formatDate(post.metadata.publishedAt)}
         </p>
+      </div>
+      <div className="mb-8">
+        <ReadWithClaude 
+          articleUrl={`${baseUrl}/writing/${post.slug}`}
+          articleTitle={post.metadata.title}
+        />
+      </div>
+      <article className="prose">
+        <CustomMDX source={post.content} />
+      </article>
+      <div className="flex justify-end items-center mt-8 text-sm">
         <a
           href={`https://github.com/tcnksm/deeeet.com/edit/main/app/writing/posts/${post.slug}.mdx`}
           target="_blank"
@@ -119,9 +131,6 @@ export default function Blog({ params }) {
           Edit
         </a>
       </div>
-      <article className="prose">
-        <CustomMDX source={post.content} />
-      </article>
     </section>
   );
 }
